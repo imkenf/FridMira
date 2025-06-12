@@ -1,0 +1,368 @@
+name: FridMira - Frida 16.7.19
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild even if release exists'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: ["main", "master"]
+    paths:
+      - ".github/workflows/build.yml"
+      - "patches/**"
+
+env:
+  FRIDA_VERSION: "16.7.19"
+  FRIDMIRA_VERSION: "v1.0"
+
+jobs: 
+  check_version:
+    runs-on: ubuntu-22.04
+    outputs:
+      FRIDA_VERSION: ${{ env.FRIDA_VERSION }}
+      FRIDMIRA_VERSION: ${{ env.FRIDMIRA_VERSION }}
+      ALREADY_RELEASE: ${{ steps.checkReleaseVersion.outputs.ALREADY_RELEASE }}
+    steps:
+      - name: Check release version
+        id: checkReleaseVersion
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            try {
+              const releaseTag = '${{ env.FRIDA_VERSION }}-${{ env.FRIDMIRA_VERSION }}'
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: releaseTag
+              });
+              
+              if ('${{ github.event.inputs.force_rebuild }}' === 'true' || '${{ github.event_name }}' === 'push') {
+                console.log('Force rebuild requested, will recreate release');
+                require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'ALREADY_RELEASE=2\n');
+              } else {
+                console.log('Release already exists, skipping build');
+                require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'ALREADY_RELEASE=1\n');
+              }
+            } catch (e) {
+              if(e.message.includes('Not Found')){
+                console.log('Release does not exist, proceeding with build');
+                require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'ALREADY_RELEASE=0\n');
+              } else {
+                core.setFailed(e.message);
+              }
+            }
+      
+      - name: Delete existing release
+        if: ${{ steps.checkReleaseVersion.outputs.ALREADY_RELEASE == '2' }}
+        uses: dev-drprasad/delete-tag-and-release@v1.1
+        with:
+          tag_name: ${{ env.FRIDA_VERSION }}-${{ env.FRIDMIRA_VERSION }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          delete_release: true
+
+  create_release:
+    needs: check_version
+    runs-on: ubuntu-22.04
+    if: needs.check_version.outputs.ALREADY_RELEASE != '1'
+    outputs:
+      upload_url: ${{ steps.createRelease.outputs.upload_url }}
+      release_id: ${{ steps.createRelease.outputs.id }}
+    steps:
+      - uses: softprops/action-gh-release@v2.1.0
+        id: createRelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
+          name: "FridMira ${{ needs.check_version.outputs.FRIDA_VERSION }} - ${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
+          body: |
+            # 🚀 FridMira for Frida ${{ needs.check_version.outputs.FRIDA_VERSION }}
+            
+            ## ✨ 增强特性 / Enhanced Features
+            - 符号混淆、线程掩盖、RPC增强 / Symbol obfuscation, thread masking, RPC enhancement
+            - 文件/socket名混淆、内置反检测 / File/socket name obfuscation, built-in anti-detection
+            - GUM内存混淆、内存标识符隐藏 / GUM memory obfuscation, memory identifier hiding
+            - 细粒度功能控制、环境变量优先级 / Fine-grained control, environment variable priority
+            
+            ## 🎛️ 控制方式 / Control Methods
+            ```bash
+            # 命令行控制 / Command Line Control
+            ./frida-server --fridmira                    # 启用所有功能 / Enable all features
+            ./frida-server --fridmira --fridmira-no-gum  # 禁用GUM内存混淆 / Disable GUM memory obfuscation
+            ./frida-server --fridmira --fridmira-no-symbol --fridmira-no-thread  # 组合控制 / Combined control
+            
+            # 环境变量控制 / Environment Variable Control
+            export FRIDMIRA_MODE=enabled          # 全局开关 / Global switch
+            export FRIDMIRA_GUM_MODE=disabled     # GUM特定控制 / GUM-specific control
+            export FRIDMIRA_VERBOSE=1             # 详细输出 / Verbose output
+            ```
+            
+            ## 📦 使用方法 / Usage
+            ```bash
+            # 下载并使用 / Download and use
+            wget https://github.com/${{ github.repository }}/releases/download/${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FRIDMIRA_VERSION }}/fridmira-server-${{ needs.check_version.outputs.FRIDA_VERSION }}-android-arm64.gz
+            gunzip fridmira-server-*.gz
+            adb push fridmira-server-* /data/local/tmp/
+            adb shell chmod 755 /data/local/tmp/fridmira-server-*
+            adb shell /data/local/tmp/fridmira-server-* --fridmira &
+            ```
+            
+            ## 🛡️ 反检测能力 / Anti-Detection Capabilities
+            - ✅ 符号混淆 / Symbol obfuscation
+            - ✅ 线程掩盖 / Thread masking  
+            - ✅ 内存混淆 / Memory obfuscation
+            - ✅ RPC增强 / RPC enhancement
+            - ✅ 文件混淆 / File obfuscation
+            - ✅ 内置反检测 / Built-in anti-detection
+            
+          prerelease: false
+          draft: false
+
+  android_build:
+    runs-on: ubuntu-22.04
+    needs: [check_version, create_release]
+    if: needs.check_version.outputs.ALREADY_RELEASE != '1'
+    strategy:
+      matrix:
+        arch: [android-arm, android-arm64, android-x86, android-x86_64]
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: "temurin"
+        java-version: "17"
+
+    - name: Setup Android NDK
+      id: setup-ndk
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+        local-cache: false
+        link-to-sdk: true
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.11
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update && DEBIAN_FRONTEND=noninteractive sudo apt-get install \
+          build-essential ninja-build gcc-multilib g++-multilib lib32stdc++-9-dev \
+          flex bison ruby ruby-dev python3-requests python3-setuptools python3-dev \
+          python3-pip libc6-dev libc6-dev-i386 git -y
+        sudo gem install fpm -v 1.11.0 --no-document
+
+    - name: Build FridMira for ${{ matrix.arch }}
+      shell: bash
+      env:
+        ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+      run: |
+        set -e  # 遇到错误立即退出
+        
+        # 配置git
+        git config --global user.name "FridMira Bot"
+        git config --global user.email "fridmira@github.actions"
+        
+        echo "🚀 Building FridMira Frida ${{ env.FRIDA_VERSION }} for ${{ matrix.arch }}"
+        
+        # 克隆并切换到指定版本
+        git clone --recursive https://github.com/frida/frida.git
+        cd frida
+        git checkout ${{ env.FRIDA_VERSION }}
+        git submodule update --init --recursive
+        echo "✅ Frida ${{ env.FRIDA_VERSION }} ready ($(git describe --tags))"
+        
+        # 验证patches目录
+        if [[ ! -d "../patches" ]]; then
+          echo "❌ Patches directory not found!"
+          exit 1
+        fi
+        
+        # 应用frida-gum patches
+        echo "📦 Applying frida-gum patches..."
+        for patch in $(find ../patches/frida-gum -name "*.patch" | sort); do
+          patch_name=$(basename "$patch")
+          echo "🔄 Applying: $patch_name"
+          if ! (cd subprojects/frida-gum && git apply -v --reject -p1 < "../../../patches/frida-gum/$patch_name"); then
+            echo "❌ Failed to apply patch: $patch_name"
+            echo "🔍 Patch content:"
+            head -20 "$patch"
+            exit 1
+          fi
+          echo "✅ Applied: $patch_name"
+        done
+        
+        # 应用frida-core patches
+        echo "📦 Applying frida-core patches..."
+        for patch in $(find ../patches/frida-core -name "*.patch" | sort); do
+          patch_name=$(basename "$patch")
+          echo "🔄 Applying: $patch_name"
+          if ! (cd subprojects/frida-core && git apply -v --reject -p1 < "../../../patches/frida-core/$patch_name"); then
+            echo "❌ Failed to apply patch: $patch_name"
+            echo "🔍 Patch content:"
+            head -20 "$patch"
+            echo "🔍 Git status:"
+            (cd subprojects/frida-core && git status)
+            exit 1
+          fi
+          echo "✅ Applied: $patch_name"
+        done
+        
+        # 验证fridmira.vala已正确添加到构建系统
+        if [[ -f "subprojects/frida-core/src/fridmira.vala" ]]; then
+          if grep -q "fridmira.vala" subprojects/frida-core/src/meson.build; then
+            echo "✅ fridmira.vala is correctly added to build system"
+          else
+            echo "❌ fridmira.vala not found in meson.build - patch may have failed"
+            exit 1
+          fi
+        fi
+        
+        echo "✅ All FridMira patches applied successfully"
+        
+        # 构建
+        echo "🔨 Building for ${{ matrix.arch }}..."
+        cd ..
+        mkdir -p build-${{ matrix.arch }}
+        cd build-${{ matrix.arch }}
+        
+        # 配置构建
+        if ! ../frida/configure --host=${{ matrix.arch }}; then
+          echo "❌ Configure failed for ${{ matrix.arch }}"
+          if [[ -f "../frida/releng/setup-env.sh" ]]; then
+            echo "🔄 Trying releng setup..."
+            source ../frida/releng/setup-env.sh
+            ../frida/configure --host=${{ matrix.arch }}
+          else
+            exit 1
+          fi
+        fi
+        
+        # 编译
+        echo "🔨 Compiling..."
+        if ! make -j$(nproc); then
+          echo "❌ Build failed, trying single-threaded..."
+          make -j1
+        fi
+        
+        # 验证构建产物
+        required_files=(
+          "./server/frida-server"
+          "./inject/frida-inject"
+          "./lib/gadget/frida-gadget.so"
+          "./lib/gumjs/libfrida-gumjs-1.0.a"
+        )
+        
+        for file in "${required_files[@]}"; do
+          if [[ ! -f "$file" ]]; then
+            echo "❌ Missing required file: $file"
+            exit 1
+          fi
+        done
+        
+        echo "✅ FridMira build completed successfully for ${{ matrix.arch }}"
+
+    - name: Package build results
+      shell: bash
+      run: |
+        mkdir -p dist
+        
+        # 打包所有组件
+        cp ./build-${{ matrix.arch }}/server/frida-server ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
+        cp ./build-${{ matrix.arch }}/inject/frida-inject ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
+        cp ./build-${{ matrix.arch }}/lib/gadget/frida-gadget.so ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so
+        cp ./build-${{ matrix.arch }}/lib/gumjs/libfrida-gumjs-1.0.a ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a
+        
+        # 压缩
+        gzip -9 ./dist/*
+        
+        # 创建符号链接用于上传
+        ln -sf ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz ./frida-server.gz
+        ln -sf ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz ./frida-inject.gz
+        ln -sf ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so.gz ./frida-gadget.so.gz
+        ln -sf ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a.gz ./libfrida-gumjs-1.0.a.gz
+
+    - name: Upload frida-server
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: './frida-server.gz'
+        asset_name: 'fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz'
+        asset_content_type: application/gzip
+
+    - name: Upload frida-inject
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: './frida-inject.gz'
+        asset_name: 'fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz'
+        asset_content_type: application/gzip
+
+    - name: Upload frida-gadget
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: './frida-gadget.so.gz'
+        asset_name: 'fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so.gz'
+        asset_content_type: application/gzip
+
+    - name: Upload frida-gumjs
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release.outputs.upload_url }}
+        asset_path: './libfrida-gumjs-1.0.a.gz'
+        asset_name: 'fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a.gz'
+        asset_content_type: application/gzip
+
+  build_summary:
+    needs: [check_version, create_release, android_build]
+    runs-on: ubuntu-22.04
+    if: always()
+    steps:
+    - name: Build Summary
+      run: |
+        echo "🎉 FridMira Build Summary"
+        echo "========================="
+        echo "Frida Version: ${{ needs.check_version.outputs.FRIDA_VERSION }}"
+        echo "FridMira Version: ${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
+        echo "Build Status: ${{ needs.android_build.result }}"
+        
+        if [[ "${{ needs.android_build.result }}" == "success" ]]; then
+          echo "✅ All architectures built successfully!"
+          echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
+          echo ""
+          echo "🎯 Available components:"
+          echo "  - fridmira-server-16.7.19-{arch}.gz"
+          echo "  - fridmira-inject-16.7.19-{arch}.gz"
+          echo "  - fridmira-gadget-16.7.19-{arch}.so.gz"
+          echo "  - fridmira-gumjs-16.7.19-{arch}.a.gz"
+          echo ""
+          echo "🚀 Quick start:"
+          echo "  ./fridmira-server --fridmira"
+          echo "  ./fridmira-server --fridmira --fridmira-no-gum"
+        else
+          echo "❌ Build failed. Check logs for details."
+          exit 1
+        fi 
