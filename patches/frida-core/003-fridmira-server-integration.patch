@@ -1,0 +1,75 @@
+From b846c9a97a03062001ad74bb9aae3a9b42781e93 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Thu, 12 Jun 2025 19:38:42 +0800
+Subject: [PATCH 3/6] FridMira: Add --fridmira-no-gum command line option
+
+---
+ server/server.vala | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/server/server.vala b/server/server.vala
+index f596434..11226ae 100644
+--- a/server/server.vala
++++ b/server/server.vala
+@@ -25,6 +25,7 @@ namespace Frida.Server {
+ 	private static bool fridmira_no_thread = false;
+ 	private static bool fridmira_no_rpc = false;
+ 	private static bool fridmira_no_file = false;
++	private static bool fridmira_no_gum = false;
+ 
+ 	private enum PolicySoftenerFlavor {
+ 		SYSTEM,
+@@ -89,6 +90,13 @@ namespace Frida.Server {
+ 			// 禁用文件混淆
+ 			fridmira_no_file = true;
+ 		}
++
++		string? gum_mode = Environment.get_variable ("FRIDMIRA_GUM_MODE");
++		if (gum_mode != null && gum_mode.down () == "disabled") {
++			// Disable GUM memory obfuscation
++			// 禁用GUM内存混淆
++			fridmira_no_gum = true;
++		}
+ 	}
+ 
+ 	const OptionEntry[] option_entries = {
+@@ -123,6 +131,8 @@ namespace Frida.Server {
+ 			"Disable FridMira RPC obfuscation", null },
+ 		{ "fridmira-no-file", 0, 0, OptionArg.NONE, ref fridmira_no_file, 
+ 			"Disable FridMira file obfuscation", null },
++		{ "fridmira-no-gum", 0, 0, OptionArg.NONE, ref fridmira_no_gum, 
++			"Disable FridMira GUM memory obfuscation", null },
+ 		{ null }
+ 	};
+ 
+@@ -330,12 +340,17 @@ namespace Frida.Server {
+ 		}
+ 
+ 		try {
++			// Set environment variables for child processes based on CLI flags
++			// 根据CLI标志为子进程设置环境变量
++			Environment.set_variable ("FRIDMIRA_GUM_MODE", fridmira_no_gum ? "disabled" : "enabled", true);
++
+ 			// Calculate feature flags based on negation flags
+ 			// 根据否定标志计算功能标志
+ 			bool enable_symbol_obfuscation = !fridmira_no_symbol;
+ 			bool enable_thread_obfuscation = !fridmira_no_thread;
+ 			bool enable_rpc_obfuscation = !fridmira_no_rpc;
+ 			bool enable_file_obfuscation = !fridmira_no_file;
++			bool enable_gum_obfuscation = !fridmira_no_gum;
+ 
+ 			// Initialize FridMira core with calculated feature flags
+ 			// 使用计算的功能标志初始化FridMira核心
+@@ -343,7 +358,8 @@ namespace Frida.Server {
+ 				enable_symbol_obfuscation,
+ 				enable_thread_obfuscation,
+ 				enable_rpc_obfuscation,
+-				enable_file_obfuscation
++				enable_file_obfuscation,
++				enable_gum_obfuscation
+ 			);
+ 
+ 			// Log successful initialization if verbose mode is enabled
+-- 
+2.45.1.windows.1
+

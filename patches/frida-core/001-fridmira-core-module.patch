@@ -1,0 +1,537 @@
+From bb2ef59633c6dfe0e4034795db94010e32a6fd63 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Thu, 12 Jun 2025 16:11:44 +0800
+Subject: [PATCH 1/6] fridmira: Add enterprise-grade anti-detection framework
+ core module
+
+---
+ src/fridmira.vala | 516 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 516 insertions(+)
+ create mode 100644 src/fridmira.vala
+
+diff --git a/src/fridmira.vala b/src/fridmira.vala
+new file mode 100644
+index 0000000..312ea46
+--- /dev/null
++++ b/src/fridmira.vala
+@@ -0,0 +1,516 @@
++/**
++ * FridMira: Enterprise-Grade Frida Anti-Detection Framework
++ * FridMira: 企业级Frida反检测框架
++ * 
++ * This module provides comprehensive anti-detection capabilities for Frida,
++ * including symbol obfuscation, thread name masking, protocol enhancement,
++ * and runtime signature randomization.
++ * 
++ * 此模块为Frida提供全面的反检测能力，包括符号混淆、线程名掩盖、
++ * 协议增强和运行时签名随机化。
++ *
++ * All functionality is controlled via environment variables with granular
++ * per-feature control and global enable/disable switches.
++ * 
++ * 所有功能通过环境变量控制，支持细粒度的单功能控制和全局开关。
++ */
++
++[CCode (gir_namespace = "FridMira", gir_version = "1.0")]
++namespace FridMira {
++	/**
++	 * FridMiraSymbolObfuscator: Advanced Symbol Name Obfuscation Engine
++	 * FridMira符号混淆器：高级符号名混淆引擎
++	 * 
++	 * Generates realistic-looking symbol names that blend in with system
++	 * libraries and native Android/iOS components to avoid detection.
++	 * 
++	 * 生成逼真的符号名，与系统库和原生Android/iOS组件融为一体，避免检测。
++	 */
++	public class FridMiraSymbolObfuscator {
++		// Symbol name component arrays for realistic generation
++		// 用于生成逼真符号名的组件数组
++		private static string[] symbol_prefixes = {
++			"_lib", "_sys", "_core", "_util", "_base", "_native", "_android",
++			"_ios", "_darwin", "_linux", "_gnu", "_glibc", "_musl"
++		};
++
++		private static string[] symbol_components = {
++			"init", "start", "stop", "create", "destroy", "alloc", "free",
++			"open", "close", "read", "write", "send", "recv", "connect",
++			"bind", "listen", "accept", "process", "handle", "execute",
++			"invoke", "call", "return", "exit", "main", "entry", "cleanup",
++			"malloc", "calloc", "realloc", "mmap", "munmap", "dlopen"
++		};
++
++		private static string[] symbol_suffixes = {
++			"", "_impl", "_native", "_jni", "_internal", "_handler", 
++			"_mgr", "_svc", "_fn", "_proc", "_wrapper", "_bridge"
++		};
++
++		/**
++		 * Check if symbol obfuscation is enabled via environment variables
++		 * 通过环境变量检查是否启用符号混淆
++		 * 
++		 * Priority order: FRIDMIRA_SYMBOL_MODE > FRIDMIRA_MODE > default(enabled)
++		 * 优先级顺序：FRIDMIRA_SYMBOL_MODE > FRIDMIRA_MODE > 默认(启用)
++		 */
++		private static bool is_mode_enabled() {
++			// Check specific feature flag first / 优先检查功能开关
++			string? symbol_mode = Environment.get_variable("FRIDMIRA_SYMBOL_MODE");
++			if (symbol_mode != null) {
++				return symbol_mode != "0";
++			}
++
++			// Fall back to global flag (default enabled) / 回退到全局开关（默认启用）
++			string? global_mode = Environment.get_variable("FRIDMIRA_MODE");
++			return (global_mode != "0");
++		}
++
++		/**
++		 * Generate obfuscated symbol name using deterministic randomization
++		 * 使用确定性随机化生成混淆的符号名
++		 * 
++		 * Uses timestamp and original string hash as seed for reproducible
++		 * but unpredictable symbol generation.
++		 * 使用时间戳和原始字符串哈希作为种子，生成可重现但不可预测的符号。
++		 */
++		public static string obfuscate_symbol(string original) {
++			if (!is_mode_enabled()) {
++				return original;
++			}
++
++			// Generate deterministic but unique seed / 生成确定性但唯一的种子
++			uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
++			Random.set_seed(seed);
++
++			string prefix = symbol_prefixes[Random.int_range(0, symbol_prefixes.length)];
++			string component = symbol_components[Random.int_range(0, symbol_components.length)];
++			string suffix = symbol_suffixes[Random.int_range(0, symbol_suffixes.length)];
++
++			return prefix + component + suffix;
++		}
++
++		/**
++		 * Public API to check if symbol obfuscation is active
++		 * 公共API检查符号混淆是否激活
++		 */
++		public static bool is_enhanced_mode_enabled() {
++			return is_mode_enabled();
++		}
++	}	/**
++	 * FridMiraThreadObfuscator: Thread Name Masking Engine
++	 * FridMira线程混淆器：线程名掩盖引擎
++	 * 
++	 * Replaces detectable thread names like "frida-server-main-loop"
++	 * with realistic system-like thread names.
++	 * 
++	 * 将可检测的线程名如"frida-server-main-loop"替换为逼真的系统线程名。
++	 */
++	public class FridMiraThreadObfuscator {
++		// Thread name component arrays for realistic generation
++		// 用于生成逼真线程名的组件数组
++		private static string[] thread_prefixes = {
++			"thread", "worker", "task", "job", "service", "handler", "process",
++			"daemon", "monitor", "watcher", "timer", "scheduler", "executor",
++			"async", "sync", "pool", "queue", "mgmt", "ctrl", "event"
++		};
++
++		private static string[] thread_components = {
++			"main", "bg", "io", "net", "ui", "core", "util", "sys", "mgmt",
++			"ctrl", "data", "event", "signal", "async", "sync", "pool",
++			"work", "task", "job", "svc", "proc", "loop", "run", "exec"
++		};
++
++		private static string[] thread_suffixes = {
++			"", "-1", "-2", "-pool", "-mgr", "-svc", "-loop", "-proc", 
++			"-worker", "-handler", "-monitor", "-ctrl", "-th", "-0", "-bg"
++		};
++
++		/**
++		 * Check if thread name obfuscation is enabled
++		 * 检查是否启用线程名混淆
++		 * 
++		 * Priority order: FRIDMIRA_THREAD_MODE > FRIDMIRA_MODE > default(enabled)
++		 * 优先级顺序：FRIDMIRA_THREAD_MODE > FRIDMIRA_MODE > 默认(启用)
++		 */
++		private static bool is_mode_enabled() {
++			// Check specific feature flag first / 优先检查功能开关
++			string? thread_mode = Environment.get_variable("FRIDMIRA_THREAD_MODE");
++			if (thread_mode != null) {
++				return thread_mode != "0";
++			}
++
++			// Fall back to global flag (default enabled) / 回退到全局开关（默认启用）
++			string? global_mode = Environment.get_variable("FRIDMIRA_MODE");
++			return (global_mode != "0");
++		}
++
++		/**
++		 * Generate realistic thread name that blends with system threads
++		 * 生成与系统线程融合的逼真线程名
++		 * 
++		 * Creates thread names that look like legitimate system components
++		 * to avoid detection by thread scanning tools.
++		 * 创建看起来像合法系统组件的线程名，避免被线程扫描工具检测。
++		 */
++		public static string obfuscate_thread_name(string original) {
++			if (!is_mode_enabled()) {
++				return original;
++			}
++
++			// Generate deterministic but unique seed / 生成确定性但唯一的种子
++			uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
++			Random.set_seed(seed);
++
++			string prefix = thread_prefixes[Random.int_range(0, thread_prefixes.length)];
++			string component = thread_components[Random.int_range(0, thread_components.length)];
++			string suffix = thread_suffixes[Random.int_range(0, thread_suffixes.length)];
++
++			return prefix + "-" + component + suffix;
++		}
++
++		/**
++		 * Public API to check if thread obfuscation is active
++		 * 公共API检查线程混淆是否激活
++		 */
++		public static bool is_enhanced_mode_enabled() {
++			return is_mode_enabled();
++		}
++	}	/**
++	 * FridMiraMemoryObfuscator: Memory Region Identifier Masking
++	 * FridMira内存混淆器：内存区域标识符掩盖
++	 * 
++	 * Provides obfuscation for memory-related identifiers and signatures
++	 * that could be used to detect Frida's presence in process memory.
++	 * 
++	 * 为内存相关标识符和签名提供混淆，避免在进程内存中检测到Frida的存在。
++	 */
++	public class FridMiraMemoryObfuscator {
++		private static string[] memory_prefixes = {
++			"mem", "buf", "heap", "stack", "seg", "region", "block", "chunk"
++		};
++
++		private static string[] memory_components = {
++			"data", "code", "exec", "read", "write", "shared", "private", "anon"
++		};
++
++		/**
++		 * Generate obfuscated memory region identifier
++		 * 生成混淆的内存区域标识符
++		 */
++		public static string obfuscate_memory_identifier(string original) {
++			string? global_mode = Environment.get_variable("FRIDMIRA_MODE");
++			if (global_mode == "0") {
++				return original;
++			}
++
++			uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
++			Random.set_seed(seed);
++
++			string prefix = memory_prefixes[Random.int_range(0, memory_prefixes.length)];
++			string component = memory_components[Random.int_range(0, memory_components.length)];
++			uint id = Random.int_range(1000, 9999);
++
++			return prefix + "_" + component + "_" + id.to_string();
++		}
++	}	/**
++	 * FridMiraProtocolEnhancer: Network Protocol Identifier Obfuscation
++	 * FridMira协议增强器：网络协议标识符混淆
++	 * 
++	 * Masks network protocol signatures and identifiers used by Frida
++	 * to communicate with external tools and debuggers.
++	 * 
++	 * 掩盖Frida用于与外部工具和调试器通信的网络协议签名和标识符。
++	 */
++	public class FridMiraProtocolEnhancer {
++		private static string[] protocol_prefixes = {
++			"proto", "net", "comm", "ipc", "rpc", "msg", "data", "stream"
++		};
++
++		private static string[] protocol_components = {
++			"ctrl", "data", "mgmt", "sync", "async", "req", "resp", "event"
++		};
++
++		/**
++		 * Generate obfuscated protocol identifier
++		 * 生成混淆的协议标识符
++		 */
++		public static string obfuscate_protocol_identifier(string original) {
++			string? global_mode = Environment.get_variable("FRIDMIRA_MODE");
++			if (global_mode == "0") {
++				return original;
++			}
++
++			uint32 seed = (uint32)(get_real_time() % 1000000) ^ original.hash();
++			Random.set_seed(seed);
++
++			string prefix = protocol_prefixes[Random.int_range(0, protocol_prefixes.length)];
++			string component = protocol_components[Random.int_range(0, protocol_components.length)];
++			
++			return prefix + "_" + component;
++		}
++	}	/**
++	 * FridMiraLibNameGenerator: Realistic Library and Socket Name Generation
++	 * FridMira库名生成器：逼真库名和Socket名生成
++	 * 
++	 * Generates realistic library names and Unix domain socket names that
++	 * blend in with system components to avoid detection.
++	 * 
++	 * 生成逼真的库名和Unix域socket名，与系统组件融为一体，避免检测。
++	 */
++	public class FridMiraLibNameGenerator {
++		// Library name component arrays / 库名组件数组
++		private static string[] lib_prefixes = {
++			"lib", "android", "system", "native", "core", "runtime",
++			"platform", "framework", "service", "hal", "vendor", "bionic"
++		};
++
++		private static string[] lib_components = {
++			"utils", "service", "manager", "handler", "process", "thread",
++			"memory", "network", "security", "crypto", "media", "graphics",
++			"audio", "camera", "sensor", "ui", "input", "display", "log"
++		};
++
++		private static string[] lib_suffixes = {
++			"", "_native", "_jni", "_impl", "_core", "_base", "_v2", "_compat"
++		};
++
++		/**
++		 * Check if library name obfuscation is enabled
++		 * 检查是否启用库名混淆
++		 * 
++		 * Priority order: FRIDMIRA_FILE_MODE > FRIDMIRA_MODE > default(enabled)
++		 * 优先级顺序：FRIDMIRA_FILE_MODE > FRIDMIRA_MODE > 默认(启用)
++		 */
++		private static bool is_mode_enabled() {
++			// Check specific feature flag first / 优先检查功能开关
++			string? file_mode = Environment.get_variable("FRIDMIRA_FILE_MODE");
++			if (file_mode != null) {
++				return file_mode != "0";
++			}
++
++			// Fall back to global flag (default enabled) / 回退到全局开关（默认启用）
++			string? global_mode = Environment.get_variable("FRIDMIRA_MODE");
++			return (global_mode != "0");
++		}
++
++		/**
++		 * Generate realistic library name for agent masquerading
++		 * 为代理伪装生成逼真的库名
++		 * 
++		 * Creates library names that mimic legitimate Android/system libraries
++		 * to avoid detection by static analysis tools.
++		 * 创建模仿合法Android/系统库的库名，避免被静态分析工具检测。
++		 */
++		public static string generate_lib_name() {
++			if (!is_mode_enabled()) {
++				return "frida-agent";
++			}
++
++			// Generate deterministic but time-varying seed / 生成确定性但时变的种子
++			uint32 seed = (uint32)(get_real_time() % 1000000);
++			Random.set_seed(seed);
++
++			string prefix = lib_prefixes[Random.int_range(0, lib_prefixes.length)];
++			string component = lib_components[Random.int_range(0, lib_components.length)];
++			string suffix = lib_suffixes[Random.int_range(0, lib_suffixes.length)];
++
++			return prefix + component + suffix;
++		}
++
++		/**
++		 * Generate realistic Unix domain socket name
++		 * 生成逼真的Unix域socket名称
++		 * 
++		 * Creates socket names that appear as legitimate system IPC endpoints
++		 * to avoid detection through /proc/net/unix scanning.
++		 * 创建看起来像合法系统IPC端点的socket名，避免通过/proc/net/unix扫描检测。
++		 */
++		public static string generate_realistic_socket_name() {
++			string[] socket_prefixes = {
++				"sys", "android", "native", "service", "core", "base",
++				"platform", "framework", "hal", "vendor", "system", "init"
++			};
++
++			string[] socket_components = {
++				"sock", "ipc", "ctrl", "mgmt", "svc", "handler",
++				"bridge", "proxy", "daemon", "worker", "helper", "monitor"
++			};
++
++			// Use PID and time for unique but realistic naming / 使用PID和时间生成唯一但逼真的命名
++			uint32 seed = (uint32)(get_real_time() % 1000000);
++			Random.set_seed(seed ^ (uint32)Posix.getpid());
++
++			string prefix = socket_prefixes[Random.int_range(0, socket_prefixes.length)];
++			string component = socket_components[Random.int_range(0, socket_components.length)];
++			uint suffix_num = Random.int_range(1, 999);
++
++			return prefix + "_" + component + "_" + suffix_num.to_string();
++		}
++
++		/**
++		 * Public API to check if file name obfuscation is active
++		 * 公共API检查文件名混淆是否激活
++		 */
++		public static bool is_enhanced_mode_enabled() {
++			return is_mode_enabled();
++		}
++	}	/**
++	 * FridMiraRpcProtocolEnhancer: Advanced RPC Protocol Obfuscation
++	 * FridMira RPC协议增强器：高级RPC协议混淆
++	 * 
++	 * Provides bidirectional command mapping to obfuscate Frida's RPC
++	 * protocol commands and responses, making traffic analysis difficult.
++	 * 
++	 * 提供双向命令映射以混淆Frida的RPC协议命令和响应，使流量分析变得困难。
++	 */
++	public class FridMiraRpcProtocolEnhancer {
++		// Static mapping tables for bidirectional command translation
++		// 用于双向命令转换的静态映射表
++		private static HashTable<string, string>? _command_map = null;
++		private static HashTable<string, string>? _reverse_map = null;
++		private static bool _enhanced_mode_enabled = false;
++		private static bool _initialized = false;
++
++		/**
++		 * Check if RPC protocol enhancement is enabled
++		 * 检查是否启用RPC协议增强
++		 * 
++		 * Priority order: FRIDMIRA_RPC_MODE > FRIDMIRA_MODE > default(enabled)
++		 * 优先级顺序：FRIDMIRA_RPC_MODE > FRIDMIRA_MODE > 默认(启用)
++		 */
++		private static bool is_mode_enabled() {
++			// Check specific feature flag first / 优先检查功能开关
++			string? rpc_mode = Environment.get_variable("FRIDMIRA_RPC_MODE");
++			if (rpc_mode != null) {
++				return rpc_mode != "0";
++			}
++
++			// Fall back to global flag (default enabled) / 回退到全局开关（默认启用）
++			string? global_mode = Environment.get_variable("FRIDMIRA_MODE");
++			return (global_mode != "0");
++		}
++
++		/**
++		 * Initialize the RPC protocol enhancer with bidirectional mapping
++		 * 使用双向映射初始化RPC协议增强器
++		 * 
++		 * Creates command translation tables for both standard->obfuscated
++		 * and obfuscated->standard mapping to ensure full compatibility.
++		 * 创建标准->混淆和混淆->标准的命令转换表，确保完全兼容性。
++		 */
++		public static void init() {
++			if (_initialized) {
++				return;
++			}
++
++			_enhanced_mode_enabled = is_mode_enabled();
++
++			// Initialize hash tables / 初始化哈希表
++			_command_map = new HashTable<string, string>(str_hash, str_equal);
++			_reverse_map = new HashTable<string, string>(str_hash, str_equal);
++
++			// Map standard Frida commands to obfuscated versions
++			// 将标准Frida命令映射到混淆版本
++			_command_map.insert("frida:rpc", "invoke:op");
++			_command_map.insert("call", "exec");
++			_command_map.insert("ok", "success");
++			_command_map.insert("error", "failure");
++			_command_map.insert("result", "output");
++			_command_map.insert("request", "invoke");
++
++			// Create reverse mapping for bidirectional translation
++			// 为双向转换创建反向映射
++			var keys = _command_map.get_keys();
++			foreach (var key in keys) {
++				_reverse_map.insert(_command_map.get(key), key);
++			}
++
++			_initialized = true;
++		}
++
++		/**
++		 * Map standard command to obfuscated version
++		 * 将标准命令映射到混淆版本
++		 * 
++		 * Translates Frida's standard RPC commands to obfuscated equivalents
++		 * when enhanced mode is enabled.
++		 * 在启用增强模式时，将Frida的标准RPC命令转换为混淆等价物。
++		 */
++		public static string map_command(string cmd) {
++			if (!_enhanced_mode_enabled) {
++				return cmd;
++			}
++
++			if (!_initialized) {
++				init();
++			}
++
++			string? mapped = _command_map.lookup(cmd);
++			return (mapped != null) ? mapped : cmd;
++		}
++
++		/**
++		 * Reverse map obfuscated command back to standard
++		 * 将混淆命令反向映射回标准版本
++		 * 
++		 * Translates obfuscated commands back to standard Frida commands
++		 * for internal processing compatibility.
++		 * 将混淆命令转换回标准Frida命令，以保持内部处理兼容性。
++		 */
++		public static string reverse_map_command(string cmd) {
++			if (!_enhanced_mode_enabled) {
++				return cmd;
++			}
++
++			if (!_initialized) {
++				init();
++			}
++
++			string? mapped = _reverse_map.lookup(cmd);
++			return (mapped != null) ? mapped : cmd;
++		}
++
++		/**
++		 * Check if command is a known enhanced command
++		 * 检查命令是否为已知的增强命令
++		 * 
++		 * Determines if the given command is one of our obfuscated commands
++		 * that needs reverse mapping.
++		 * 确定给定命令是否为需要反向映射的混淆命令之一。
++		 */
++		public static bool is_enhanced_command(string cmd) {
++			if (!_initialized) {
++				init();
++			}
++
++			return _reverse_map.contains(cmd);
++		}
++
++		/**
++		 * Public API to check if RPC obfuscation is active
++		 * 公共API检查RPC混淆是否激活
++		 */
++		public static bool is_enhanced_mode_enabled() {
++			return _enhanced_mode_enabled;
++		}
++
++		/**
++		 * Generate random request ID prefix for additional obfuscation
++		 * 生成随机请求ID前缀以增加额外混淆
++		 * 
++		 * Adds randomized prefixes to request IDs to further mask
++		 * the communication pattern from traffic analysis.
++		 * 为请求ID添加随机前缀，进一步掩盖流量分析中的通信模式。
++		 */
++		public static string generate_request_id_prefix() {
++			if (!_enhanced_mode_enabled) {
++				return "";
++			}
++
++			string[] prefixes = {"req", "id", "op", "cmd", "task", "job", "call"};
++			var random_index = Random.int_range(0, prefixes.length);
++			return prefixes[random_index] + "_";
++		}
++	}
++}
+\ No newline at end of file
+-- 
+2.45.1.windows.1
+
