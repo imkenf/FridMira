@@ -1,0 +1,267 @@
+From 635cec45b842fc901b586f4eeefa1c37aada52d4 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Fri, 13 Jun 2025 22:53:12 +0800
+Subject: [PATCH 3/6] FridMira: Add comprehensive server integration with full component initialization
+
+---
+ server/server.vala | 207 ++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 206 insertions(+), 1 deletion(-)
+
+diff --git a/server/server.vala b/server/server.vala
+index 67bf4b3..ce30ac0 100644
+--- a/server/server.vala
++++ b/server/server.vala
+@@ -18,6 +18,15 @@ namespace Frida.Server {
+ 	private static bool report_crashes = true;
+ 	private static bool verbose = false;
+
++	// FridMira anti-detection framework control variables
++	// FridMira反检测框架控制变量
++	private static bool fridmira_enabled = false;
++	private static bool fridmira_no_symbol = false;
++	private static bool fridmira_no_thread = false;
++	private static bool fridmira_no_rpc = false;
++	private static bool fridmira_no_file = false;
++	private static bool fridmira_no_gum = false;
++
+ 	private enum PolicySoftenerFlavor {
+ 		SYSTEM,
+ 		INTERNAL;
+@@ -29,12 +38,73 @@ namespace Frida.Server {
+
+ 	private delegate void ReadyHandler (bool success);
+
++	/**
++	 * Process FridMira environment variables with hierarchical priority
++	 * 处理FridMira环境变量，采用分层优先级机制
++	 *
++	 * Priority order (highest to lowest):
++	 * 优先级顺序（从高到低）：
++	 * 1. Command line arguments / 命令行参数
++	 * 2. Environment variables / 环境变量
++	 * 3. Default values / 默认值
++	 */
++	private static void process_fridmira_environment_variables () {
++		// Process environment variables as default values
++		// 处理环境变量作为默认值
++		// CLI arguments will override these settings
++		// CLI参数将覆盖这些设置
++
++		// Check global FridMira mode environment variable
++		// 检查全局FridMira模式环境变量
++		string? fridmira_mode = Environment.get_variable ("FRIDMIRA_MODE");
++		if (fridmira_mode != null && fridmira_mode.down () == "enabled") {
++			fridmira_enabled = true;
++		}
++
++		// Process individual feature environment variables
++		// 处理各个功能的环境变量
++		string? symbol_mode = Environment.get_variable ("FRIDMIRA_SYMBOL_MODE");
++		if (symbol_mode != null && symbol_mode.down () == "disabled") {
++			// Disable symbol obfuscation
++			// 禁用符号混淆
++			fridmira_no_symbol = true;
++		}
++
++		string? thread_mode = Environment.get_variable ("FRIDMIRA_THREAD_MODE");
++		if (thread_mode != null && thread_mode.down () == "disabled") {
++			// Disable thread obfuscation
++			// 禁用线程混淆
++			fridmira_no_thread = true;
++		}
++
++		string? rpc_mode = Environment.get_variable ("FRIDMIRA_RPC_MODE");
++		if (rpc_mode != null && rpc_mode.down () == "disabled") {
++			// Disable RPC obfuscation
++			// 禁用RPC混淆
++			fridmira_no_rpc = true;
++		}
++
++		string? file_mode = Environment.get_variable ("FRIDMIRA_FILE_MODE");
++		if (file_mode != null && file_mode.down () == "disabled") {
++			// Disable file obfuscation
++			// 禁用文件混淆
++			fridmira_no_file = true;
++		}
++
++		string? gum_mode = Environment.get_variable ("FRIDMIRA_GUM_MODE");
++		if (gum_mode != null && gum_mode.down () == "disabled") {
++			// Disable GUM memory obfuscation
++			// 禁用GUM内存混淆
++			fridmira_no_gum = true;
++		}
++	}
++
+ 	const OptionEntry[] option_entries = {
+ 		{ "version", 0, 0, OptionArg.NONE, ref output_version, "Output version information and exit", null },
+ 		{ "device", 0, 0, OptionArg.STRING, ref device_id, "Serve device with the given ID", "ID" },
+ 		{ "listen", 'l', 0, OptionArg.STRING, ref listen_address, "Listen on ADDRESS", "ADDRESS" },
+ 		{ "certificate", 0, 0, OptionArg.FILENAME, ref certpath, "Enable TLS using CERTIFICATE", "CERTIFICATE" },
+-		{ "origin", 0, 0, OptionArg.STRING, ref origin, "Only accept requests with “Origin” header matching ORIGIN " +
++		{ "origin", 0, 0, OptionArg.STRING, ref origin, "Only accept requests with "Origin" header matching ORIGIN " +
+ 			"(by default any origin will be accepted)", "ORIGIN" },
+ 		{ "token", 0, 0, OptionArg.STRING, ref token, "Require authentication using TOKEN", "TOKEN" },
+ 		{ "asset-root", 0, 0, OptionArg.FILENAME, ref asset_root, "Serve static files inside ROOT (by default no files are served)",
+@@ -48,6 +118,21 @@ namespace Frida.Server {
+ 		{ "ignore-crashes", 'C', OptionFlags.REVERSE, OptionArg.NONE, ref report_crashes,
+ 			"Disable native crash reporter integration", null },
+ 		{ "verbose", 'v', 0, OptionArg.NONE, ref verbose, "Be verbose", null },
++
++		// FridMira anti-detection framework command line options
++		// FridMira反检测框架命令行选项
++		{ "fridmira", 0, 0, OptionArg.NONE, ref fridmira_enabled,
++			"Enable FridMira anti-detection framework", null },
++		{ "fridmira-no-symbol", 0, 0, OptionArg.NONE, ref fridmira_no_symbol,
++			"Disable FridMira symbol obfuscation", null },
++		{ "fridmira-no-thread", 0, 0, OptionArg.NONE, ref fridmira_no_thread,
++			"Disable FridMira thread obfuscation", null },
++		{ "fridmira-no-rpc", 0, 0, OptionArg.NONE, ref fridmira_no_rpc,
++			"Disable FridMira RPC obfuscation", null },
++		{ "fridmira-no-file", 0, 0, OptionArg.NONE, ref fridmira_no_file,
++			"Disable FridMira file obfuscation", null },
++		{ "fridmira-no-gum", 0, 0, OptionArg.NONE, ref fridmira_no_gum,
++			"Disable FridMira GUM memory obfuscation", null },
+ 		{ null }
+ 	};
+
+@@ -60,6 +145,10 @@ namespace Frida.Server {
+ 		}
+ #endif
+
++		// Process FridMira environment variables as default values
++		// 处理FridMira环境变量作为默认值
++		process_fridmira_environment_variables ();
++
+ 		try {
+ 			var ctx = new OptionContext ();
+ 			ctx.set_help_enabled (true);
+@@ -201,6 +290,12 @@ namespace Frida.Server {
+ 		TemporaryDirectory.always_use ((directory != null) ? directory : DEFAULT_DIRECTORY);
+ 		TemporaryDirectory.use_sysroot (options.sysroot);
+
++		// Initialize FridMira framework if enabled
++		// 如果启用则初始化FridMira框架
++		if (fridmira_enabled) {
++			initialize_fridmira_framework ();
++		}
++
+ 		application = new Application (device_id, endpoint_params, options);
+
+ 		Posix.signal (Posix.Signal.INT, (sig) => {
+@@ -357,4 +452,114 @@ namespace Frida.Server {
+
+ 		return new TlsCertificate.from_file (path);
+ 	}
++
++	/**
++	 * Initialize FridMira anti-detection framework
++	 * 初始化FridMira反检测框架
++	 *
++	 * This function sets up the FridMira framework with the specified configuration.
++	 * FridMira components are automatically activated based on environment variables.
++	 * 此函数使用指定配置设置FridMira框架。FridMira组件根据环境变量自动激活。
++	 */
++	private static void initialize_fridmira_framework () {
++		// Log initialization attempt if verbose mode is enabled
++		// 如果启用详细模式则记录初始化尝试
++		if (verbose) {
++			stdout.printf ("Initializing FridMira anti-detection framework...\n");
++		}
++
++		try {
++			// Set environment variables for child processes based on CLI flags
++			// 根据CLI标志为子进程设置环境变量
++			Environment.set_variable ("FRIDMIRA_MODE", "enabled", true);
++			Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", fridmira_no_symbol ? "disabled" : "enabled", true);
++			Environment.set_variable ("FRIDMIRA_THREAD_MODE", fridmira_no_thread ? "disabled" : "enabled", true);
++			Environment.set_variable ("FRIDMIRA_RPC_MODE", fridmira_no_rpc ? "disabled" : "enabled", true);
++			Environment.set_variable ("FRIDMIRA_FILE_MODE", fridmira_no_file ? "disabled" : "enabled", true);
++			Environment.set_variable ("FRIDMIRA_GUM_MODE", fridmira_no_gum ? "disabled" : "enabled", true);
++
++			// Initialize core FridMira components with actual functionality
++			// 使用实际功能初始化核心FridMira组件
++
++			// Initialize symbol obfuscator if enabled
++			// 如果启用则初始化符号混淆器
++			if (!fridmira_no_symbol) {
++				// Test symbol obfuscator functionality
++				// 测试符号混淆器功能
++				string test_symbol = Frida.FridMiraSymbolObfuscator.obfuscate_symbol("frida_test_symbol");
++				if (verbose) {
++					stdout.printf ("  Symbol obfuscator: enabled (test: frida_test_symbol -> %s)\n", test_symbol);
++				}
++			}
++
++			// Initialize thread obfuscator if enabled
++			// 如果启用则初始化线程混淆器
++			if (!fridmira_no_thread) {
++				// Test thread name obfuscator functionality
++				// 测试线程名混淆器功能
++				string test_thread = Frida.FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
++				if (verbose) {
++					stdout.printf ("  Thread obfuscator: enabled (test: frida-server-main-loop -> %s)\n", test_thread);
++				}
++			}
++
++			// Initialize RPC protocol enhancer if RPC obfuscation is enabled
++			// 如果启用RPC混淆则初始化RPC协议增强器
++			if (!fridmira_no_rpc) {
++				Frida.FridMiraRpcProtocolEnhancer.init ();
++				string test_protocol = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id();
++				if (verbose) {
++					stdout.printf ("  RPC protocol enhancer: initialized (protocol: %s)\n", test_protocol);
++				}
++			}
++
++			// Initialize file/library name generator if enabled
++			// 如果启用则初始化文件/库名生成器
++			if (!fridmira_no_file) {
++				// Test file name generator functionality
++				// 测试文件名生成器功能
++				string test_lib = Frida.FridMiraLibNameGenerator.generate_lib_name();
++				string test_socket = Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
++				if (verbose) {
++					stdout.printf ("  File/library name obfuscator: enabled (lib: %s, socket: %s)\n", test_lib, test_socket);
++				}
++			}
++
++			// Initialize memory obfuscator if enabled
++			// 如果启用则初始化内存混淆器
++			if (!fridmira_no_gum) {
++				// Test memory identifier obfuscator functionality
++				// 测试内存标识符混淆器功能
++				string test_memory = Frida.FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_memory_region");
++				if (verbose) {
++					stdout.printf ("  GUM memory obfuscator: enabled (test: frida_memory_region -> %s)\n", test_memory);
++				}
++			}
++
++			// Test protocol enhancer functionality
++			// 测试协议增强器功能
++			if (!fridmira_no_rpc) {
++				string test_proto_id = Frida.FridMiraProtocolEnhancer.obfuscate_protocol_identifier("frida_protocol");
++				if (verbose) {
++					stdout.printf ("  Protocol enhancer: active (test: frida_protocol -> %s)\n", test_proto_id);
++				}
++			}
++
++			// Log successful initialization if verbose mode is enabled
++			// 如果启用详细模式则记录成功初始化
++			if (verbose) {
++				stdout.printf ("FridMira framework initialized successfully with active components:\n");
++				stdout.printf ("  Symbol obfuscation: %s\n", fridmira_no_symbol ? "disabled" : "enabled");
++				stdout.printf ("  Thread obfuscation: %s\n", fridmira_no_thread ? "disabled" : "enabled");
++				stdout.printf ("  RPC obfuscation: %s\n", fridmira_no_rpc ? "disabled" : "enabled");
++				stdout.printf ("  File obfuscation: %s\n", fridmira_no_file ? "disabled" : "enabled");
++				stdout.printf ("  GUM memory obfuscation: %s\n", fridmira_no_gum ? "disabled" : "enabled");
++			}
++		} catch (Error e) {
++			// Handle initialization errors gracefully
++			// 优雅地处理初始化错误
++			stderr.printf ("Warning: FridMira initialization failed: %s\n", e.message);
++			stderr.printf ("Continuing with standard Frida functionality...\n");
++		}
++	}
+ }
+--
+2.45.1.windows.1
