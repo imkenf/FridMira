@@ -1,19 +1,19 @@
-From 751edc6d8a4bca74dc6a2c3e5b57446a3f5f18ce Mon Sep 17 00:00:00 2001
+From e876e4c5c97f9c559c12c36f815fc347980db937 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 13 Jun 2025 20:12:52 +0800
-Subject: [PATCH] fridmira: Add comprehensive anti-detection framework to lib/base
+Subject: [PATCH 1/6]  fridmira: Add comprehensive anti-detection framework to lib/base
 
 ---
- lib/base/fridmira.vala | 750 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 750 insertions(+)
+ lib/base/fridmira.vala | 754 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 754 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..7ea7161
+index 0000000..c9cab7e
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,750 @@
+@@ -0,0 +1,754 @@
 +/**
 + * FridMira: Enterprise-Grade Frida Anti-Detection Framework
 + * FridMira: 企业级Frida反检测框架
@@ -98,7 +98,7 @@ index 0000000..7ea7161
 +			}
 +
 +			// Generate deterministic but unique seed / 生成确定性但唯一的种子
-+		uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
++			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
 +			Random.set_seed(seed);
 +
 +			string prefix = symbol_prefixes[Random.int_range(0, symbol_prefixes.length)];
@@ -179,7 +179,7 @@ index 0000000..7ea7161
 +			}
 +
 +			// Generate deterministic but unique seed / 生成确定性但唯一的种子
-+		uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
++			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
 +			Random.set_seed(seed);
 +
 +			string prefix = thread_prefixes[Random.int_range(0, thread_prefixes.length)];
@@ -226,7 +226,7 @@ index 0000000..7ea7161
 +				return original;
 +			}
 +
-+					uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
++			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
 +			Random.set_seed(seed);
 +
 +			string prefix = memory_prefixes[Random.int_range(0, memory_prefixes.length)];
@@ -265,7 +265,7 @@ index 0000000..7ea7161
 +				return original;
 +			}
 +
-+					uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
++			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
 +			Random.set_seed(seed);
 +
 +			string prefix = protocol_prefixes[Random.int_range(0, protocol_prefixes.length)];
@@ -334,7 +334,7 @@ index 0000000..7ea7161
 +			}
 +
 +			// Generate deterministic but time-varying seed / 生成确定性但时变的种子
-+		uint32 seed = (uint32)(GLib.get_real_time() % 1000000);
++			uint32 seed = (uint32)(GLib.get_real_time() % 1000000);
 +			Random.set_seed(seed);
 +
 +			string prefix = lib_prefixes[Random.int_range(0, lib_prefixes.length)];
@@ -363,9 +363,13 @@ index 0000000..7ea7161
 +				"bridge", "proxy", "daemon", "worker", "helper", "monitor"
 +			};
 +
-+			// Use PID and time for unique but realistic naming / 使用PID和时间生成唯一但逼真的命名
-+		uint32 seed = (uint32)(GLib.get_real_time() % 1000000);
-+			Random.set_seed(seed ^ (uint32)Posix.getpid());
++			// Use custom PID and time for unique but realistic naming / 使用自定义PID和时间生成唯一但逼真的命名
++			uint32 seed = (uint32)(GLib.get_real_time() % 1000000);
++			// Generate custom PID equivalent using high-precision timestamp combination
++			// 使用高精度时间戳组合生成自定义PID等价物
++			int64 time_us = GLib.get_real_time();
++			uint32 custom_pid = (uint32)((time_us >> 16) ^ (time_us & 0xFFFF));
++			Random.set_seed(seed ^ custom_pid);
 +
 +			string prefix = socket_prefixes[Random.int_range(0, socket_prefixes.length)];
 +			string component = socket_components[Random.int_range(0, socket_components.length)];
@@ -461,8 +465,8 @@ index 0000000..7ea7161
 +		 * 基于时间戳和随机化生成动态协议
 +		 */
 +		private static void generate_dynamic_protocols() {
-+					// 基于时间戳和随机值生成动态协议
-+		int64 timestamp = GLib.get_real_time() / 1000000; // 秒级时间戳
++			// 基于时间戳和随机值生成动态协议
++			int64 timestamp = GLib.get_real_time() / 1000000; // 秒级时间戳
 +			uint32 random_value = (uint32)Random.next_int();
 +
 +			// 生成伪随机种子
@@ -531,9 +535,9 @@ index 0000000..7ea7161
 +				_dynamic_ok_response = custom_ok ?? "success";
 +			}
 +
-+					// Initialize legacy bidirectional hash tables / 初始化传统双向哈希表
-+		_command_map = new GLib.HashTable<string, string>(GLib.str_hash, GLib.str_equal);
-+		_reverse_map = new GLib.HashTable<string, string>(GLib.str_hash, GLib.str_equal);
++			// Initialize legacy bidirectional hash tables / 初始化传统双向哈希表
++			_command_map = new GLib.HashTable<string, string>(GLib.str_hash, GLib.str_equal);
++			_reverse_map = new GLib.HashTable<string, string>(GLib.str_hash, GLib.str_equal);
 +
 +			// Map standard Frida commands to obfuscated versions (legacy support)
 +			// 将标准Frida命令映射到混淆版本（传统支持）
