@@ -91,12 +91,12 @@ index c465452..2ec85bf 100644
 +		}
 +		
 +		private static void generate_dynamic_protocols() {
-+			// 基于时间戳和进程ID生成动态协议
++			// 基于时间戳和随机值生成动态协议
 +			int64 timestamp = get_real_time() / 1000000; // 秒级时间戳
-+			int pid = (int)Posix.getpid();
++			uint32 random_value = Random.next_int();
 +			
 +			// 生成伪随机种子
-+			uint32 seed = (uint32)(timestamp ^ pid);
++			uint32 seed = (uint32)(timestamp ^ random_value);
 +			Random.set_seed(seed);
 +			
 +			// 选择随机协议词
