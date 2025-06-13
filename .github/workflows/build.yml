@@ -21,7 +21,7 @@ env:
   FRIDA_VERSION: "16.7.19"
   FRIDMIRA_VERSION: "v1.0"
 
-jobs: 
+jobs:
   check_version:
     runs-on: ubuntu-22.04
     outputs:
@@ -42,7 +42,7 @@ jobs:
                 repo: context.repo.repo,
                 tag: releaseTag
               });
-              
+
               if ('${{ github.event.inputs.force_rebuild }}' === 'true' || '${{ github.event_name }}' === 'push') {
                 console.log('Force rebuild requested, will recreate release');
                 require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'ALREADY_RELEASE=2\n');
@@ -58,7 +58,7 @@ jobs:
                 core.setFailed(e.message);
               }
             }
-      
+
       - name: Delete existing release
         if: ${{ steps.checkReleaseVersion.outputs.ALREADY_RELEASE == '2' }}
         uses: actions/github-script@v7
@@ -71,19 +71,19 @@ jobs:
                 repo: context.repo.repo,
                 tag: releaseTag
               });
-              
+
               await github.rest.repos.deleteRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 release_id: release.data.id
               });
-              
+
               await github.rest.git.deleteRef({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 ref: `tags/${releaseTag}`
               });
-              
+
               console.log(`Deleted release and tag: ${releaseTag}`);
             } catch (error) {
               console.log(`Release ${releaseTag} not found or already deleted`);
@@ -104,26 +104,26 @@ jobs:
           name: "FridMira ${{ needs.check_version.outputs.FRIDA_VERSION }} - ${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
           body: |
             # 🚀 FridMira for Frida ${{ needs.check_version.outputs.FRIDA_VERSION }}
-            
+
             ## ✨ 增强特性 / Enhanced Features
             - 符号混淆、线程掩盖、RPC增强 / Symbol obfuscation, thread masking, RPC enhancement
             - 文件/socket名混淆、内置反检测 / File/socket name obfuscation, built-in anti-detection
             - GUM内存混淆、内存标识符隐藏 / GUM memory obfuscation, memory identifier hiding
             - 细粒度功能控制、环境变量优先级 / Fine-grained control, environment variable priority
-            
+
             ## 🎛️ 控制方式 / Control Methods
             ```bash
             # 命令行控制 / Command Line Control
             ./frida-server --fridmira                    # 启用所有功能 / Enable all features
             ./frida-server --fridmira --fridmira-no-gum  # 禁用GUM内存混淆 / Disable GUM memory obfuscation
             ./frida-server --fridmira --fridmira-no-symbol --fridmira-no-thread  # 组合控制 / Combined control
-            
+
             # 环境变量控制 / Environment Variable Control
             export FRIDMIRA_MODE=enabled          # 全局开关 / Global switch
             export FRIDMIRA_GUM_MODE=disabled     # GUM特定控制 / GUM-specific control
             export FRIDMIRA_VERBOSE=1             # 详细输出 / Verbose output
             ```
-            
+
             ## 📦 使用方法 / Usage
             ```bash
             # 下载并使用 / Download and use
@@ -133,15 +133,15 @@ jobs:
             adb shell chmod 755 /data/local/tmp/fridmira-server-*
             adb shell /data/local/tmp/fridmira-server-* --fridmira &
             ```
-            
+
             ## 🛡️ 反检测能力 / Anti-Detection Capabilities
             - ✅ 符号混淆 / Symbol obfuscation
-            - ✅ 线程掩盖 / Thread masking  
+            - ✅ 线程掩盖 / Thread masking
             - ✅ 内存混淆 / Memory obfuscation
             - ✅ RPC增强 / RPC enhancement
             - ✅ 文件混淆 / File obfuscation
             - ✅ 内置反检测 / Built-in anti-detection
-            
+
           prerelease: false
           draft: false
 
@@ -195,26 +195,26 @@ jobs:
         ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
       run: |
         set -e  # 遇到错误立即退出
-        
+
         # 配置git
         git config --global user.name "FridMira Bot"
         git config --global user.email "fridmira@github.actions"
-        
+
         echo "🚀 Building FridMira Frida ${{ env.FRIDA_VERSION }} for ${{ matrix.arch }}"
-        
+
         # 克隆并切换到指定版本
         git clone --recursive https://github.com/frida/frida.git
         cd frida
         git checkout ${{ env.FRIDA_VERSION }}
         git submodule update --init --recursive
         echo "✅ Frida ${{ env.FRIDA_VERSION }} ready ($(git describe --tags))"
-        
+
         # 验证patches目录
         if [[ ! -d "../patches" ]]; then
           echo "❌ Patches directory not found!"
           exit 1
         fi
-        
+
         # 应用frida-gum patches
         echo "📦 Applying frida-gum patches..."
         for patch in $(find ../patches/frida-gum -name "*.patch" | sort); do
@@ -228,7 +228,7 @@ jobs:
           fi
           echo "✅ Applied: $patch_name"
         done
-        
+
         # 应用frida-core patches
         echo "📦 Applying frida-core patches..."
         for patch in $(find ../patches/frida-core -name "*.patch" | sort); do
@@ -244,7 +244,7 @@ jobs:
           fi
           echo "✅ Applied: $patch_name"
         done
-        
+
         # 验证fridmira.vala已正确添加到构建系统
         if [[ -f "subprojects/frida-core/src/fridmira.vala" ]]; then
           if grep -q "fridmira.vala" subprojects/frida-core/src/meson.build; then
@@ -254,15 +254,15 @@ jobs:
             exit 1
           fi
         fi
-        
+
         echo "✅ All FridMira patches applied successfully"
-        
+
         # 构建
         echo "🔨 Building for ${{ matrix.arch }}..."
         cd ..
         mkdir -p build-${{ matrix.arch }}
         cd build-${{ matrix.arch }}
-        
+
         # 配置构建
         if ! ../frida/configure --host=${{ matrix.arch }}; then
           echo "❌ Configure failed for ${{ matrix.arch }}"
@@ -274,14 +274,14 @@ jobs:
             exit 1
           fi
         fi
-        
+
         # 编译
         echo "🔨 Compiling..."
         if ! make -j$(nproc); then
           echo "❌ Build failed, trying single-threaded..."
           make -j1
         fi
-        
+
         # 验证构建产物
         required_files=(
           "./server/frida-server"
@@ -289,30 +289,30 @@ jobs:
           "./lib/gadget/frida-gadget.so"
           "./lib/gumjs/libfrida-gumjs-1.0.a"
         )
-        
+
         for file in "${required_files[@]}"; do
           if [[ ! -f "$file" ]]; then
             echo "❌ Missing required file: $file"
             exit 1
           fi
         done
-        
+
         echo "✅ FridMira build completed successfully for ${{ matrix.arch }}"
 
     - name: Package build results
       shell: bash
       run: |
         mkdir -p dist
-        
+
         # 打包所有组件
         cp ./build-${{ matrix.arch }}/server/frida-server ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
         cp ./build-${{ matrix.arch }}/inject/frida-inject ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
         cp ./build-${{ matrix.arch }}/lib/gadget/frida-gadget.so ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so
         cp ./build-${{ matrix.arch }}/lib/gumjs/libfrida-gumjs-1.0.a ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a
-        
+
         # 压缩
         gzip -9 ./dist/*
-        
+
         # 创建符号链接用于上传
         ln -sf ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz ./frida-server.gz
         ln -sf ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz ./frida-inject.gz
@@ -371,7 +371,7 @@ jobs:
         echo "Frida Version: ${{ needs.check_version.outputs.FRIDA_VERSION }}"
         echo "FridMira Version: ${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
         echo "Build Status: ${{ needs.android_build.result }}"
-        
+
         if [[ "${{ needs.android_build.result }}" == "success" ]]; then
           echo "✅ All architectures built successfully!"
           echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
@@ -388,4 +388,4 @@ jobs:
         else
           echo "❌ Build failed. Check logs for details."
           exit 1
-        fi 
+        fi
