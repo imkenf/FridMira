@@ -1,0 +1,38 @@
+From b31c9245e1a31a042fe5b7535271a137b1eb603e Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Sat, 14 Jun 2025 05:41:47 +0800
+Subject: [PATCH 6/6] fridmira: Add socket name obfuscation to Linux helper process
+
+---
+ src/linux/frida-helper-process.vala | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/src/linux/frida-helper-process.vala b/src/linux/frida-helper-process.vala
+index 9f41c88..1af2b80 100644
+--- a/src/linux/frida-helper-process.vala
++++ b/src/linux/frida-helper-process.vala
+@@ -321,7 +321,22 @@ namespace Frida {
+ 			TimeoutSource? timeout_source = null;
+
+ 			try {
++				// FridMira Socket Name Obfuscation - Generate realistic socket names
++				// FridMira Socket名混淆 - 生成逼真的socket名
+ 				string socket_path = "/frida-" + Uuid.string_random ();
++
++				// Apply FridMira socket name obfuscation if available and enabled
++				// 应用FridMira socket名混淆（如果可用且启用）
++				if (Frida.FridMiraLibNameGenerator.is_enhanced_mode_enabled()) {
++					try {
++						socket_path = "/" + Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
++					} catch (Error e) {
++						// Fallback to original naming if FridMira fails
++						// 如果FridMira失败则回退到原始命名
++						socket_path = "/frida-" + Uuid.string_random ();
++					}
++				}
++
+ 				string socket_address = "unix:abstract=" + socket_path;
+
+ 				service = new SocketService ();
+--
+2.45.1.windows.1
