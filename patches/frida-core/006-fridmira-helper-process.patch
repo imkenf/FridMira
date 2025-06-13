@@ -1,4 +1,4 @@
-From fc2de332a45bf174c4c923636805f583dd769981 Mon Sep 17 00:00:00 2001
+From ab2e5e68b4f1ba9b9ec3e0e9d66f61c6c9a2e5c7 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Thu, 12 Jun 2025 18:42:40 +0800
 Subject: [PATCH 6/6] FridMira: Add socket name obfuscation to Linux helper
@@ -29,7 +29,7 @@ index 9f41c88..89e8e2a 100644
 +				
 +				if (should_obfuscate) {
 +					try {
-+						socket_path = "/" + FridMira.FridMiraLibNameGenerator.generate_library_name();
++						socket_path = "/" + FridMira.FridMiraLibNameGenerator.generate_lib_name();
 +					} catch (Error e) {
 +						// Fallback to original naming if FridMira fails
 +						// 如果FridMira失败则回退到原始命名

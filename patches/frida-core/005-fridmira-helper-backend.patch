@@ -30,7 +30,7 @@ index 1bbe475..38560d4 100644
 +			
 +			if (should_obfuscate) {
 +				try {
-+					return "/" + FridMira.FridMiraLibNameGenerator.generate_library_name();
++					return "/" + FridMira.FridMiraLibNameGenerator.generate_lib_name();
 +				} catch (Error e) {
 +					// Fallback to original naming if FridMira fails
 +					// 如果FridMira失败则回退到原始命名
