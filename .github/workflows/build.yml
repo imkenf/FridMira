@@ -291,7 +291,7 @@ jobs:
           "./subprojects/frida-core/server/frida-server"
           "./subprojects/frida-core/inject/frida-inject"
           "./subprojects/frida-core/lib/gadget/frida-gadget.so"
-          "./subprojects/frida-core/lib/gumjs/libfrida-gumjs-1.0.a"
+          "./subprojects/frida-gum/bindings/gumjs/libfrida-gumjs-1.0.a"
         )
 
         for file in "${required_files[@]}"; do
@@ -312,7 +312,7 @@ jobs:
         cp ./build-${{ matrix.arch }}/subprojects/frida-core/server/frida-server ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
         cp ./build-${{ matrix.arch }}/subprojects/frida-core/inject/frida-inject ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
         cp ./build-${{ matrix.arch }}/subprojects/frida-core/lib/gadget/frida-gadget.so ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so
-        cp ./build-${{ matrix.arch }}/subprojects/frida-core/lib/gumjs/libfrida-gumjs-1.0.a ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a
+        cp ./build-${{ matrix.arch }}/subprojects/frida-gum/bindings/gumjs/libfrida-gumjs-1.0.a ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a
 
         # 压缩
         gzip -9 ./dist/*
