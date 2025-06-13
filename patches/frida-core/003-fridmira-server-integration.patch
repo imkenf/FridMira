@@ -1,15 +1,15 @@
-From cd8097897e9817a2a52afb848f491759f95d8d49 Mon Sep 17 00:00:00 2001
+From e6f9be950025fd46e0009580e26922487d679ae7 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Thu, 12 Jun 2025 20:33:10 +0800
-Subject: [PATCH] FridMira: Add server integration with command line options
- and environment varible support
+Date: Thu, 12 Jun 2025 21:06:43 +0800
+Subject: [PATCH] FridMira: Add correct server integration with proper API
+ calls
 
 ---
- server/server.vala | 150 +++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 150 insertions(+)
+ server/server.vala | 144 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 144 insertions(+)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..a3b7ee0 100644
+index 67bf4b3..33848c1 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,15 @@ namespace Frida.Server {
@@ -142,7 +142,7 @@ index 67bf4b3..a3b7ee0 100644
  		application = new Application (device_id, endpoint_params, options);
  
  		Posix.signal (Posix.Signal.INT, (sig) => {
-@@ -357,4 +452,59 @@ namespace Frida.Server {
+@@ -357,4 +452,53 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
@@ -151,8 +151,9 @@ index 67bf4b3..a3b7ee0 100644
 +	 * Initialize FridMira anti-detection framework
 +	 * 初始化FridMira反检测框架
 +	 * 
-+	 * This function sets up the FridMira framework with the specified configuration
-+	 * 此函数使用指定配置设置FridMira框架
++	 * This function sets up the FridMira framework with the specified configuration.
++	 * FridMira components are automatically activated based on environment variables.
++	 * 此函数使用指定配置设置FridMira框架。FridMira组件根据环境变量自动激活。
 +	 */
 +	private static void initialize_fridmira_framework () {
 +		// Log initialization attempt if verbose mode is enabled
@@ -164,35 +165,28 @@ index 67bf4b3..a3b7ee0 100644
 +		try {
 +			// Set environment variables for child processes based on CLI flags
 +			// 根据CLI标志为子进程设置环境变量
++			Environment.set_variable ("FRIDMIRA_MODE", "enabled", true);
++			Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", fridmira_no_symbol ? "disabled" : "enabled", true);
++			Environment.set_variable ("FRIDMIRA_THREAD_MODE", fridmira_no_thread ? "disabled" : "enabled", true);
++			Environment.set_variable ("FRIDMIRA_RPC_MODE", fridmira_no_rpc ? "disabled" : "enabled", true);
++			Environment.set_variable ("FRIDMIRA_FILE_MODE", fridmira_no_file ? "disabled" : "enabled", true);
 +			Environment.set_variable ("FRIDMIRA_GUM_MODE", fridmira_no_gum ? "disabled" : "enabled", true);
 +
-+			// Calculate feature flags based on negation flags
-+			// 根据否定标志计算功能标志
-+			bool enable_symbol_obfuscation = !fridmira_no_symbol;
-+			bool enable_thread_obfuscation = !fridmira_no_thread;
-+			bool enable_rpc_obfuscation = !fridmira_no_rpc;
-+			bool enable_file_obfuscation = !fridmira_no_file;
-+			bool enable_gum_obfuscation = !fridmira_no_gum;
-+
-+			// Initialize FridMira core with calculated feature flags
-+			// 使用计算的功能标志初始化FridMira核心
-+			FridMira.FridMiraCore.initialize_from_cli (
-+				enable_symbol_obfuscation,
-+				enable_thread_obfuscation,
-+				enable_rpc_obfuscation,
-+				enable_file_obfuscation,
-+				enable_gum_obfuscation
-+			);
++			// Initialize RPC protocol enhancer if RPC obfuscation is enabled
++			// 如果启用RPC混淆则初始化RPC协议增强器
++			if (!fridmira_no_rpc) {
++				FridMira.FridMiraRpcProtocolEnhancer.init ();
++			}
 +
 +			// Log successful initialization if verbose mode is enabled
 +			// 如果启用详细模式则记录成功初始化
 +			if (verbose) {
 +				stdout.printf ("FridMira framework initialized successfully\n");
-+				stdout.printf ("  Symbol obfuscation: %s\n", enable_symbol_obfuscation ? "enabled" : "disabled");
-+				stdout.printf ("  Thread obfuscation: %s\n", enable_thread_obfuscation ? "enabled" : "disabled");
-+				stdout.printf ("  RPC obfuscation: %s\n", enable_rpc_obfuscation ? "enabled" : "disabled");
-+				stdout.printf ("  File obfuscation: %s\n", enable_file_obfuscation ? "enabled" : "disabled");
-+				stdout.printf ("  GUM memory obfuscation: %s\n", enable_gum_obfuscation ? "enabled" : "disabled");
++				stdout.printf ("  Symbol obfuscation: %s\n", fridmira_no_symbol ? "disabled" : "enabled");
++				stdout.printf ("  Thread obfuscation: %s\n", fridmira_no_thread ? "disabled" : "enabled");
++				stdout.printf ("  RPC obfuscation: %s\n", fridmira_no_rpc ? "disabled" : "enabled");
++				stdout.printf ("  File obfuscation: %s\n", fridmira_no_file ? "disabled" : "enabled");
++				stdout.printf ("  GUM memory obfuscation: %s\n", fridmira_no_gum ? "disabled" : "enabled");
 +			}
 +		} catch (Error e) {
 +			// Handle initialization errors gracefully
