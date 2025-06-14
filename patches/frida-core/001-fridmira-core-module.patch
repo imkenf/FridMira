@@ -1,19 +1,20 @@
-From 14d3e6c232c9423c779dbe063bacf3fefbe22940 Mon Sep 17 00:00:00 2001
+From 5fdf2a39d63d344434b9e5702e60c6cba66b7d90 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Fri, 13 Jun 2025 20:12:52 +0800
-Subject: [PATCH 1/6] fridmira: Add comprehensive anti-detection framework to lib/base
+Date: Sat, 14 Jun 2025 20:49:57 +0800
+Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
+ lib/base
 
 ---
- lib/base/fridmira.vala | 753 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 753 insertions(+)
+ lib/base/fridmira.vala | 754 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 754 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..cfee59a
+index 0000000..3fe99ca
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,753 @@
+@@ -0,0 +1,754 @@
 +/**
 + * FridMira: Enterprise-Grade Frida Anti-Detection Framework
 + * FridMira: 企业级Frida反检测框架
@@ -98,11 +99,11 @@ index 0000000..cfee59a
 +
 +			// Generate deterministic but unique seed / 生成确定性但唯一的种子
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
-+			Random.set_seed(seed);
++			var random = new Random.with_seed (seed);
 +
-+			string prefix = symbol_prefixes[Random.int_range(0, symbol_prefixes.length)];
-+			string component = symbol_components[Random.int_range(0, symbol_components.length)];
-+			string suffix = symbol_suffixes[Random.int_range(0, symbol_suffixes.length)];
++			string prefix = symbol_prefixes[random.int_range(0, symbol_prefixes.length)];
++			string component = symbol_components[random.int_range(0, symbol_components.length)];
++			string suffix = symbol_suffixes[random.int_range(0, symbol_suffixes.length)];
 +
 +			return prefix + component + suffix;
 +		}
@@ -179,11 +180,11 @@ index 0000000..cfee59a
 +
 +			// Generate deterministic but unique seed / 生成确定性但唯一的种子
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
-+			Random.set_seed(seed);
++			var random = new Random.with_seed (seed);
 +
-+			string prefix = thread_prefixes[Random.int_range(0, thread_prefixes.length)];
-+			string component = thread_components[Random.int_range(0, thread_components.length)];
-+			string suffix = thread_suffixes[Random.int_range(0, thread_suffixes.length)];
++			string prefix = thread_prefixes[random.int_range(0, thread_prefixes.length)];
++			string component = thread_components[random.int_range(0, thread_components.length)];
++			string suffix = thread_suffixes[random.int_range(0, thread_suffixes.length)];
 +
 +			return prefix + "-" + component + suffix;
 +		}
@@ -226,11 +227,11 @@ index 0000000..cfee59a
 +			}
 +
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
-+			Random.set_seed(seed);
++			var random = new Random.with_seed (seed);
 +
-+			string prefix = memory_prefixes[Random.int_range(0, memory_prefixes.length)];
-+			string component = memory_components[Random.int_range(0, memory_components.length)];
-+			uint id = Random.int_range(1000, 9999);
++			string prefix = memory_prefixes[random.int_range(0, memory_prefixes.length)];
++			string component = memory_components[random.int_range(0, memory_components.length)];
++			uint id = random.int_range(1000, 9999);
 +
 +			return prefix + "_" + component + "_" + id.to_string();
 +		}
@@ -265,10 +266,10 @@ index 0000000..cfee59a
 +			}
 +
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
-+			Random.set_seed(seed);
++			var random = new Random.with_seed (seed);
 +
-+			string prefix = protocol_prefixes[Random.int_range(0, protocol_prefixes.length)];
-+			string component = protocol_components[Random.int_range(0, protocol_components.length)];
++			string prefix = protocol_prefixes[random.int_range(0, protocol_prefixes.length)];
++			string component = protocol_components[random.int_range(0, protocol_components.length)];
 +
 +			return prefix + "_" + component;
 +		}
@@ -334,11 +335,11 @@ index 0000000..cfee59a
 +
 +			// Generate deterministic but time-varying seed / 生成确定性但时变的种子
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000);
-+			Random.set_seed(seed);
++			var random = new Random.with_seed (seed);
 +
-+			string prefix = lib_prefixes[Random.int_range(0, lib_prefixes.length)];
-+			string component = lib_components[Random.int_range(0, lib_components.length)];
-+			string suffix = lib_suffixes[Random.int_range(0, lib_suffixes.length)];
++			string prefix = lib_prefixes[random.int_range(0, lib_prefixes.length)];
++			string component = lib_components[random.int_range(0, lib_components.length)];
++			string suffix = lib_suffixes[random.int_range(0, lib_suffixes.length)];
 +
 +			return prefix + component + suffix;
 +		}
@@ -368,11 +369,11 @@ index 0000000..cfee59a
 +			// 使用高精度时间戳组合生成自定义PID等价物
 +			int64 time_us = GLib.get_real_time();
 +			uint32 custom_pid = (uint32)((time_us >> 16) ^ (time_us & 0xFFFF));
-+			Random.set_seed(seed ^ custom_pid);
++			var random = new Random.with_seed (seed ^ custom_pid);
 +
-+			string prefix = socket_prefixes[Random.int_range(0, socket_prefixes.length)];
-+			string component = socket_components[Random.int_range(0, socket_components.length)];
-+			uint suffix_num = Random.int_range(1, 999);
++			string prefix = socket_prefixes[random.int_range(0, socket_prefixes.length)];
++			string component = socket_components[random.int_range(0, socket_components.length)];
++			uint suffix_num = random.int_range(1, 999);
 +
 +			return prefix + "_" + component + "_" + suffix_num.to_string();
 +		}
@@ -470,15 +471,15 @@ index 0000000..cfee59a
 +
 +			// 生成伪随机种子
 +			uint32 seed = (uint32)(timestamp ^ random_value);
-+			Random.set_seed(seed);
++			var random = new Random.with_seed (seed);
 +
 +			// 选择随机协议词
-+			string protocol_word = PROTOCOL_WORDS[Random.int_range(0, PROTOCOL_WORDS.length)];
-+			string call_word = COMMAND_WORDS[Random.int_range(0, COMMAND_WORDS.length)];
-+			string ok_word = RESPONSE_WORDS[Random.int_range(0, RESPONSE_WORDS.length)];
++			string protocol_word = PROTOCOL_WORDS[random.int_range(0, PROTOCOL_WORDS.length)];
++			string call_word = COMMAND_WORDS[random.int_range(0, COMMAND_WORDS.length)];
++			string ok_word = RESPONSE_WORDS[random.int_range(0, RESPONSE_WORDS.length)];
 +
 +			// 添加动态后缀
-+			string suffix = "%04x".printf(Random.int_range(0x1000, 0xFFFF));
++			string suffix = "%04x".printf(random.int_range(0x1000, 0xFFFF));
 +
 +			_dynamic_protocol_id = "%s%s:rpc".printf(protocol_word, suffix);
 +			_dynamic_call_command = "%s%s".printf(call_word, suffix[0:2]);
@@ -762,10 +763,12 @@ index 0000000..cfee59a
 +			}
 +
 +			string[] prefixes = {"req", "id", "op", "cmd", "task", "job", "call"};
-+			var random_index = Random.int_range(0, prefixes.length);
++			var random = new Random ();
++			var random_index = random.int_range(0, prefixes.length);
 +			return prefixes[random_index] + "_";
 +		}
 +	}
 +}
---
+-- 
 2.45.1.windows.1
+

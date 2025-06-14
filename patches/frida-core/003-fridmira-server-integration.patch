@@ -1,14 +1,14 @@
-From 1af7f0c08d59e1f395b5ef07d5ae91345f9d8330 Mon Sep 17 00:00:00 2001
+From 0ce54572101e07b49c1e5db9d3c3fab80557b72f Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Sat, 14 Jun 2025 03:05:49 +0800
-Subject: [PATCH] fridmira: Integrate FridMira server functionality
+Date: Sat, 14 Jun 2025 23:36:57 +0800
+Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 205 +++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 205 insertions(+)
+ server/server.vala | 196 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 196 insertions(+)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..cd4fe13 100644
+index 67bf4b3..aa46387 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,15 @@ namespace Frida.Server {
@@ -141,7 +141,7 @@ index 67bf4b3..cd4fe13 100644
  		application = new Application (device_id, endpoint_params, options);
  
  		Posix.signal (Posix.Signal.INT, (sig) => {
-@@ -357,4 +452,114 @@ namespace Frida.Server {
+@@ -357,4 +452,105 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
@@ -226,15 +226,6 @@ index 67bf4b3..cd4fe13 100644
 +				string test_memory = Frida.FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_memory_region");
 +				if (verbose) {
 +					stdout.printf ("  GUM memory obfuscator: enabled (test: frida_memory_region -> %s)\n", test_memory);
-+				}
-+			}
-+
-+			// Test protocol enhancer functionality
-+			// 测试协议增强器功能
-+			if (!fridmira_no_rpc) {
-+				string test_proto_id = Frida.FridMiraProtocolEnhancer.obfuscate_protocol_identifier("frida_protocol");
-+				if (verbose) {
-+					stdout.printf ("  Protocol enhancer: active (test: frida_protocol -> %s)\n", test_proto_id);
 +				}
 +			}
 +
