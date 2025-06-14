@@ -1,20 +1,20 @@
-From 2064ebc7fa9961397e9b72784abe924815e2f989 Mon Sep 17 00:00:00 2001
+From 18eb084c4535fbb1d34bd153aa978910e2c973ee Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 20:49:57 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/base/fridmira.vala | 756 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 756 insertions(+)
+ lib/base/fridmira.vala | 916 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 916 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..23fefa6
+index 0000000..9fedb22
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,756 @@
+@@ -0,0 +1,916 @@
 +/**
 + * FridMira: Enterprise-Grade Frida Anti-Detection Framework
 + * FridMira: 企业级Frida反检测框架
@@ -45,25 +45,41 @@ index 0000000..23fefa6
 +	 * 生成逼真的符号名，与系统库和原生Android/iOS组件融为一体，避免检测。
 +	 */
 +	public class FridMiraSymbolObfuscator {
-+		// Symbol name component arrays for realistic generation
-+		// 用于生成逼真符号名的组件数组
-+		private static string[] symbol_prefixes = {
-+			"_lib", "_sys", "_core", "_util", "_base", "_native", "_android",
-+			"_ios", "_darwin", "_linux", "_gnu", "_glibc", "_musl"
-+		};
++		/**
++		 * Get symbol prefixes array
++		 * 获取仿系统符号前缀数组
++		 */
++		private static string[] get_symbol_prefixes() {
++			return {
++				"_lib", "_sys", "_core", "_util", "_base", "_native", "_android",
++				"_ios", "_darwin", "_linux", "_gnu", "_glibc", "_musl"
++			};
++		}
 +
-+		private static string[] symbol_components = {
-+			"init", "start", "stop", "create", "destroy", "alloc", "free",
-+			"open", "close", "read", "write", "send", "recv", "connect",
-+			"bind", "listen", "accept", "process", "handle", "execute",
-+			"invoke", "call", "return", "exit", "main", "entry", "cleanup",
-+			"malloc", "calloc", "realloc", "mmap", "munmap", "dlopen"
-+		};
++		/**
++		 * Get symbol components array
++		 * 获取仿系统符号组件数组
++		 */
++		private static string[] get_symbol_components() {
++			return {
++				"init", "start", "stop", "create", "destroy", "alloc", "free",
++				"open", "close", "read", "write", "send", "recv", "connect",
++				"bind", "listen", "accept", "process", "handle", "execute",
++				"invoke", "call", "return", "exit", "main", "entry", "cleanup",
++				"malloc", "calloc", "realloc", "mmap", "munmap", "dlopen"
++			};
++		}
 +
-+		private static string[] symbol_suffixes = {
-+			"", "_impl", "_native", "_jni", "_internal", "_handler",
-+			"_mgr", "_svc", "_fn", "_proc", "_wrapper", "_bridge"
-+		};
++		/**
++		 * Get symbol suffixes array
++		 * 获取仿系统符号后缀数组
++		 */
++		private static string[] get_symbol_suffixes() {
++			return {
++				"", "_impl", "_native", "_jni", "_internal", "_handler",
++				"_mgr", "_svc", "_fn", "_proc", "_wrapper", "_bridge"
++			};
++		}
 +
 +		/**
 +		 * Check if symbol obfuscation is enabled via environment variables
@@ -101,9 +117,19 @@ index 0000000..23fefa6
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
 +			var random = new Rand.with_seed (seed);
 +
-+			string prefix = symbol_prefixes[random.int_range(0, symbol_prefixes.length)];
-+			string component = symbol_components[random.int_range(0, symbol_components.length)];
-+			string suffix = symbol_suffixes[random.int_range(0, symbol_suffixes.length)];
++			// Get arrays safely / 获取仿系统数组
++			string[] prefixes = get_symbol_prefixes();
++			string[] components = get_symbol_components();
++			string[] suffixes = get_symbol_suffixes();
++
++			// Ensure arrays are not empty / 确保数组不为空
++			if (prefixes.length == 0 || components.length == 0 || suffixes.length == 0) {
++				return original; // Fallback to original if arrays are empty
++			}
++
++			string prefix = prefixes[random.int_range(0, prefixes.length)];
++			string component = components[random.int_range(0, components.length)];
++			string suffix = suffixes[random.int_range(0, suffixes.length)];
 +
 +			return prefix + component + suffix;
 +		}
@@ -127,24 +153,40 @@ index 0000000..23fefa6
 +	 * 将可检测的线程名如"frida-server-main-loop"替换为逼真的系统线程名。
 +	 */
 +	public class FridMiraThreadObfuscator {
-+		// Thread name component arrays for realistic generation
-+		// 用于生成逼真线程名的组件数组
-+		private static string[] thread_prefixes = {
-+			"thread", "worker", "task", "job", "service", "handler", "process",
-+			"daemon", "monitor", "watcher", "timer", "scheduler", "executor",
-+			"async", "sync", "pool", "queue", "mgmt", "ctrl", "event"
-+		};
++		/**
++		 * Get thread prefixes array
++		 * 获取仿系统线程前缀数组
++		 */
++		private static string[] get_thread_prefixes() {
++			return {
++				"thread", "worker", "task", "job", "service", "handler", "process",
++				"daemon", "monitor", "watcher", "timer", "scheduler", "executor",
++				"async", "sync", "pool", "queue", "mgmt", "ctrl", "event"
++			};
++		}
 +
-+		private static string[] thread_components = {
-+			"main", "bg", "io", "net", "ui", "core", "util", "sys", "mgmt",
-+			"ctrl", "data", "event", "signal", "async", "sync", "pool",
-+			"work", "task", "job", "svc", "proc", "loop", "run", "exec"
-+		};
++		/**
++		 * Get thread components array
++		 * 获取仿系统线程组件数组
++		 */
++		private static string[] get_thread_components() {
++			return {
++				"main", "bg", "io", "net", "ui", "core", "util", "sys", "mgmt",
++				"ctrl", "data", "event", "signal", "async", "sync", "pool",
++				"work", "task", "job", "svc", "proc", "loop", "run", "exec"
++			};
++		}
 +
-+		private static string[] thread_suffixes = {
-+			"", "-1", "-2", "-pool", "-mgr", "-svc", "-loop", "-proc",
-+			"-worker", "-handler", "-monitor", "-ctrl", "-th", "-0", "-bg"
-+		};
++		/**
++		 * Get thread suffixes array
++		 * 获取仿系统线程后缀数组
++		 */
++		private static string[] get_thread_suffixes() {
++			return {
++				"", "-1", "-2", "-pool", "-mgr", "-svc", "-loop", "-proc",
++				"-worker", "-handler", "-monitor", "-ctrl", "-th", "-0", "-bg"
++			};
++		}
 +
 +		/**
 +		 * Check if thread name obfuscation is enabled
@@ -182,9 +224,19 @@ index 0000000..23fefa6
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
 +			var random = new Rand.with_seed (seed);
 +
-+			string prefix = thread_prefixes[random.int_range(0, thread_prefixes.length)];
-+			string component = thread_components[random.int_range(0, thread_components.length)];
-+			string suffix = thread_suffixes[random.int_range(0, thread_suffixes.length)];
++			// Get arrays safely / 获取仿系统数组
++			string[] prefixes = get_thread_prefixes();
++			string[] components = get_thread_components();
++			string[] suffixes = get_thread_suffixes();
++
++			// Ensure arrays are not empty / 确保数组不为空
++			if (prefixes.length == 0 || components.length == 0 || suffixes.length == 0) {
++				return original; // Fallback to original if arrays are empty
++			}
++
++			string prefix = prefixes[random.int_range(0, prefixes.length)];
++			string component = components[random.int_range(0, components.length)];
++			string suffix = suffixes[random.int_range(0, suffixes.length)];
 +
 +			return prefix + "-" + component + suffix;
 +		}
@@ -208,13 +260,25 @@ index 0000000..23fefa6
 +	 * 为内存相关标识符和签名提供混淆，避免在进程内存中检测到Frida的存在。
 +	 */
 +	public class FridMiraMemoryObfuscator {
-+		private static string[] memory_prefixes = {
-+			"mem", "buf", "heap", "stack", "seg", "region", "block", "chunk"
-+		};
++		/**
++		 * Get memory prefixes array
++		 * 获取仿系统内存前缀数组
++		 */
++		private static string[] get_memory_prefixes() {
++			return {
++				"mem", "buf", "heap", "stack", "seg", "region", "block", "chunk"
++			};
++		}
 +
-+		private static string[] memory_components = {
-+			"data", "code", "exec", "read", "write", "shared", "private", "anon"
-+		};
++		/**
++		 * Get memory components array
++		 * 获取仿系统内存组件数组
++		 */
++		private static string[] get_memory_components() {
++			return {
++				"data", "code", "exec", "read", "write", "shared", "private", "anon"
++			};
++		}
 +
 +		/**
 +		 * Generate obfuscated memory region identifier
@@ -229,8 +293,17 @@ index 0000000..23fefa6
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
 +			var random = new Rand.with_seed (seed);
 +
-+			string prefix = memory_prefixes[random.int_range(0, memory_prefixes.length)];
-+			string component = memory_components[random.int_range(0, memory_components.length)];
++			// Get arrays safely / 获取仿系统数组
++			string[] prefixes = get_memory_prefixes();
++			string[] components = get_memory_components();
++
++			// Ensure arrays are not empty / 确保数组不为空
++			if (prefixes.length == 0 || components.length == 0) {
++				return original; // Fallback to original if arrays are empty
++			}
++
++			string prefix = prefixes[random.int_range(0, prefixes.length)];
++			string component = components[random.int_range(0, components.length)];
 +			uint id = random.int_range(1000, 9999);
 +
 +			return prefix + "_" + component + "_" + id.to_string();
@@ -247,13 +320,25 @@ index 0000000..23fefa6
 +	 * 掩盖Frida用于与外部工具和调试器通信的网络协议签名和标识符。
 +	 */
 +	public class FridMiraProtocolEnhancer {
-+		private static string[] protocol_prefixes = {
-+			"proto", "net", "comm", "ipc", "rpc", "msg", "data", "stream"
-+		};
++		/**
++		 * Get protocol prefixes array
++		 * 获取仿系统协议前缀数组
++		 */
++		private static string[] get_protocol_prefixes() {
++			return {
++				"proto", "net", "comm", "ipc", "rpc", "msg", "data", "stream"
++			};
++		}
 +
-+		private static string[] protocol_components = {
-+			"ctrl", "data", "mgmt", "sync", "async", "req", "resp", "event"
-+		};
++		/**
++		 * Get protocol components array
++		 * 获取仿系统协议组件数组
++		 */
++		private static string[] get_protocol_components() {
++			return {
++				"ctrl", "data", "mgmt", "sync", "async", "req", "resp", "event"
++			};
++		}
 +
 +		/**
 +		 * Generate obfuscated protocol identifier
@@ -268,8 +353,17 @@ index 0000000..23fefa6
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
 +			var random = new Rand.with_seed (seed);
 +
-+			string prefix = protocol_prefixes[random.int_range(0, protocol_prefixes.length)];
-+			string component = protocol_components[random.int_range(0, protocol_components.length)];
++			// Get arrays safely / 获取仿系统数组
++			string[] prefixes = get_protocol_prefixes();
++			string[] components = get_protocol_components();
++
++			// Ensure arrays are not empty / 确保数组不为空
++			if (prefixes.length == 0 || components.length == 0) {
++				return original; // Fallback to original if arrays are empty
++			}
++
++			string prefix = prefixes[random.int_range(0, prefixes.length)];
++			string component = components[random.int_range(0, components.length)];
 +
 +			return prefix + "_" + component;
 +		}
@@ -285,21 +379,60 @@ index 0000000..23fefa6
 +	 * 生成逼真的库名和Unix域socket名，与系统组件融为一体，避免检测。
 +	 */
 +	public class FridMiraLibNameGenerator {
-+		// Library name component arrays / 库名组件数组
-+		private static string[] lib_prefixes = {
-+			"lib", "android", "system", "native", "core", "runtime",
-+			"platform", "framework", "service", "hal", "vendor", "bionic"
-+		};
++		/**
++		 * Get library prefixes array
++		 * 获取仿系统库前缀数组
++		 */
++		private static string[] get_lib_prefixes() {
++			return {
++				"lib", "android", "system", "native", "core", "runtime",
++				"platform", "framework", "service", "hal", "vendor", "bionic"
++			};
++		}
 +
-+		private static string[] lib_components = {
-+			"utils", "service", "manager", "handler", "process", "thread",
-+			"memory", "network", "security", "crypto", "media", "graphics",
-+			"audio", "camera", "sensor", "ui", "input", "display", "log"
-+		};
++		/**
++		 * Get library components array
++		 * 获取仿系统库组件数组
++		 */
++		private static string[] get_lib_components() {
++			return {
++				"utils", "service", "manager", "handler", "process", "thread",
++				"memory", "network", "security", "crypto", "media", "graphics",
++				"audio", "camera", "sensor", "ui", "input", "display", "log"
++			};
++		}
 +
-+		private static string[] lib_suffixes = {
-+			"", "_native", "_jni", "_impl", "_core", "_base", "_v2", "_compat"
-+		};
++		/**
++		 * Get library suffixes array
++		 * 获取仿系统库后缀数组
++		 */
++		private static string[] get_lib_suffixes() {
++			return {
++				"", "_native", "_jni", "_impl", "_core", "_base", "_v2", "_compat"
++			};
++		}
++
++		/**
++		 * Get socket prefixes array
++		 * 获取仿系统socket前缀数组
++		 */
++		private static string[] get_socket_prefixes() {
++			return {
++				"sys", "android", "native", "service", "core", "base",
++				"platform", "framework", "hal", "vendor", "system", "init"
++			};
++		}
++
++		/**
++		 * Get socket components array
++		 * 获取仿系统socket组件数组
++		 */
++		private static string[] get_socket_components() {
++			return {
++				"sock", "ipc", "ctrl", "mgmt", "svc", "handler",
++				"bridge", "proxy", "daemon", "worker", "helper", "monitor"
++			};
++		}
 +
 +		/**
 +		 * Check if library name obfuscation is enabled
@@ -337,9 +470,19 @@ index 0000000..23fefa6
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000);
 +			var random = new Rand.with_seed (seed);
 +
-+			string prefix = lib_prefixes[random.int_range(0, lib_prefixes.length)];
-+			string component = lib_components[random.int_range(0, lib_components.length)];
-+			string suffix = lib_suffixes[random.int_range(0, lib_suffixes.length)];
++			// Get arrays safely / 获取仿系统数组
++			string[] prefixes = get_lib_prefixes();
++			string[] components = get_lib_components();
++			string[] suffixes = get_lib_suffixes();
++
++			// Ensure arrays are not empty / 确保数组不为空
++			if (prefixes.length == 0 || components.length == 0 || suffixes.length == 0) {
++				return "frida-agent"; // Fallback to default if arrays are empty
++			}
++
++			string prefix = prefixes[random.int_range(0, prefixes.length)];
++			string component = components[random.int_range(0, components.length)];
++			string suffix = suffixes[random.int_range(0, suffixes.length)];
 +
 +			return prefix + component + suffix;
 +		}
@@ -353,16 +496,6 @@ index 0000000..23fefa6
 +		 * 创建看起来像合法系统IPC端点的socket名，避免通过/proc/net/unix扫描检测。
 +		 */
 +		public static string generate_realistic_socket_name() {
-+			string[] socket_prefixes = {
-+				"sys", "android", "native", "service", "core", "base",
-+				"platform", "framework", "hal", "vendor", "system", "init"
-+			};
-+
-+			string[] socket_components = {
-+				"sock", "ipc", "ctrl", "mgmt", "svc", "handler",
-+				"bridge", "proxy", "daemon", "worker", "helper", "monitor"
-+			};
-+
 +			// Use custom PID and time for unique but realistic naming / 使用自定义PID和时间生成唯一但逼真的命名
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000);
 +			// Generate custom PID equivalent using high-precision timestamp combination
@@ -370,6 +503,15 @@ index 0000000..23fefa6
 +			int64 time_us = GLib.get_real_time();
 +			uint32 custom_pid = (uint32)((time_us >> 16) ^ (time_us & 0xFFFF));
 +			var random = new Rand.with_seed (seed ^ custom_pid);
++
++			// Get arrays safely / 获取仿系统数组
++			string[] socket_prefixes = get_socket_prefixes();
++			string[] socket_components = get_socket_components();
++
++			// Ensure arrays are not empty / 确保数组不为空
++			if (socket_prefixes.length == 0 || socket_components.length == 0) {
++				return "frida_socket"; // Fallback to default if arrays are empty
++			}
 +
 +			string prefix = socket_prefixes[random.int_range(0, socket_prefixes.length)];
 +			string component = socket_components[random.int_range(0, socket_components.length)];
@@ -426,17 +568,35 @@ index 0000000..23fefa6
 +		private static Gee.HashMap<string, string> _session_ok_responses = new Gee.HashMap<string, string>();
 +
 +		// Dynamic protocol word libraries / 动态协议词库
-+		private static string[] PROTOCOL_WORDS = {
-+			"perf", "opt", "boost", "turbo", "fast", "speed", "cache", "mem"
-+		};
++		/**
++		 * Get protocol words array
++		 * 获取仿系统协议词数组
++		 */
++		private static string[] get_protocol_words() {
++			return {
++				"perf", "opt", "boost", "turbo", "fast", "speed", "cache", "mem"
++			};
++		}
 +
-+		private static string[] COMMAND_WORDS = {
-+			"exec", "run", "proc", "task", "job", "work", "op", "act"
-+		};
++		/**
++		 * Get command words array
++		 * 获取仿系统命令词数组
++		 */
++		private static string[] get_command_words() {
++			return {
++				"exec", "run", "proc", "task", "job", "work", "op", "act"
++			};
++		}
 +
-+		private static string[] RESPONSE_WORDS = {
-+			"done", "ready", "good", "pass", "yes", "ack", "fin", "end"
-+		};
++		/**
++		 * Get response words array
++		 * 获取仿系统响应词数组
++		 */
++		private static string[] get_response_words() {
++			return {
++				"done", "ready", "good", "pass", "yes", "ack", "fin", "end"
++			};
++		}
 +
 +		private static bool _enhanced_mode_enabled = false;
 +		private static bool _initialized = false;
@@ -474,9 +634,9 @@ index 0000000..23fefa6
 +			var random = new Rand.with_seed (seed);
 +
 +			// 选择随机协议词
-+			string protocol_word = PROTOCOL_WORDS[random.int_range(0, PROTOCOL_WORDS.length)];
-+			string call_word = COMMAND_WORDS[random.int_range(0, COMMAND_WORDS.length)];
-+			string ok_word = RESPONSE_WORDS[random.int_range(0, RESPONSE_WORDS.length)];
++			string protocol_word = get_protocol_words()[random.int_range(0, get_protocol_words().length)];
++			string call_word = get_command_words()[random.int_range(0, get_command_words().length)];
++			string ok_word = get_response_words()[random.int_range(0, get_response_words().length)];
 +
 +			// 添加动态后缀
 +			string suffix = "%04x".printf(random.int_range(0x1000, 0xFFFF));
