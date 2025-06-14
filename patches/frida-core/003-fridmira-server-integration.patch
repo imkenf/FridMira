@@ -1,14 +1,14 @@
-From 0ce54572101e07b49c1e5db9d3c3fab80557b72f Mon Sep 17 00:00:00 2001
+From 4aafccc700c74f6ef313571a4f609740a518e2d7 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 23:36:57 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 196 +++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 196 insertions(+)
+ server/server.vala | 216 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 216 insertions(+)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..aa46387 100644
+index 67bf4b3..bc68ce9 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,15 @@ namespace Frida.Server {
@@ -141,7 +141,7 @@ index 67bf4b3..aa46387 100644
  		application = new Application (device_id, endpoint_params, options);
  
  		Posix.signal (Posix.Signal.INT, (sig) => {
-@@ -357,4 +452,105 @@ namespace Frida.Server {
+@@ -357,4 +452,125 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
@@ -177,55 +177,75 @@ index 67bf4b3..aa46387 100644
 +			// Initialize symbol obfuscator if enabled
 +			// 如果启用则初始化符号混淆器
 +			if (!fridmira_no_symbol) {
-+				// Test symbol obfuscator functionality
-+				// 测试符号混淆器功能
-+				string test_symbol = Frida.FridMiraSymbolObfuscator.obfuscate_symbol("frida_test_symbol");
-+				if (verbose) {
-+					stdout.printf ("  Symbol obfuscator: enabled (test: frida_test_symbol -> %s)\n", test_symbol);
++				try {
++					// Test symbol obfuscator functionality
++					// 测试符号混淆器功能
++					string test_symbol = Frida.FridMiraSymbolObfuscator.obfuscate_symbol("frida_test_symbol");
++					if (verbose) {
++						stdout.printf ("  Symbol obfuscator: enabled (test: frida_test_symbol -> %s)\n", test_symbol);
++					}
++				} catch (Error e) {
++					stderr.printf ("Warning: Symbol obfuscator initialization failed: %s\n", e.message);
 +				}
 +			}
 +
 +			// Initialize thread obfuscator if enabled
 +			// 如果启用则初始化线程混淆器
 +			if (!fridmira_no_thread) {
-+				// Test thread name obfuscator functionality
-+				// 测试线程名混淆器功能
-+				string test_thread = Frida.FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
-+				if (verbose) {
-+					stdout.printf ("  Thread obfuscator: enabled (test: frida-server-main-loop -> %s)\n", test_thread);
++				try {
++					// Test thread name obfuscator functionality
++					// 测试线程名混淆器功能
++					string test_thread = Frida.FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
++					if (verbose) {
++						stdout.printf ("  Thread obfuscator: enabled (test: frida-server-main-loop -> %s)\n", test_thread);
++					}
++				} catch (Error e) {
++					stderr.printf ("Warning: Thread obfuscator initialization failed: %s\n", e.message);
 +				}
 +			}
 +
 +			// Initialize RPC protocol enhancer if RPC obfuscation is enabled
 +			// 如果启用RPC混淆则初始化RPC协议增强器
 +			if (!fridmira_no_rpc) {
-+				Frida.FridMiraRpcProtocolEnhancer.init ();
-+				string test_protocol = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id();
-+				if (verbose) {
-+					stdout.printf ("  RPC protocol enhancer: initialized (protocol: %s)\n", test_protocol);
++				try {
++					Frida.FridMiraRpcProtocolEnhancer.init ();
++					string test_protocol = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id();
++					if (verbose) {
++						stdout.printf ("  RPC protocol enhancer: initialized (protocol: %s)\n", test_protocol);
++					}
++				} catch (Error e) {
++					stderr.printf ("Warning: RPC protocol enhancer initialization failed: %s\n", e.message);
 +				}
 +			}
 +
 +			// Initialize file/library name generator if enabled
 +			// 如果启用则初始化文件/库名生成器
 +			if (!fridmira_no_file) {
-+				// Test file name generator functionality
-+				// 测试文件名生成器功能
-+				string test_lib = Frida.FridMiraLibNameGenerator.generate_lib_name();
-+				string test_socket = Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
-+				if (verbose) {
-+					stdout.printf ("  File/library name obfuscator: enabled (lib: %s, socket: %s)\n", test_lib, test_socket);
++				try {
++					// Test file name generator functionality
++					// 测试文件名生成器功能
++					string test_lib = Frida.FridMiraLibNameGenerator.generate_lib_name();
++					string test_socket = Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
++					if (verbose) {
++						stdout.printf ("  File/library name obfuscator: enabled (lib: %s, socket: %s)\n", test_lib, test_socket);
++					}
++				} catch (Error e) {
++					stderr.printf ("Warning: File/library name obfuscator initialization failed: %s\n", e.message);
 +				}
 +			}
 +
 +			// Initialize memory obfuscator if enabled
 +			// 如果启用则初始化内存混淆器
 +			if (!fridmira_no_gum) {
-+				// Test memory identifier obfuscator functionality
-+				// 测试内存标识符混淆器功能
-+				string test_memory = Frida.FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_memory_region");
-+				if (verbose) {
-+					stdout.printf ("  GUM memory obfuscator: enabled (test: frida_memory_region -> %s)\n", test_memory);
++				try {
++					// Test memory identifier obfuscator functionality
++					// 测试内存标识符混淆器功能
++					string test_memory = Frida.FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_memory_region");
++					if (verbose) {
++						stdout.printf ("  GUM memory obfuscator: enabled (test: frida_memory_region -> %s)\n", test_memory);
++					}
++				} catch (Error e) {
++					stderr.printf ("Warning: GUM memory obfuscator initialization failed: %s\n", e.message);
 +				}
 +			}
 +

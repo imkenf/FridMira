@@ -1,20 +1,20 @@
-From 62ef7a98088f81e2942500f2e260f2c03f4759f5 Mon Sep 17 00:00:00 2001
+From 2064ebc7fa9961397e9b72784abe924815e2f989 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 20:49:57 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/base/fridmira.vala | 754 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 754 insertions(+)
+ lib/base/fridmira.vala | 756 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 756 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..4e045b3
+index 0000000..23fefa6
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,754 @@
+@@ -0,0 +1,756 @@
 +/**
 + * FridMira: Enterprise-Grade Frida Anti-Detection Framework
 + * FridMira: 企业级Frida反检测框架
@@ -548,12 +548,14 @@ index 0000000..4e045b3
 +			_command_map.insert("result", "output");
 +			_command_map.insert("request", "invoke");
 +
-+			// Create reverse mapping for bidirectional translation
-+			// 为双向转换创建反向映射
-+			var keys = _command_map.get_keys();
-+			foreach (var key in keys) {
-+				_reverse_map.insert(_command_map.get(key), key);
-+			}
++			// Create reverse mapping for bidirectional translation (safe approach)
++			// 为双向转换创建反向映射（安全方法）
++			_reverse_map.insert("invoke:op", "frida:rpc");
++			_reverse_map.insert("exec", "call");
++			_reverse_map.insert("success", "ok");
++			_reverse_map.insert("failure", "error");
++			_reverse_map.insert("output", "result");
++			_reverse_map.insert("invoke", "request");
 +
 +			_initialized = true;
 +		}
