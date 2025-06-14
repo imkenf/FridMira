@@ -1,23 +1,22 @@
-From 9c855b336c14ccb955dc636aaaf39c2e4b9f3b23 Mon Sep 17 00:00:00 2001
+From 045d8ca5f4713cafb70d13a3b0c96d20ae95b680 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 20:49:57 +0800
-Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
- lib/base
+Subject: [PATCH 001/006] Add comprehensive anti-detection framework to lib/base
 
 ---
- lib/base/fridmira.vala | 817 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 817 insertions(+)
+ lib/base/fridmira.vala | 928 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 928 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..2200ca1
+index 0000000..7379305
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,817 @@
+@@ -0,0 +1,928 @@
 +/**
-+ * FridMira: Enterprise-Grade Frida Anti-Detection Framework
-+ * FridMira: 企业级Frida反检测框架
++ * FridMira: Frida Anti-Detection Framework
++ * FridMira: Frida 反检测框架
 + *
 + * This module provides comprehensive anti-detection capabilities for Frida,
 + * including symbol obfuscation, thread name masking, protocol enhancement,
@@ -41,8 +40,11 @@ index 0000000..2200ca1
 +	 *
 +	 * Generates realistic-looking symbol names that blend in with system
 +	 * libraries and native Android/iOS components to avoid detection.
++	 * Uses intelligent filtering to only obfuscate Frida-related symbols
++	 * while preserving system-critical symbols for stability.
 +	 *
 +	 * 生成仿系统的符号名，与系统库和原生Android/iOS组件融为一体，避免检测。
++	 * 使用智能过滤只混淆Frida相关符号，同时保护系统关键符号以确保稳定性。
 +	 */
 +	public class FridMiraSymbolObfuscator {
 +		// Symbol name component arrays for realistic generation
@@ -72,6 +74,59 @@ index 0000000..2200ca1
 +		}
 +
 +		/**
++		 * Safe Frida symbols that can be obfuscated without system impact
++		 * 可以安全混淆而不影响系统的Frida符号
++		 */
++		private static string[] get_safe_frida_symbols() {
++			return {
++				"frida_", "_frida_", "FRIDA_",
++				"frida_server", "frida_agent", "frida_gadget",
++				"frida_core", "frida_gum", "frida_gumjs"
++			};
++		}
++
++		/**
++		 * Frida GUM symbols that need careful handling
++		 * 需要谨慎处理的Frida GUM符号
++		 */
++		private static string[] get_frida_gum_symbols() {
++			return {
++				"gum_init", "gum_deinit", "gum_interceptor_",
++				"gum_invocation_", "gum_script_", "gum_stalker_",
++				"gum_memory_", "gum_module_", "gum_process_",
++				"gum_thread_", "gum_kernel_", "gum_darwin_",
++				"gum_linux_", "gum_windows_", "gum_android_"
++			};
++		}
++
++		/**
++		 * Critical system symbols that must never be obfuscated
++		 * 绝对不能混淆的系统关键符号
++		 */
++		private static string[] get_critical_system_symbols() {
++			return {
++				// Signal handling / 信号处理
++				"signal", "sigaction", "kill", "raise", "abort", "exit",
++				// Memory management / 内存管理
++				"malloc", "free", "calloc", "realloc", "mmap", "munmap",
++				// Thread and synchronization / 线程和同步
++				"pthread_", "sem_", "mutex_", "cond_",
++				// Dynamic linking / 动态链接
++				"dlopen", "dlsym", "dlclose", "dladdr", "dlinfo",
++				// System calls / 系统调用
++				"__libc_", "__android_", "__system_", "syscall",
++				// Android specific / Android特定
++				"android_", "art_", "dalvik_", "jni_", "ART_",
++				// Preload related / 预加载相关
++				"preload", "__preload", "_preload",
++				// C runtime / C运行时
++				"__cxa_", "__gnu_", "__gxx_", "std::",
++				// Kernel and low-level / 内核和底层
++				"__kernel_", "kernel_", "__user_", "__init_"
++			};
++		}
++
++		/**
 +		 * Check if symbol obfuscation is enabled via environment variables
 +		 * 通过环境变量检查是否启用符号混淆
 +		 *
@@ -91,6 +146,55 @@ index 0000000..2200ca1
 +		}
 +
 +		/**
++		 * Check if a symbol is safe to obfuscate
++		 * 检查符号是否可以安全混淆
++		 */
++		private static bool is_symbol_safe_to_obfuscate(string original_symbol) {
++			// 1. Never obfuscate critical system symbols
++			// 1. 绝不混淆系统关键符号
++			foreach (string critical in get_critical_system_symbols()) {
++				if (original_symbol.has_prefix(critical)) {
++					return false;
++				}
++			}
++
++			// 2. Check if it's a safe Frida symbol
++			// 2. 检查是否为安全的Frida符号
++			foreach (string frida_sym in get_safe_frida_symbols()) {
++				if (original_symbol.has_prefix(frida_sym)) {
++					return true;
++				}
++			}
++
++			// 3. Carefully handle GUM symbols with additional verification
++			// 3. 谨慎处理GUM符号，进行额外验证
++			foreach (string gum_sym in get_frida_gum_symbols()) {
++				if (original_symbol.has_prefix(gum_sym)) {
++					// Additional check: ensure it's actually from Frida context
++					// 额外检查：确保确实来自Frida上下文
++					return is_confirmed_frida_gum_symbol(original_symbol);
++				}
++			}
++
++			// 4. Default: do not obfuscate unknown symbols for safety
++			// 4. 默认：为安全起见不混淆未知符号
++			return false;
++		}
++
++		/**
++		 * Verify if a GUM symbol is actually from Frida
++		 * 验证GUM符号是否确实来自Frida
++		 */
++		private static bool is_confirmed_frida_gum_symbol(string symbol) {
++			// Check if symbol contains clear Frida indicators
++			// 检查符号是否包含明确的Frida标识
++			return symbol.contains("frida") ||
++				   (symbol.contains("gum") &&
++				    (symbol.contains("script") || symbol.contains("interceptor") ||
++				     symbol.contains("stalker") || symbol.contains("invocation")));
++		}
++
++		/**
 +		 * Generate obfuscated symbol name using deterministic randomization
 +		 * 使用确定性随机化生成混淆的符号名
 +		 *
@@ -100,6 +204,12 @@ index 0000000..2200ca1
 +		 */
 +		public static string obfuscate_symbol(string original) {
 +			if (!is_mode_enabled()) {
++				return original;
++			}
++
++			// Safety check: only obfuscate if it's safe to do so
++			// 安全检查：只有在安全的情况下才进行混淆
++			if (!is_symbol_safe_to_obfuscate(original)) {
 +				return original;
 +			}
 +
