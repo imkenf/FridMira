@@ -1,4 +1,4 @@
-From 5fdf2a39d63d344434b9e5702e60c6cba66b7d90 Mon Sep 17 00:00:00 2001
+From 62ef7a98088f81e2942500f2e260f2c03f4759f5 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 20:49:57 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
@@ -11,7 +11,7 @@ Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..3fe99ca
+index 0000000..4e045b3
 --- /dev/null
 +++ b/lib/base/fridmira.vala
 @@ -0,0 +1,754 @@
@@ -99,7 +99,7 @@ index 0000000..3fe99ca
 +
 +			// Generate deterministic but unique seed / 生成确定性但唯一的种子
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
-+			var random = new Random.with_seed (seed);
++			var random = new Rand.with_seed (seed);
 +
 +			string prefix = symbol_prefixes[random.int_range(0, symbol_prefixes.length)];
 +			string component = symbol_components[random.int_range(0, symbol_components.length)];
@@ -180,7 +180,7 @@ index 0000000..3fe99ca
 +
 +			// Generate deterministic but unique seed / 生成确定性但唯一的种子
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
-+			var random = new Random.with_seed (seed);
++			var random = new Rand.with_seed (seed);
 +
 +			string prefix = thread_prefixes[random.int_range(0, thread_prefixes.length)];
 +			string component = thread_components[random.int_range(0, thread_components.length)];
@@ -227,7 +227,7 @@ index 0000000..3fe99ca
 +			}
 +
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
-+			var random = new Random.with_seed (seed);
++			var random = new Rand.with_seed (seed);
 +
 +			string prefix = memory_prefixes[random.int_range(0, memory_prefixes.length)];
 +			string component = memory_components[random.int_range(0, memory_components.length)];
@@ -266,7 +266,7 @@ index 0000000..3fe99ca
 +			}
 +
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000) ^ original.hash();
-+			var random = new Random.with_seed (seed);
++			var random = new Rand.with_seed (seed);
 +
 +			string prefix = protocol_prefixes[random.int_range(0, protocol_prefixes.length)];
 +			string component = protocol_components[random.int_range(0, protocol_components.length)];
@@ -335,7 +335,7 @@ index 0000000..3fe99ca
 +
 +			// Generate deterministic but time-varying seed / 生成确定性但时变的种子
 +			uint32 seed = (uint32)(GLib.get_real_time() % 1000000);
-+			var random = new Random.with_seed (seed);
++			var random = new Rand.with_seed (seed);
 +
 +			string prefix = lib_prefixes[random.int_range(0, lib_prefixes.length)];
 +			string component = lib_components[random.int_range(0, lib_components.length)];
@@ -369,7 +369,7 @@ index 0000000..3fe99ca
 +			// 使用高精度时间戳组合生成自定义PID等价物
 +			int64 time_us = GLib.get_real_time();
 +			uint32 custom_pid = (uint32)((time_us >> 16) ^ (time_us & 0xFFFF));
-+			var random = new Random.with_seed (seed ^ custom_pid);
++			var random = new Rand.with_seed (seed ^ custom_pid);
 +
 +			string prefix = socket_prefixes[random.int_range(0, socket_prefixes.length)];
 +			string component = socket_components[random.int_range(0, socket_components.length)];
@@ -467,11 +467,11 @@ index 0000000..3fe99ca
 +		private static void generate_dynamic_protocols() {
 +			// 基于时间戳和随机值生成动态协议
 +			int64 timestamp = GLib.get_real_time() / 1000000; // 秒级时间戳
-+			uint32 random_value = (uint32)Random.next_int();
++			uint32 random_value = new Rand ().next_int ();
 +
 +			// 生成伪随机种子
 +			uint32 seed = (uint32)(timestamp ^ random_value);
-+			var random = new Random.with_seed (seed);
++			var random = new Rand.with_seed (seed);
 +
 +			// 选择随机协议词
 +			string protocol_word = PROTOCOL_WORDS[random.int_range(0, PROTOCOL_WORDS.length)];
@@ -763,7 +763,7 @@ index 0000000..3fe99ca
 +			}
 +
 +			string[] prefixes = {"req", "id", "op", "cmd", "task", "job", "call"};
-+			var random = new Random ();
++			var random = new Rand ();
 +			var random_index = random.int_range(0, prefixes.length);
 +			return prefixes[random_index] + "_";
 +		}
