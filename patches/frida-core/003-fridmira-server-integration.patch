@@ -1,14 +1,14 @@
-From 06ec20c122c604460d49957db704d94ae6188e04 Mon Sep 17 00:00:00 2001
+From ab2459873a391bb3c299c46321bcec54b41ee5f0 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 23:36:57 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 270 +++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 270 insertions(+)
+ server/server.vala | 296 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 296 insertions(+)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..cb8b94c 100644
+index 67bf4b3..9e54c4e 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,15 @@ namespace Frida.Server {
@@ -171,7 +171,65 @@ index 67bf4b3..cb8b94c 100644
  		return application.run ();
  	}
  
-@@ -357,4 +471,160 @@ namespace Frida.Server {
+@@ -284,20 +398,40 @@ namespace Frida.Server {
+ 		}
+ 
+ 		private async void start () {
++			stdout.printf ("=== FridMira Debug: Application.start() called ===\n");
++			stdout.flush ();
++
+ 			try {
++				stdout.printf ("=== FridMira Debug: Checking device_id: %s ===\n", device_id ?? "null");
++				stdout.flush ();
++
+ 				if (device_id != null && device_id != "local") {
++					stdout.printf ("=== FridMira Debug: Creating DeviceManager for non-local device ===\n");
++					stdout.flush ();
+ 					manager = new DeviceManager.with_nonlocal_backends_only ();
+ 
++					stdout.printf ("=== FridMira Debug: Getting device by ID ===\n");
++					stdout.flush ();
+ 					var device = yield manager.get_device_by_id (device_id, 0, io_cancellable);
+ 					device.lost.connect (on_device_lost);
+ 
++					stdout.printf ("=== FridMira Debug: Creating ControlService with device ===\n");
++					stdout.flush ();
+ 					service = yield new ControlService.with_device (device, endpoint_params, options);
+ 				} else {
++					stdout.printf ("=== FridMira Debug: Creating local ControlService ===\n");
++					stdout.flush ();
+ 					service = new ControlService (endpoint_params, options);
+ 				}
+ 
++				stdout.printf ("=== FridMira Debug: About to start service ===\n");
++				stdout.flush ();
+ 				yield service.start (io_cancellable);
++				stdout.printf ("=== FridMira Debug: Service started successfully ===\n");
++				stdout.flush ();
+ 			} catch (GLib.Error e) {
++				stdout.printf ("=== FridMira Debug: Error in start(): %s ===\n", e.message);
++				stdout.flush ();
+ 				if (e is IOError.CANCELLED)
+ 					return;
+ 				printerr ("Unable to start: %s\n", e.message);
+@@ -307,10 +441,16 @@ namespace Frida.Server {
+ 				return;
+ 			}
+ 
++			stdout.printf ("=== FridMira Debug: Adding ready callback to Idle ===\n");
++			stdout.flush ();
+ 			Idle.add (() => {
++				stdout.printf ("=== FridMira Debug: Ready callback executed ===\n");
++				stdout.flush ();
+ 				ready (true);
+ 				return false;
+ 			});
++			stdout.printf ("=== FridMira Debug: Application.start() completed ===\n");
++			stdout.flush ();
+ 		}
+ 
+ 		public void stop () {
+@@ -357,4 +497,160 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
