@@ -1,17 +1,17 @@
-From f5239f33118a300d0ff0133e3a772b23c7f56db0 Mon Sep 17 00:00:00 2001
+From 9c044442e36c556369ca839751dd830b28aa3686 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Sat, 14 Jun 2025 05:40:26 +0800
-Subject: [PATCH 5/6] fridmira: Add socket name obfuscation to Linux helper backend
+Date: Sat, 14 Jun 2025 11:38:11 +0800
+Subject: [PATCH] fridmira: Add socket name obfuscation to Linux helper backend
 
 ---
- src/linux/frida-helper-backend.vala | 18 +++++++++++++++++-
- 1 file changed, 17 insertions(+), 1 deletion(-)
+ src/linux/frida-helper-backend.vala | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
 
 diff --git a/src/linux/frida-helper-backend.vala b/src/linux/frida-helper-backend.vala
-index 1bbe475..e1d4012 100644
+index 1bbe475..f6c9bf3 100644
 --- a/src/linux/frida-helper-backend.vala
 +++ b/src/linux/frida-helper-backend.vala
-@@ -1252,7 +1252,23 @@ namespace Frida {
+@@ -1252,7 +1252,17 @@ namespace Frida {
  		}
 
  		private static string make_fallback_address () {
@@ -23,13 +23,7 @@ index 1bbe475..e1d4012 100644
 +			// Apply FridMira socket name obfuscation if available and enabled
 +			// 应用FridMira socket名混淆（如果可用且启用）
 +			if (Frida.FridMiraLibNameGenerator.is_enhanced_mode_enabled()) {
-+				try {
-+					return "/" + Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
-+				} catch (Error e) {
-+					// Fallback to original naming if FridMira fails
-+					// 如果FridMira失败则回退到原始命名
-+					return default_address;
-+				}
++				return "/" + Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
 +			}
 +
 +			return default_address;
