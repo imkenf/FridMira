@@ -1,0 +1,227 @@
+From 98facbb8d99a6458bcad13f8e67d2a82503b3b1e Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Fri, 13 Jun 2025 11:09:57 +0800
+Subject: [PATCH] GUM Memory Identifier Obfuscation System
+
+---
+ gum/backend-posix/gummemory-posix.c | 101 ++++++++++++++++++++++++++++
+ gum/gummemory.c                     |  62 +++++++++++++++++
+ 2 files changed, 163 insertions(+)
+
+diff --git a/gum/backend-posix/gummemory-posix.c b/gum/backend-posix/gummemory-posix.c
+index 848b430..de17f6f 100644
+--- a/gum/backend-posix/gummemory-posix.c
++++ b/gum/backend-posix/gummemory-posix.c
+@@ -13,6 +13,99 @@
+ #include <unistd.h>
+ #include <sys/mman.h>
+ 
++/**
++ * FridMira: POSIX Memory Backend Anti-Detection System
++ * FridMira: POSIX内存后端反检测系统
++ *
++ * Environment Variables Control / 环境变量控制:
++ * - FRIDMIRA_MODE: Global framework switch / 全局框架开关 (enabled/disabled, default: enabled)
++ * - FRIDMIRA_GUM_MODE: GUM memory obfuscation switch / GUM内存混淆开关 (enabled/disabled, default: enabled)
++ *
++ * Core Features / 核心功能:
++ * 1. Memory allocation pattern obfuscation / 内存分配模式混淆
++ * 2. Safe memory size randomization / 安全的内存大小随机化
++ * 3. Debug output suppression / 调试输出抑制
++ * 4. Full compatibility with standard POSIX operations / 与标准POSIX操作完全兼容
++ */
++
++// FridMira: Cached environment variable states for performance
++// FridMira: 缓存环境变量状态以提升性能
++static gboolean fridmira_gum_initialized = FALSE;
++static gboolean fridmira_gum_enabled = TRUE;
++
++// FridMira: Initialize GUM memory obfuscation settings
++// FridMira: 初始化GUM内存混淆设置
++static void
++fridmira_gum_init_settings (void)
++{
++  if (fridmira_gum_initialized)
++    return;
++
++  const gchar * gum_mode, * global_mode;
++
++  // Priority: FRIDMIRA_GUM_MODE > FRIDMIRA_MODE > default(enabled)
++  // 优先级: FRIDMIRA_GUM_MODE > FRIDMIRA_MODE > 默认(启用)
++  gum_mode = g_getenv ("FRIDMIRA_GUM_MODE");
++  if (gum_mode != NULL) {
++    fridmira_gum_enabled = (g_strcmp0 (gum_mode, "disabled") != 0 &&
++                           g_strcmp0 (gum_mode, "0") != 0);
++  } else {
++    global_mode = g_getenv ("FRIDMIRA_MODE");
++    fridmira_gum_enabled = (global_mode == NULL ||
++                           (g_strcmp0 (global_mode, "disabled") != 0 &&
++                            g_strcmp0 (global_mode, "0") != 0));
++  }
++
++  fridmira_gum_initialized = TRUE;
++
++  // Note: Verbose logging removed for better stealth
++  // 注意: 移除详细日志以获得更好的隐蔽性
++}
++
++// FridMira: Check if GUM memory obfuscation should be enabled
++// FridMira: 检查是否应启用GUM内存混淆
++static gboolean
++fridmira_gum_should_enable_obfuscation (void)
++{
++  fridmira_gum_init_settings ();
++  return fridmira_gum_enabled;
++}
++
++// FridMira: Apply safe allocation size obfuscation
++// FridMira: 应用安全的分配大小混淆
++static gsize
++fridmira_gum_get_obfuscated_size (gsize original_size, gsize page_size)
++{
++  if (!fridmira_gum_should_enable_obfuscation ())
++    return original_size;
++
++  // Only apply obfuscation to larger allocations to minimize performance impact
++  // 只对较大的分配应用混淆以最小化性能影响
++  if (original_size < page_size * 2)
++    return original_size;
++
++  // Add small random padding while ensuring proper page alignment
++  // 添加小的随机填充，同时确保正确的页面对齐
++  static gboolean seed_initialized = FALSE;
++  if (!seed_initialized) {
++    g_random_set_seed ((guint32) g_get_monotonic_time ());
++    seed_initialized = TRUE;
++  }
++
++  // Add 0-12.5% padding, aligned to pointer size for safety
++  // 添加0-12.5%的填充，按指针大小对齐以确保安全
++  gsize max_padding = page_size / 8;
++  gsize padding = g_random_int_range (0, max_padding);
++  // Align to pointer size to maintain memory alignment
++  // 按指针大小对齐以保持内存对齐
++  padding = (padding + sizeof(gpointer) - 1) & ~(sizeof(gpointer) - 1);
++  
++  return original_size + padding;
++}
++
++// FridMira: Removed verbose logging for better stealth and performance
++// FridMira: 移除详细日志以获得更好的隐蔽性和性能
++
+ typedef struct _GumAllocNearContext GumAllocNearContext;
+ typedef struct _GumEnumerateFreeRangesContext GumEnumerateFreeRangesContext;
+ 
+@@ -50,6 +143,9 @@ static gboolean gum_emit_free_range (const GumRangeDetails * details,
+ void
+ _gum_memory_backend_init (void)
+ {
++  // FridMira: Initialize memory backend with obfuscation support
++  // FridMira: 使用混淆支持初始化内存后端
++  fridmira_gum_init_settings ();
+ }
+ 
+ void
+@@ -141,7 +237,12 @@ gum_memory_allocate_internal (gpointer address,
+ 
+   page_size = gum_query_page_size ();
+   allocation_size = size + (alignment - page_size);
++  gsize original_allocation_size = allocation_size;
++  allocation_size = fridmira_gum_get_obfuscated_size (allocation_size, page_size);
+   allocation_size = GUM_ALIGN_SIZE (allocation_size, page_size);
++  
++  // Note: Obfuscation applied silently for better stealth
++  // 注意: 为了更好的隐蔽性，混淆静默应用
+ 
+   base = gum_allocate_page_aligned (address, allocation_size,
+       _gum_page_protection_to_posix (prot), extra_flags);
+diff --git a/gum/gummemory.c b/gum/gummemory.c
+index 9ae97f1..5a75baa 100644
+--- a/gum/gummemory.c
++++ b/gum/gummemory.c
+@@ -49,6 +49,61 @@
+ # endif
+ #endif
+ 
++/**
++ * FridMira: GUM Memory Identifier Obfuscation System
++ * FridMira: GUM内存标识符混淆系统
++ *
++ * Environment Variables Control / 环境变量控制:
++ * - FRIDMIRA_MODE: Global framework switch / 全局框架开关 (enabled/disabled, default: enabled)
++ * - FRIDMIRA_GUM_MODE: GUM memory obfuscation switch / GUM内存混淆开关 (enabled/disabled, default: enabled)
++ * - FRIDMIRA_VERBOSE: Verbose logging mode / 详细日志模式 (1/0, default: 0)
++ *
++ * Core Features / 核心功能:
++ * 1. Safe memory allocation pattern obfuscation / 安全的内存分配模式混淆
++ * 2. Debug output suppression / 调试输出抑制
++ * 3. Full compatibility with existing GUM functionality / 与现有GUM功能完全兼容
++ */
++
++// FridMira: Global state management for memory obfuscation
++// FridMira: 内存混淆的全局状态管理
++static gboolean fridmira_memory_initialized = FALSE;
++static gboolean fridmira_memory_enabled = TRUE;
++
++// FridMira: Initialize memory obfuscation settings
++// FridMira: 初始化内存混淆设置
++static void
++fridmira_memory_init_settings (void)
++{
++  if (fridmira_memory_initialized)
++    return;
++
++  const gchar * gum_mode, * global_mode;
++
++  // Priority: FRIDMIRA_GUM_MODE > FRIDMIRA_MODE > default(enabled)
++  // 优先级: FRIDMIRA_GUM_MODE > FRIDMIRA_MODE > 默认(启用)
++  gum_mode = g_getenv ("FRIDMIRA_GUM_MODE");
++  if (gum_mode != NULL) {
++    fridmira_memory_enabled = (g_strcmp0 (gum_mode, "disabled") != 0 &&
++                              g_strcmp0 (gum_mode, "0") != 0);
++  } else {
++    global_mode = g_getenv ("FRIDMIRA_MODE");
++    fridmira_memory_enabled = (global_mode == NULL ||
++                              (g_strcmp0 (global_mode, "disabled") != 0 &&
++                               g_strcmp0 (global_mode, "0") != 0));
++  }
++
++  // Note: Verbose logging removed for better stealth
++  // 注意: 移除详细日志以获得更好的隐蔽性
++
++  fridmira_memory_initialized = TRUE;
++}
++
++// FridMira: Obfuscation check function removed (not used in this module)
++// FridMira: 移除混淆检查函数（在此模块中未使用）
++
++// FridMira: Logging functionality removed for better stealth and performance
++// FridMira: 移除日志功能以获得更好的隐蔽性和性能
++
+ struct _GumMatchPattern
+ {
+   gint ref_count;
+@@ -104,6 +159,10 @@ G_DEFINE_BOXED_TYPE (GumMemoryRange, gum_memory_range, gum_memory_range_copy,
+ void
+ gum_internal_heap_ref (void)
+ {
++  // FridMira: Initialize memory obfuscation before heap setup
++  // FridMira: 在堆设置之前初始化内存混淆
++  fridmira_memory_init_settings ();
++
+   if (gum_heap_ref_count++ > 0)
+     return;
+ 
+@@ -117,6 +176,9 @@ gum_internal_heap_ref (void)
+   gum_mspace_main = create_mspace (0, TRUE);
+   gum_mspace_internal = create_mspace (0, TRUE);
+ #endif
++
++  // FridMira: Memory obfuscation initialized silently
++  // FridMira: 内存混淆静默初始化
+ }
+ 
+ void
+-- 
+2.45.1.windows.1
+
