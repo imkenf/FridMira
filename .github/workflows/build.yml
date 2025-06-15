@@ -246,8 +246,8 @@ jobs:
         done
 
         # 验证fridmira.vala已正确添加到构建系统
-        if [[ -f "subprojects/frida-core/lib/base/fridmira.vala" ]]; then
-          if grep -q "fridmira.vala" subprojects/frida-core/lib/base/meson.build; then
+        if [[ -f "subprojects/frida-core/src/fridmira.vala" ]]; then
+          if grep -q "fridmira.vala" subprojects/frida-core/src/meson.build; then
             echo "✅ fridmira.vala is correctly added to build system"
           else
             echo "❌ fridmira.vala not found in meson.build - patch may have failed"
@@ -282,16 +282,12 @@ jobs:
           make -j1
         fi
 
-        # 调试：显示构建产物目录结构
-        echo "🔍 Build output structure:"
-        find . -name "frida-server" -o -name "frida-inject" -o -name "frida-gadget.so" -o -name "libfrida-gumjs-1.0.a" | head -20
-
         # 验证构建产物
         required_files=(
-          "./subprojects/frida-core/server/frida-server"
-          "./subprojects/frida-core/inject/frida-inject"
-          "./subprojects/frida-core/lib/gadget/frida-gadget.so"
-          "./subprojects/frida-gum/bindings/gumjs/libfrida-gumjs-1.0.a"
+          "./server/frida-server"
+          "./inject/frida-inject"
+          "./lib/gadget/frida-gadget.so"
+          "./lib/gumjs/libfrida-gumjs-1.0.a"
         )
 
         for file in "${required_files[@]}"; do
@@ -309,10 +305,10 @@ jobs:
         mkdir -p dist
 
         # 打包所有组件
-        cp ./build-${{ matrix.arch }}/subprojects/frida-core/server/frida-server ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
-        cp ./build-${{ matrix.arch }}/subprojects/frida-core/inject/frida-inject ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
-        cp ./build-${{ matrix.arch }}/subprojects/frida-core/lib/gadget/frida-gadget.so ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so
-        cp ./build-${{ matrix.arch }}/subprojects/frida-gum/bindings/gumjs/libfrida-gumjs-1.0.a ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a
+        cp ./build-${{ matrix.arch }}/server/frida-server ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
+        cp ./build-${{ matrix.arch }}/inject/frida-inject ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
+        cp ./build-${{ matrix.arch }}/lib/gadget/frida-gadget.so ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so
+        cp ./build-${{ matrix.arch }}/lib/gumjs/libfrida-gumjs-1.0.a ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a
 
         # 压缩
         gzip -9 ./dist/*
