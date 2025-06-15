@@ -1,17 +1,17 @@
-From 09c95e0e44fd0c4eef45fa55b422129e192617a4 Mon Sep 17 00:00:00 2001
+From cdf0fe8de7ce66074203299facf0858c70090d43 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sun, 15 Jun 2025 20:25:18 +0800
 Subject: [PATCH 000/000] fix test
 
 ---
- src/linux/linux-host-session.vala | 5 ++++-
- 1 file changed, 4 insertions(+), 1 deletion(-)
+ src/linux/linux-host-session.vala | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbe..b0ac292 100644
+index 55a0fbe..a1fce9a 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
-@@ -810,7 +810,10 @@ namespace Frida {
+@@ -810,7 +810,11 @@ namespace Frida {
  		}
  
  		public async void preload (Cancellable? cancellable) throws Error, IOError {
@@ -19,6 +19,7 @@ index 55a0fbe..b0ac292 100644
 +			try {
 +				yield enumerate_applications (new ApplicationQueryOptions (), cancellable);
 +			} catch (Error e) {
++				FridMira.debug ("SystemServerAgent.preload: enumerate_applications() failed: %s", e.message);
 +			}
  
  			try {
