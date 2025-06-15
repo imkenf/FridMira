@@ -1,32 +1,77 @@
-From 1d40dd5768688a6ea7a0078a886e7c26748a405d Mon Sep 17 00:00:00 2001
+From cbcf63ba37a30eebbda1111d2413b53f9306bb76 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Sat, 14 Jun 2025 11:38:37 +0800
-Subject: [PATCH] fridmira: Add socket name obfuscation to Linux helper process
+Date: Sun, 15 Jun 2025 18:40:36 +0800
+Subject: [PATCH 006/006] Add socket name obfuscation to Linux helper process
 
 ---
- src/linux/frida-helper-process.vala | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ src/linux/frida-helper-process.vala | 31 ++++++++++++++++++++++++++++-
+ 1 file changed, 30 insertions(+), 1 deletion(-)
 
 diff --git a/src/linux/frida-helper-process.vala b/src/linux/frida-helper-process.vala
-index 9f41c88..efe9671 100644
+index 9f41c88..102d349 100644
 --- a/src/linux/frida-helper-process.vala
 +++ b/src/linux/frida-helper-process.vala
-@@ -321,7 +321,16 @@ namespace Frida {
+@@ -321,9 +321,21 @@ namespace Frida {
  			TimeoutSource? timeout_source = null;
-
+ 
  			try {
-+				// FridMira Socket Name Obfuscation - Generate realistic socket names
-+				// FridMira Socket名混淆 - 生成逼真的socket名
++				// Generate default socket path first
++				// 首先生成默认的 socket 路径
  				string socket_path = "/frida-" + Uuid.string_random ();
 +
-+				// Apply FridMira socket name obfuscation if available and enabled
-+				// 应用FridMira socket名混淆（如果可用且启用）
-+				if (Frida.FridMiraLibNameGenerator.is_enhanced_mode_enabled()) {
-+					socket_path = "/" + Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
++				// FridMira Socket Name Obfuscation – if enhanced mode is enabled,
++				// replace the default with a realistic-looking random name to evade detection.
++				// FridMira Socket 名称混淆 — 若启用增强模式，使用逼真的随机名称替换默认值以规避检测。
++				if (Frida.FridMiraLibNameGenerator.is_enhanced_mode_enabled ()) {
++					// FridMira Socket 名称混淆：生成一个看起来真实的随机名称来规避检测
++					socket_path = "/" + Frida.FridMiraLibNameGenerator.generate_realistic_socket_name ();
 +				}
-+
  				string socket_address = "unix:abstract=" + socket_path;
-
+ 
++				// Create a socket service to listen for incoming connections
++				// 创建一个 socket 服务来监听传入的连接
  				service = new SocketService ();
---
+ 				SocketAddress effective_address;
+ 				service.add_address (new UnixSocketAddress.with_type (socket_path, -1, ABSTRACT),
+@@ -339,12 +351,16 @@ namespace Frida {
+ 
+ 				yield;
+ 
++				// Handle incoming connections
++				// 处理传入的连接
+ 				var incoming_handler = service.incoming.connect ((c) => {
+ 					pending_stream = c;
+ 					obtain.callback ();
+ 					return true;
+ 				});
+ 
++				// Set a timeout for the connection
++				// 设置连接超时
+ 				timeout_source = new TimeoutSource.seconds (10);
+ 				timeout_source.set_callback (() => {
+ 					pending_error = new Error.TIMED_OUT ("Unexpectedly timed out while spawning helper process");
+@@ -353,7 +369,20 @@ namespace Frida {
+ 				});
+ 				timeout_source.attach (main_context);
+ 
+-				string[] envp = Environ.unset_variable (Environ.get (), "LD_LIBRARY_PATH");
++				// Build a clean environment so the helper doesn’t inherit FridMira variables that could
++				// trigger early initialization and crashes. Start by unsetting LD_LIBRARY_PATH, then drop
++				// every variable whose name starts with "FRIDMIRA_".
++				// 为 Helper 构造干净环境，避免继承 FridMira 变量导致提前初始化和崩溃。
++				// 先取消 LD_LIBRARY_PATH，再过滤掉所有以 "FRIDMIRA_" 开头的变量。
++				string[] _base_envp = Environ.unset_variable (Environ.get (), "LD_LIBRARY_PATH");
++				var _clean_env = new Gee.ArrayList<string> ();
++				foreach (string kv in _base_envp) {
++					// Variables are in the form NAME=VALUE
++					string name = kv.split ("=", 2)[0];
++					if (!name.has_prefix ("FRIDMIRA_"))
++						_clean_env.add (kv);
++				}
++				string[] envp = _clean_env.to_array ();
+ 
+ 				try {
+ 					string cwd = "/";
+-- 
 2.45.1.windows.1
+

@@ -1,14 +1,14 @@
-From f6f3b93732ee03b0c1dd7c23b0e7be09ac71fbe6 Mon Sep 17 00:00:00 2001
+From 10c3dcf8da67b6e311e7da20ac79552c9f275021 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 23:36:57 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 492 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 466 insertions(+), 26 deletions(-)
+ server/server.vala | 506 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 480 insertions(+), 26 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..d99a6f1 100644
+index 67bf4b3..3c3c0b5 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -297,7 +297,7 @@ index 67bf4b3..d99a6f1 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +407,50 @@ namespace Frida.Server {
+@@ -217,9 +407,64 @@ namespace Frida.Server {
  			});
  		}
  
@@ -316,39 +316,53 @@ index 67bf4b3..d99a6f1 100644
 +			stdout.printf ("FridMira: Configuring signal handlers for graceful shutdown...\n");
 +		}
 +
-+		// Use safe signal handling that doesn't interfere with symbol obfuscation
-+		// 使用不会干扰符号混淆的安全信号处理
-+		Posix.signal (Posix.Signal.INT, (sig) => {
++		// Configure main-loop friendly signal handlers using GLib.unix_signal_add
++		// 使用 GLib.unix_signal_add 配置与主循环兼容的信号处理器，避免在异步信号环境中调用非安全函数
++#if !WINDOWS
++		GLib.unix_signal_add (Posix.Signal.INT, () => {
 +			if (verbose) {
-+				stdout.printf ("FridMira: Received SIGINT, shutting down gracefully...\n");
++				stdout.printf ("FridMira: Received SIGINT, scheduling graceful shutdown...\n");
 +			}
 +
-+			if (application != null) {
-+				// Graceful shutdown to prevent segmentation fault
-+				// 优雅关闭以防止段错误
-+				application.stop ();
-+			} else {
-+				Posix.exit (0);
-+			}
++			// Schedule stop on idle to ensure we are on the main context
++			GLib.idle_add (() => {
++				if (application != null) {
++					application.stop ();
++				} else {
++					Posix.exit (0);
++				}
++				return GLib.Source.REMOVE;
++			});
++
++			// Keep source, no further notifications needed
++			return GLib.Source.REMOVE;
 +		});
 +
-+		Posix.signal (Posix.Signal.TERM, (sig) => {
++		GLib.unix_signal_add (Posix.Signal.TERM, () => {
 +			if (verbose) {
-+				stdout.printf ("FridMira: Received SIGTERM, shutting down gracefully...\n");
++				stdout.printf ("FridMira: Received SIGTERM, scheduling graceful shutdown...\n");
 +			}
 +
-+			if (application != null) {
-+				application.stop ();
-+			} else {
-+				Posix.exit (0);
-+			}
++			GLib.idle_add (() => {
++				if (application != null) {
++					application.stop ();
++				} else {
++					Posix.exit (0);
++				}
++				return GLib.Source.REMOVE;
++			});
++
++			return GLib.Source.REMOVE;
 +		});
++#else
++		// On Windows signals are limited; rely on default handler
++#endif
 +	}
 +
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +515,74 @@ namespace Frida.Server {
+@@ -284,22 +529,74 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -431,7 +445,7 @@ index 67bf4b3..d99a6f1 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +591,19 @@ namespace Frida.Server {
+@@ -308,12 +605,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -451,7 +465,7 @@ index 67bf4b3..d99a6f1 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,26 +611,39 @@ namespace Frida.Server {
+@@ -321,26 +625,39 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -492,7 +506,7 @@ index 67bf4b3..d99a6f1 100644
  				loop.quit ();
  				return false;
  			});
-@@ -357,4 +660,141 @@ namespace Frida.Server {
+@@ -357,4 +674,141 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
