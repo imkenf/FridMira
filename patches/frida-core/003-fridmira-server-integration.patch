@@ -1,4 +1,4 @@
-From 23f96fa26ad93a1b49b7f5115cef249b5a7eb7fc Mon Sep 17 00:00:00 2001
+From d004f9b9f7b6fe051abb9676c84f7f0f50a7f067 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 23:36:57 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
@@ -8,7 +8,7 @@ Subject: [PATCH 003/006] Integrate FridMira server functionality
  1 file changed, 480 insertions(+), 26 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..c8a1799 100644
+index 67bf4b3..9d10002 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -325,7 +325,7 @@ index 67bf4b3..c8a1799 100644
 +			}
 +
 +			// Schedule stop on idle to ensure we are on the main context
-+			GLib.idle_add (() => {
++			GLib.Idle.add (() => {
 +				if (application != null) {
 +					application.stop ();
 +				} else {
@@ -343,7 +343,7 @@ index 67bf4b3..c8a1799 100644
 +				stdout.printf ("FridMira: Received SIGTERM, scheduling graceful shutdown...\n");
 +			}
 +
-+			GLib.idle_add (() => {
++			GLib.Idle.add (() => {
 +				if (application != null) {
 +					application.stop ();
 +				} else {
