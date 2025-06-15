@@ -284,15 +284,17 @@ jobs:
 
         # 验证构建产物
         required_files=(
-          "./server/frida-server"
-          "./inject/frida-inject"
-          "./lib/gadget/frida-gadget.so"
-          "./lib/gumjs/libfrida-gumjs-1.0.a"
+          "./subprojects/frida-core/server/frida-server"
+          "./subprojects/frida-core/inject/frida-inject"
+          "./subprojects/frida-core/lib/gadget/frida-gadget.so"
+          "./subprojects/frida-gum/gum/libfrida-gumjs-1.0.a"
         )
 
         for file in "${required_files[@]}"; do
           if [[ ! -f "$file" ]]; then
             echo "❌ Missing required file: $file"
+            echo "🔍 Looking for files in current directory:"
+            find . -name "frida-server" -o -name "frida-inject" -o -name "frida-gadget.so" -o -name "*gumjs*.a" | head -10
             exit 1
           fi
         done
@@ -305,10 +307,10 @@ jobs:
         mkdir -p dist
 
         # 打包所有组件
-        cp ./build-${{ matrix.arch }}/server/frida-server ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
-        cp ./build-${{ matrix.arch }}/inject/frida-inject ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
-        cp ./build-${{ matrix.arch }}/lib/gadget/frida-gadget.so ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so
-        cp ./build-${{ matrix.arch }}/lib/gumjs/libfrida-gumjs-1.0.a ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a
+        cp ./build-${{ matrix.arch }}/subprojects/frida-core/server/frida-server ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
+        cp ./build-${{ matrix.arch }}/subprojects/frida-core/inject/frida-inject ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}
+        cp ./build-${{ matrix.arch }}/subprojects/frida-core/lib/gadget/frida-gadget.so ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so
+        cp ./build-${{ matrix.arch }}/subprojects/frida-gum/gum/libfrida-gumjs-1.0.a ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a
 
         # 压缩
         gzip -9 ./dist/*
