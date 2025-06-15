@@ -1,31 +1,43 @@
-From b472095e10863461e1192ed023bfd32dc8e92d3c Mon Sep 17 00:00:00 2001
+From 6f454e361cbd5e2c0cd1de282e2b3f4b37ae91f1 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sun, 15 Jun 2025 20:25:18 +0800
 Subject: [PATCH 000/000] fix test
 
 ---
- src/linux/linux-host-session.vala | 8 ++++++--
- 1 file changed, 6 insertions(+), 2 deletions(-)
+ src/linux/linux-host-session.vala | 20 +++++++++-----------
+ 1 file changed, 9 insertions(+), 11 deletions(-)
 
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbe..8badcc4 100644
+index 55a0fbe..0beed83 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
-@@ -810,8 +810,12 @@ namespace Frida {
+@@ -810,17 +810,15 @@ namespace Frida {
  		}
  
  		public async void preload (Cancellable? cancellable) throws Error, IOError {
 -			yield enumerate_applications (new ApplicationQueryOptions (), cancellable);
 -
-+			try {
-+				yield enumerate_applications (new ApplicationQueryOptions (), cancellable);
-+			} catch (Error e) {
-+				stderr.printf ("FridMira: [WARNING] SystemServerAgent.preload: enumerate_applications() failed: %s\n", e.message);
-+				return;
-+			}
- 			try {
- 				yield get_process_name ("", 0, cancellable);
- 			} catch (Error e) {
+-			try {
+-				yield get_process_name ("", 0, cancellable);
+-			} catch (Error e) {
+-			}
+-
+-			try {
+-				yield start_package ("", new DefaultActivityEntrypoint (), cancellable);
+-			} catch (Error e) {
+-			}
++			/*
++			 * FridMira: [STABILITY-FIX]
++			 * The entire preload mechanism for SystemServerAgent is fundamentally unstable on some systems.
++			 * It causes the agent to crash inside system_server, leading to a segmentation fault in the main frida-server process.
++			 * Simple try-catch blocks are insufficient to prevent the crash.
++			 * The only reliable solution is to completely disable this functionality by emptying the function body.
++			 * This is the code-level equivalent of permanently enabling the '--no-preload' flag.
++			 */
++			return;
+ 		}
+ 
+ 		public async HostApplicationInfo get_frontmost_application (FrontmostQueryOptions options,
 -- 
 2.45.1.windows.1
 
