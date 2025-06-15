@@ -1,19 +1,20 @@
-From 013cfb167abfd451b5fa80d0651909e2f618fdd5 Mon Sep 17 00:00:00 2001
+From a578e554f75593949bde14dbbce819622566047c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 20:49:57 +0800
-Subject: [PATCH 001/006] Add comprehensive anti-detection framework to lib/base
+Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
+ lib/base
 
 ---
- lib/base/fridmira.vala | 1113 ++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 1113 insertions(+)
+ lib/base/fridmira.vala | 996 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 996 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..3f76334
+index 0000000..f3cc892
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,1113 @@
+@@ -0,0 +1,996 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -73,7 +74,7 @@ index 0000000..3f76334
 +			};
 +		}
 +
-+				/**
++		/**
 +		 * Default Frida signature symbols (built-in blacklist)
 +		 * 默认Frida特征符号（内置黑名单）
 +		 */
@@ -120,109 +121,7 @@ index 0000000..3f76334
 +			};
 +		}
 +
-+		/**
-+		 * Get critical symbols that must NEVER be obfuscated for preload compatibility
-+		 * 获取为了Preload兼容性绝对不能混淆的关键符号
-+		 *
-+		 * These symbols are essential for:
-+		 * 这些符号对以下功能至关重要：
-+		 * 1. Dynamic linking and symbol resolution / 动态链接和符号解析
-+		 * 2. Agent loading and initialization / Agent加载和初始化
-+		 * 3. Core runtime functionality / 核心运行时功能
-+		 * 4. Preload mechanism operation / Preload机制运行
-+		 */
-+		private static string[] get_preload_critical_symbols() {
-+			return {
-+				// === CORE ENTRY POINTS (NEVER OBFUSCATE) ===
-+				// === 核心入口点（绝不混淆） ===
-+				"frida_load",                    // Main preload entry point / 主要Preload入口点
-+				"frida_agent_main",              // Agent main entry point / Agent主入口点
-+				"frida_main",                    // Core main function / 核心主函数
-+				"_frida_agent_main",             // Internal agent main / 内部agent主函数
 +
-+				// === GUM CORE INITIALIZATION ===
-+				// === GUM核心初始化 ===
-+				"gum_init",                      // GUM initialization / GUM初始化
-+				"gum_init_embedded",             // GUM embedded init / GUM嵌入式初始化
-+				"gum_deinit",                    // GUM cleanup / GUM清理
-+				"gum_deinit_embedded",           // GUM embedded cleanup / GUM嵌入式清理
-+
-+				// === FRIDA CORE INITIALIZATION ===
-+				// === FRIDA核心初始化 ===
-+				"frida_init",                    // Frida initialization / Frida初始化
-+				"frida_deinit",                  // Frida cleanup / Frida清理
-+				"_frida_init",                   // Internal frida init / 内部frida初始化
-+				"_frida_deinit",                 // Internal frida cleanup / 内部frida清理
-+
-+				// === ENVIRONMENT INITIALIZATION ===
-+				// === 环境初始化 ===
-+				"_frida_agent_environment_init", // Agent environment setup / Agent环境设置
-+				"_frida_agent_environment_deinit", // Agent environment cleanup / Agent环境清理
-+
-+				// === DYNAMIC LINKING SYMBOLS ===
-+				// === 动态链接符号 ===
-+				"dlopen",                        // Dynamic library loading / 动态库加载
-+				"dlsym",                         // Symbol resolution / 符号解析
-+				"dlclose",                       // Library unloading / 库卸载
-+				"dlerror",                       // Error reporting / 错误报告
-+
-+				// === PTHREAD SYMBOLS ===
-+				// === PTHREAD符号 ===
-+				"pthread_create",                // Thread creation / 线程创建
-+				"pthread_detach",                // Thread detachment / 线程分离
-+				"pthread_join",                  // Thread joining / 线程连接
-+				"pthread_exit",                  // Thread exit / 线程退出
-+
-+				// === BOOTSTRAP SYMBOLS ===
-+				// === 引导符号 ===
-+				"frida_bootstrap",               // Bootstrap function / 引导函数
-+				"frida_connect",                 // Connection establishment / 连接建立
-+				"frida_send_hello",              // Initial handshake / 初始握手
-+				"frida_send_ready",              // Ready signal / 就绪信号
-+				"frida_receive_ack",             // Acknowledgment / 确认信号
-+
-+				// === LOADER CONTEXT SYMBOLS ===
-+				// === 加载器上下文符号 ===
-+				"FridaLoaderContext",            // Loader context structure / 加载器上下文结构
-+				"FridaBootstrapContext",         // Bootstrap context / 引导上下文
-+				"FridaLibcApi",                  // Libc API structure / Libc API结构
-+
-+				// === CRITICAL RUNTIME SYMBOLS ===
-+				// === 关键运行时符号 ===
-+				"frida_error_quark",             // Error handling / 错误处理
-+				"frida_run_atexit_handlers",     // Exit handlers / 退出处理器
-+				"gum_script_backend_get_type",   // Script backend / 脚本后端
-+
-+				// === MEMORY MANAGEMENT ===
-+				// === 内存管理 ===
-+				"gum_internal_heap_unref",       // Internal heap cleanup / 内部堆清理
-+				"gum_peek_private_memory_usage", // Memory usage monitoring / 内存使用监控
-+
-+				// === ANDROID SPECIFIC ===
-+				// === Android特定 ===
-+				"JNI_OnLoad",                    // JNI entry point / JNI入口点
-+
-+				// === SIGNAL HANDLING ===
-+				// === 信号处理 ===
-+				"bsd_signal",                    // Signal handling / 信号处理
-+
-+				// === LIBRARY INITIALIZATION ===
-+				// === 库初始化 ===
-+				"gio_init",                      // GIO initialization / GIO初始化
-+				"gio_shutdown",                  // GIO shutdown / GIO关闭
-+				"gio_deinit",                    // GIO cleanup / GIO清理
-+				"glib_shutdown",                 // GLib shutdown / GLib关闭
-+
-+				// === OPENSSL INTEGRATION ===
-+				// === OpenSSL集成 ===
-+				"g_io_module_openssl_register",  // OpenSSL module / OpenSSL模块
-+
-+				// === THREAD GARBAGE COLLECTION ===
-+				// === 线程垃圾回收 ===
-+				"g_thread_set_garbage_handler",  // Thread GC handler / 线程GC处理器
-+				"_frida_agent_on_pending_thread_garbage" // Thread cleanup / 线程清理
-+			};
-+		}
 +
 +		/**
 +		 * Load symbol blacklist from external configuration file
@@ -344,48 +243,33 @@ index 0000000..3f76334
 +			return (global_mode != "0");
 +		}
 +
-+		/**
-+		 * Check if a symbol should be obfuscated (enhanced blacklist mode with preload protection)
-+		 * 检查符号是否应该被混淆（黑名单模式，带Preload保护）
++				/**
++		 * Check if a symbol should be obfuscated (simple blacklist mode)
++		 * 检查符号是否应该被混淆（简单黑名单模式）
 +		 *
-+		 * ENHANCED RULES:
-+		 * 增强规则：
-+		 * 1. NEVER obfuscate preload-critical symbols / 绝不混淆Preload关键符号
-+		 * 2. Only obfuscate if symbol contains Frida signatures / 只有包含Frida特征的符号才混淆
-+		 * 3. Default: keep original (safe approach) / 默认：保持原样（安全方法）
++		 * SIMPLE RULE: Only obfuscate if symbol contains Frida signatures
++		 * 简单规则：只有包含Frida特征的符号才混淆
 +		 */
 +		private static bool should_obfuscate_symbol(string original_symbol) {
-+			// RULE 1: NEVER obfuscate preload-critical symbols
-+			// 规则1：绝不混淆Preload关键符号
-+			foreach (string critical_symbol in get_preload_critical_symbols()) {
-+				if (original_symbol == critical_symbol ||
-+				    original_symbol.contains(critical_symbol)) {
-+					return false; // Absolutely protected / 绝对保护
-+				}
-+			}
-+
-+			// RULE 2: Check if symbol contains any Frida signature
-+			// 规则2：检查符号是否包含任何Frida特征
++			// Check if symbol contains any Frida signature
++			// 检查符号是否包含任何Frida特征
 +			foreach (string signature in get_frida_signature_symbols()) {
 +				if (original_symbol.contains(signature)) {
 +					return true; // Safe to obfuscate / 可以安全混淆
 +				}
 +			}
 +
-+			// RULE 3: Default: keep original (safe approach)
-+			// 规则3：默认：保持原样（安全方法）
++			// Default: keep original (safe approach)
++			// 默认：保持原样（安全方法）
 +			return false;
 +		}
 +
 +		/**
-+		 * Generate obfuscated symbol name using enhanced blacklist mode with preload protection
-+		 * 使用黑名单模式生成混淆的符号名，带Preload保护
++		 * Generate obfuscated symbol name using simple blacklist mode
++		 * 使用简单黑名单模式生成混淆的符号名
 +		 *
-+		 * ENHANCED APPROACH:
-+		 * 增强方法：
-+		 * - Protects all preload-critical symbols / 保护所有Preload关键符号
-+		 * - Only obfuscates known Frida signatures / 只混淆已知的Frida特征符号
-+		 * - Ensures compatibility with preload mechanism / 确保与Preload机制兼容
++		 * SIMPLE APPROACH: Only obfuscate known Frida signatures
++		 * 简单方法：只混淆已知的Frida特征符号
 +		 */
 +		public static string obfuscate_symbol(string original) {
 +			if (!is_mode_enabled()) {
