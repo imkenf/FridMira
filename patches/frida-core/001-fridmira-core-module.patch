@@ -1,19 +1,19 @@
-From 045d8ca5f4713cafb70d13a3b0c96d20ae95b680 Mon Sep 17 00:00:00 2001
+From 5ef6b2906a6482c968d52efd05b11bc0b9d3a926 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 20:49:57 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to lib/base
 
 ---
- lib/base/fridmira.vala | 928 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 928 insertions(+)
+ lib/base/fridmira.vala | 930 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 930 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..7379305
+index 0000000..6aace14
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,928 @@
+@@ -0,0 +1,930 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -113,6 +113,8 @@ index 0000000..7379305
 +				"pthread_", "sem_", "mutex_", "cond_",
 +				// Dynamic linking / 动态链接
 +				"dlopen", "dlsym", "dlclose", "dladdr", "dlinfo",
++				// Frida agent entry points (DO NOT OBFUSCATE) / Frida Agent 入口点 (禁止混淆)
++				"frida_agent_main", "gum_agent_main",
 +				// System calls / 系统调用
 +				"__libc_", "__android_", "__system_", "syscall",
 +				// Android specific / Android特定
