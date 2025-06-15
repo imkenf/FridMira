@@ -1,14 +1,14 @@
-From b1b0fa65639c5f6d2932d0f003ef99065e473390 Mon Sep 17 00:00:00 2001
+From 6a0e4be9333ad7d4ce1b3a9cefec83e9bd73005c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 23:36:57 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 340 +++++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 329 insertions(+), 11 deletions(-)
+ server/server.vala | 338 +++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 328 insertions(+), 10 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..841b257 100644
+index 67bf4b3..8382a32 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -116,7 +116,7 @@ index 67bf4b3..841b257 100644
 +		{ "no-gum", 0, 0, OptionArg.NONE, ref fridmira_no_gum,
 +			"Disable GUM memory obfuscation (requires --fridmira)", null },
 +		{ "no-preload", 0, 0, OptionArg.NONE, ref fridmira_no_preload,
-+			"Disable preload optimization with FridMira", null },
++			"Disable preload optimization with FridMira (for debugging)", null },
  		{ null }
  	};
  
@@ -152,15 +152,15 @@ index 67bf4b3..841b257 100644
  
  		var options = new ControlServiceOptions ();
 -		options.enable_preload = enable_preload;
-+		// Smart preload control: Enable by default with FridMira since symbol conflicts are fixed
-+		// 智能preload控制：由于符号冲突已修复，FridMira下默认启用preload
++		// Simplified preload control: FridMira blacklist mode is safe
++		// 简化preload控制：FridMira黑名单模式是安全的
 +		if (fridmira_enabled && fridmira_no_preload) {
 +			// User explicitly disabled preload with FridMira
 +			// 用户明确禁用FridMira下的preload
 +			options.enable_preload = false;
 +		} else {
-+			// Normal behavior: Use standard preload setting (enabled by default)
-+			// 正常行为：使用标准preload设置（默认启用）
++			// Normal behavior: Use standard preload setting
++			// 正常行为：使用标准preload设置（FridMira黑名单模式不影响关键函数）
 +			options.enable_preload = enable_preload;
 +		}
  		options.report_crashes = report_crashes;
@@ -291,8 +291,7 @@ index 67bf4b3..841b257 100644
  			});
  		}
  
--		public void stop () {
-+				public void stop () {
+ 		public void stop () {
 +			if (verbose) {
 +				stdout.printf ("FridMira: Stopping application...\n");
 +			}
@@ -372,10 +371,10 @@ index 67bf4b3..841b257 100644
 +			// 如果启用则初始化符号混淆器
 +			if (!fridmira_no_symbol) {
 +				try {
-+					// Test symbol obfuscator functionality
-+					// 测试符号混淆器功能
++				// Test symbol obfuscator functionality
++				// 测试符号混淆器功能
 +					string demo_symbol = Frida.FridMiraSymbolObfuscator.obfuscate_symbol("frida_test_symbol");
-+					if (verbose) {
++				if (verbose) {
 +						stdout.printf ("  Symbol obfuscator: enabled (example: frida_test_symbol -> %s)\n", demo_symbol);
 +					}
 +				} catch (Error e) {
@@ -387,10 +386,10 @@ index 67bf4b3..841b257 100644
 +			// 如果启用则初始化线程混淆器
 +			if (!fridmira_no_thread) {
 +				try {
-+					// Test thread name obfuscator functionality
-+					// 测试线程名混淆器功能
++				// Test thread name obfuscator functionality
++				// 测试线程名混淆器功能
 +					string demo_thread = Frida.FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
-+					if (verbose) {
++				if (verbose) {
 +						stdout.printf ("  Thread obfuscator: enabled (example: frida-server-main-loop -> %s)\n", demo_thread);
 +					}
 +				} catch (Error e) {
@@ -402,9 +401,9 @@ index 67bf4b3..841b257 100644
 +			// 如果启用RPC混淆则初始化RPC协议增强器
 +			if (!fridmira_no_rpc) {
 +				try {
-+					Frida.FridMiraRpcProtocolEnhancer.init ();
++				Frida.FridMiraRpcProtocolEnhancer.init ();
 +					string protocol_id = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id();
-+					if (verbose) {
++				if (verbose) {
 +						stdout.printf ("  RPC protocol enhancer: enabled (protocol: %s)\n", protocol_id);
 +					}
 +				} catch (Error e) {
@@ -416,11 +415,11 @@ index 67bf4b3..841b257 100644
 +			// 如果启用则初始化文件/库名生成器
 +			if (!fridmira_no_file) {
 +				try {
-+					// Test file name generator functionality
-+					// 测试文件名生成器功能
++				// Test file name generator functionality
++				// 测试文件名生成器功能
 +					string demo_lib = Frida.FridMiraLibNameGenerator.generate_lib_name();
 +					string demo_socket = Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
-+					if (verbose) {
++				if (verbose) {
 +						stdout.printf ("  File/library name obfuscator: enabled (examples: lib=%s, socket=%s)\n", demo_lib, demo_socket);
 +					}
 +				} catch (Error e) {
@@ -432,12 +431,12 @@ index 67bf4b3..841b257 100644
 +			// 如果启用则初始化内存混淆器
 +			if (!fridmira_no_gum) {
 +				try {
-+					// Test memory identifier obfuscator functionality
-+					// 测试内存标识符混淆器功能
++				// Test memory identifier obfuscator functionality
++				// 测试内存标识符混淆器功能
 +					string demo_memory = Frida.FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_memory_region");
-+					if (verbose) {
++				if (verbose) {
 +						stdout.printf ("  GUM memory obfuscator: enabled (example: frida_memory_region -> %s)\n", demo_memory);
-+					}
++				}
 +				} catch (Error e) {
 +					stderr.printf ("Warning: GUM memory obfuscator initialization failed: %s\n", e.message);
 +				}
@@ -458,10 +457,10 @@ index 67bf4b3..841b257 100644
 +				string preload_status;
 +				if (fridmira_no_preload) {
 +					preload_status = "disabled (--no-preload)";
-+				} else if (!enable_preload) {
-+					preload_status = "disabled (--disable-preload)";
++				} else if (enable_preload) {
++					preload_status = "enabled (blacklist mode)";
 +				} else {
-+					preload_status = "enabled (symbol conflicts fixed)";
++					preload_status = "disabled (--disable-preload)";
 +				}
 +				stdout.printf ("  Preload optimization: %s\n", preload_status);
 +			}

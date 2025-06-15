@@ -1,19 +1,19 @@
-From 5ef6b2906a6482c968d52efd05b11bc0b9d3a926 Mon Sep 17 00:00:00 2001
+From 39c9954d3a644d8cb98963d80c8e1b2587f239d1 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 20:49:57 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to lib/base
 
 ---
- lib/base/fridmira.vala | 930 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 930 insertions(+)
+ lib/base/fridmira.vala | 990 +++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 990 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..6aace14
+index 0000000..2e95b0d
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,930 @@
+@@ -0,0 +1,990 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -73,59 +73,148 @@ index 0000000..6aace14
 +			};
 +		}
 +
-+		/**
-+		 * Safe Frida symbols that can be obfuscated without system impact
-+		 * 可以安全混淆而不影响系统的Frida符号
++				/**
++		 * Default Frida signature symbols (built-in blacklist)
++		 * 默认Frida特征符号（内置黑名单）
 +		 */
-+		private static string[] get_safe_frida_symbols() {
++		private static string[] get_default_frida_signatures() {
 +			return {
-+				"frida_", "_frida_", "FRIDA_",
-+				"frida_server", "frida_agent", "frida_gadget",
-+				"frida_core", "frida_gum", "frida_gumjs"
++				// Frida server signatures / Frida服务器特征
++				"frida_server", "frida-server", "FRIDA_SERVER",
++				"FridaServer", "fridaServer",
++
++				// Frida agent signatures / Frida代理特征
++				"frida_agent", "frida-agent", "FRIDA_AGENT",
++				"FridaAgent", "fridaAgent",
++
++				// Frida gadget signatures / Frida gadget特征
++				"frida_gadget", "frida-gadget", "FRIDA_GADGET",
++				"FridaGadget", "fridaGadget",
++
++				// Frida core signatures / Frida核心特征
++				"frida_core", "frida-core", "FRIDA_CORE",
++				"FridaCore", "fridaCore",
++
++				// Frida script and RPC signatures / Frida脚本和RPC特征
++				"frida_rpc", "frida-rpc", "FRIDA_RPC",
++				"frida_script", "frida-script", "FRIDA_SCRIPT",
++				"FridaScript", "fridaScript",
++
++				// Frida session and device signatures / Frida会话和设备特征
++				"frida_session", "frida-session", "FRIDA_SESSION",
++				"frida_device", "frida-device", "FRIDA_DEVICE",
++				"FridaDevice", "fridaDevice",
++
++				// Frida process and spawn signatures / Frida进程和spawn特征
++				"frida_process", "frida-process", "FRIDA_PROCESS",
++				"frida_spawn", "frida-spawn", "FRIDA_SPAWN",
++
++				// Generic frida prefixes (but exclude critical functions)
++				// 通用frida前缀（但排除关键函数）
++				"frida_version", "frida_build", "frida_config",
++				"frida_error", "frida_warning", "frida_debug"
 +			};
 +		}
 +
 +		/**
-+		 * Frida GUM symbols that need careful handling
-+		 * 需要谨慎处理的Frida GUM符号
++		 * Load symbol blacklist from external configuration file
++		 * 从外部配置文件加载符号黑名单
++		 *
++		 * Configuration file format (one symbol per line):
++		 * 配置文件格式（每行一个符号）：
++		 *
++		 * # Comments start with #
++		 * frida_custom_function
++		 * my_frida_symbol
++		 * custom_detection_string
 +		 */
-+		private static string[] get_frida_gum_symbols() {
-+			return {
-+				"gum_init", "gum_deinit", "gum_interceptor_",
-+				"gum_invocation_", "gum_script_", "gum_stalker_",
-+				"gum_memory_", "gum_module_", "gum_process_",
-+				"gum_thread_", "gum_kernel_", "gum_darwin_",
-+				"gum_linux_", "gum_windows_", "gum_android_"
++		private static string[] load_external_blacklist() {
++			var external_symbols = new Gee.ArrayList<string>();
++
++			// Check for configuration file paths in order of priority
++			// 按优先级顺序检查配置文件路径
++			string[] config_paths = {
++				// 1. Environment variable specified path / 环境变量指定路径
++				Environment.get_variable("FRIDMIRA_SYMBOL_CONFIG"),
++				// 2. Current directory / 当前目录
++				"./fridmira-symbols.conf",
++				// 3. User home directory / 用户主目录
++				Path.build_filename(Environment.get_home_dir(), ".fridmira-symbols.conf"),
++				// 4. System-wide configuration / 系统级配置
++				"/etc/fridmira/symbols.conf",
++				"/usr/local/etc/fridmira/symbols.conf"
 +			};
++
++			foreach (string config_path in config_paths) {
++				if (config_path == null) continue;
++
++				try {
++					if (FileUtils.test(config_path, FileTest.EXISTS | FileTest.IS_REGULAR)) {
++						string content;
++						if (FileUtils.get_contents(config_path, out content)) {
++							parse_config_content(content, external_symbols);
++							if (Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++								stderr.printf("FridMira: Loaded symbol blacklist from: %s\n", config_path);
++							}
++							break; // Use first found configuration file / 使用第一个找到的配置文件
++						}
++					}
++				} catch (Error e) {
++					if (Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++						stderr.printf("FridMira: Warning - Failed to load config %s: %s\n", config_path, e.message);
++					}
++				}
++			}
++
++			return external_symbols.to_array();
 +		}
 +
 +		/**
-+		 * Critical system symbols that must never be obfuscated
-+		 * 绝对不能混淆的系统关键符号
++		 * Parse configuration file content
++		 * 解析配置文件内容
 +		 */
-+		private static string[] get_critical_system_symbols() {
-+			return {
-+				// Signal handling / 信号处理
-+				"signal", "sigaction", "kill", "raise", "abort", "exit",
-+				// Memory management / 内存管理
-+				"malloc", "free", "calloc", "realloc", "mmap", "munmap",
-+				// Thread and synchronization / 线程和同步
-+				"pthread_", "sem_", "mutex_", "cond_",
-+				// Dynamic linking / 动态链接
-+				"dlopen", "dlsym", "dlclose", "dladdr", "dlinfo",
-+				// Frida agent entry points (DO NOT OBFUSCATE) / Frida Agent 入口点 (禁止混淆)
-+				"frida_agent_main", "gum_agent_main",
-+				// System calls / 系统调用
-+				"__libc_", "__android_", "__system_", "syscall",
-+				// Android specific / Android特定
-+				"android_", "art_", "dalvik_", "jni_", "ART_",
-+				// Preload related / 预加载相关
-+				"preload", "__preload", "_preload",
-+				// C runtime / C运行时
-+				"__cxa_", "__gnu_", "__gxx_", "std::",
-+				// Kernel and low-level / 内核和底层
-+				"__kernel_", "kernel_", "__user_", "__init_"
-+			};
++		private static void parse_config_content(string content, Gee.ArrayList<string> symbols) {
++			string[] lines = content.split("\n");
++
++			foreach (string line in lines) {
++				string trimmed = line.strip();
++
++				// Skip empty lines and comments / 跳过空行和注释
++				if (trimmed.length == 0 || trimmed.has_prefix("#")) {
++					continue;
++				}
++
++				// Add valid symbol to list / 添加有效符号到列表
++				if (trimmed.length > 0) {
++					symbols.add(trimmed);
++				}
++			}
++		}
++
++		/**
++		 * Get complete symbol blacklist (built-in + external)
++		 * 获取完整符号黑名单（内置+外部）
++		 */
++		private static string[] get_frida_signature_symbols() {
++			var all_symbols = new Gee.ArrayList<string>();
++
++			// Add built-in symbols / 添加内置符号
++			foreach (string symbol in get_default_frida_signatures()) {
++				all_symbols.add(symbol);
++			}
++
++			// Add external symbols if configuration loading is enabled
++			// 如果启用配置加载则添加外部符号
++			string? use_external = Environment.get_variable("FRIDMIRA_USE_EXTERNAL_CONFIG");
++			if (use_external == null || use_external != "0") {
++				foreach (string symbol in load_external_blacklist()) {
++					if (!all_symbols.contains(symbol)) {
++						all_symbols.add(symbol);
++					}
++				}
++			}
++
++			return all_symbols.to_array();
 +		}
 +
 +		/**
@@ -148,70 +237,41 @@ index 0000000..6aace14
 +		}
 +
 +		/**
-+		 * Check if a symbol is safe to obfuscate
-+		 * 检查符号是否可以安全混淆
++		 * Check if a symbol should be obfuscated (blacklist mode)
++		 * 检查符号是否应该被混淆（黑名单模式）
++		 *
++		 * SIMPLE RULE: Only obfuscate if symbol contains Frida signatures
++		 * 规则：只有包含Frida特征的符号才混淆
 +		 */
-+		private static bool is_symbol_safe_to_obfuscate(string original_symbol) {
-+			// 1. Never obfuscate critical system symbols
-+			// 1. 绝不混淆系统关键符号
-+			foreach (string critical in get_critical_system_symbols()) {
-+				if (original_symbol.has_prefix(critical)) {
-+					return false;
-+				}
-+			}
-+
-+			// 2. Check if it's a safe Frida symbol
-+			// 2. 检查是否为安全的Frida符号
-+			foreach (string frida_sym in get_safe_frida_symbols()) {
-+				if (original_symbol.has_prefix(frida_sym)) {
++		private static bool should_obfuscate_symbol(string original_symbol) {
++			// Check if symbol contains any Frida signature
++			// 检查符号是否包含任何Frida特征
++			foreach (string signature in get_frida_signature_symbols()) {
++				if (original_symbol.contains(signature)) {
 +					return true;
 +				}
 +			}
 +
-+			// 3. Carefully handle GUM symbols with additional verification
-+			// 3. 谨慎处理GUM符号，进行额外验证
-+			foreach (string gum_sym in get_frida_gum_symbols()) {
-+				if (original_symbol.has_prefix(gum_sym)) {
-+					// Additional check: ensure it's actually from Frida context
-+					// 额外检查：确保确实来自Frida上下文
-+					return is_confirmed_frida_gum_symbol(original_symbol);
-+				}
-+			}
-+
-+			// 4. Default: do not obfuscate unknown symbols for safety
-+			// 4. 默认：为安全起见不混淆未知符号
++			// Default: keep original (safe approach)
++			// 默认：保持原样（安全方法）
 +			return false;
 +		}
 +
 +		/**
-+		 * Verify if a GUM symbol is actually from Frida
-+		 * 验证GUM符号是否确实来自Frida
-+		 */
-+		private static bool is_confirmed_frida_gum_symbol(string symbol) {
-+			// Check if symbol contains clear Frida indicators
-+			// 检查符号是否包含明确的Frida标识
-+			return symbol.contains("frida") ||
-+				   (symbol.contains("gum") &&
-+				    (symbol.contains("script") || symbol.contains("interceptor") ||
-+				     symbol.contains("stalker") || symbol.contains("invocation")));
-+		}
-+
-+		/**
-+		 * Generate obfuscated symbol name using deterministic randomization
-+		 * 使用确定性随机化生成混淆的符号名
++		 * Generate obfuscated symbol name using blacklist mode
++		 * 使用黑名单模式生成混淆的符号名
 +		 *
-+		 * Uses timestamp and original string hash as seed for reproducible
-+		 * but unpredictable symbol generation.
-+		 * 使用时间戳和原始字符串哈希作为种子，生成可重现但不可预测的符号。
++		 * SIMPLIFIED APPROACH: Only obfuscate known Frida signatures
++		 * 简化方法：只混淆已知的Frida特征符号
 +		 */
 +		public static string obfuscate_symbol(string original) {
 +			if (!is_mode_enabled()) {
 +				return original;
 +			}
 +
-+			// Safety check: only obfuscate if it's safe to do so
-+			// 安全检查：只有在安全的情况下才进行混淆
-+			if (!is_symbol_safe_to_obfuscate(original)) {
++			// Blacklist check: only obfuscate Frida signature symbols
++			// 黑名单检查：只混淆Frida特征符号
++			if (!should_obfuscate_symbol(original)) {
 +				return original;
 +			}
 +
