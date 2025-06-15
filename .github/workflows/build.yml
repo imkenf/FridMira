@@ -89,65 +89,9 @@ jobs:
               console.log(`Release ${releaseTag} not found or already deleted`);
             }
 
-  create_release:
-    needs: check_version
-    runs-on: ubuntu-22.04
-    if: needs.check_version.outputs.ALREADY_RELEASE != '1'
-    outputs:
-      upload_url: ${{ steps.createRelease.outputs.upload_url }}
-      release_id: ${{ steps.createRelease.outputs.id }}
-    steps:
-      - uses: softprops/action-gh-release@v2.1.0
-        id: createRelease
-        with:
-          tag_name: "${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
-          name: "FridMira ${{ needs.check_version.outputs.FRIDA_VERSION }} - ${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
-          body: |
-            # 🚀 FridMira for Frida ${{ needs.check_version.outputs.FRIDA_VERSION }}
-
-            ## ✨ 增强特性 / Enhanced Features
-            - 符号混淆、线程掩盖、RPC增强 / Symbol obfuscation, thread masking, RPC enhancement
-            - 文件/socket名混淆、内置反检测 / File/socket name obfuscation, built-in anti-detection
-            - GUM内存混淆、内存标识符隐藏 / GUM memory obfuscation, memory identifier hiding
-            - 细粒度功能控制、环境变量优先级 / Fine-grained control, environment variable priority
-
-            ## 🎛️ 控制方式 / Control Methods
-            ```bash
-            # 命令行控制 / Command Line Control
-            ./frida-server --fridmira                    # 启用所有功能 / Enable all features
-            ./frida-server --fridmira --fridmira-no-gum  # 禁用GUM内存混淆 / Disable GUM memory obfuscation
-            ./frida-server --fridmira --fridmira-no-symbol --fridmira-no-thread  # 组合控制 / Combined control
-
-            # 环境变量控制 / Environment Variable Control
-            export FRIDMIRA_MODE=enabled          # 全局开关 / Global switch
-            export FRIDMIRA_GUM_MODE=disabled     # GUM特定控制 / GUM-specific control
-            export FRIDMIRA_VERBOSE=1             # 详细输出 / Verbose output
-            ```
-
-            ## 📦 使用方法 / Usage
-            ```bash
-            # 下载并使用 / Download and use
-            wget https://github.com/${{ github.repository }}/releases/download/${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FRIDMIRA_VERSION }}/fridmira-server-${{ needs.check_version.outputs.FRIDA_VERSION }}-android-arm64.gz
-            gunzip fridmira-server-*.gz
-            adb push fridmira-server-* /data/local/tmp/
-            adb shell chmod 755 /data/local/tmp/fridmira-server-*
-            adb shell /data/local/tmp/fridmira-server-* --fridmira &
-            ```
-
-            ## 🛡️ 反检测能力 / Anti-Detection Capabilities
-            - ✅ 符号混淆 / Symbol obfuscation
-            - ✅ 线程掩盖 / Thread masking
-            - ✅ 内存混淆 / Memory obfuscation
-            - ✅ RPC增强 / RPC enhancement
-            - ✅ 文件混淆 / File obfuscation
-            - ✅ 内置反检测 / Built-in anti-detection
-
-          prerelease: false
-          draft: false
-
   android_build:
     runs-on: ubuntu-22.04
-    needs: [check_version, create_release]
+    needs: [check_version]
     if: needs.check_version.outputs.ALREADY_RELEASE != '1'
     strategy:
       matrix:
@@ -246,8 +190,8 @@ jobs:
         done
 
         # 验证fridmira.vala已正确添加到构建系统
-        if [[ -f "subprojects/frida-core/src/fridmira.vala" ]]; then
-          if grep -q "fridmira.vala" subprojects/frida-core/src/meson.build; then
+        if [[ -f "subprojects/frida-core/lib/base/fridmira.vala" ]]; then
+          if grep -q "fridmira.vala" subprojects/frida-core/lib/base/meson.build; then
             echo "✅ fridmira.vala is correctly added to build system"
           else
             echo "❌ fridmira.vala not found in meson.build - patch may have failed"
@@ -282,6 +226,10 @@ jobs:
           make -j1
         fi
 
+        # 调试：显示构建产物目录结构
+        echo "🔍 Build output structure:"
+        find . -name "frida-server" -o -name "frida-inject" -o -name "frida-gadget.so" -o -name "libfrida-gumjs-1.0.a" | head -20
+
         # 验证构建产物
         required_files=(
           "./subprojects/frida-core/server/frida-server"
@@ -293,8 +241,6 @@ jobs:
         for file in "${required_files[@]}"; do
           if [[ ! -f "$file" ]]; then
             echo "❌ Missing required file: $file"
-            echo "🔍 Looking for files in current directory:"
-            find . -name "frida-server" -o -name "frida-inject" -o -name "frida-gadget.so" -o -name "*gumjs*.a" | head -10
             exit 1
           fi
         done
@@ -315,54 +261,61 @@ jobs:
         # 压缩
         gzip -9 ./dist/*
 
-        # 创建符号链接用于上传
-        ln -sf ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz ./frida-server.gz
-        ln -sf ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz ./frida-inject.gz
-        ln -sf ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so.gz ./frida-gadget.so.gz
-        ln -sf ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a.gz ./libfrida-gumjs-1.0.a.gz
-
-    - name: Upload frida-server
-      uses: actions/upload-release-asset@v1.0.2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v2.1.0
       with:
-        upload_url: ${{ needs.create_release.outputs.upload_url }}
-        asset_path: './frida-server.gz'
-        asset_name: 'fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz'
-        asset_content_type: application/gzip
+        tag_name: "${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
+        name: "FridMira ${{ needs.check_version.outputs.FRIDA_VERSION }} - ${{ needs.check_version.outputs.FRIDMIRA_VERSION }}"
+        files: |
+          ./dist/fridmira-server-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz
+          ./dist/fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz
+          ./dist/fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so.gz
+          ./dist/fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a.gz
+        body: |
+          # 🚀 FridMira for Frida ${{ needs.check_version.outputs.FRIDA_VERSION }}
 
-    - name: Upload frida-inject
-      uses: actions/upload-release-asset@v1.0.2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create_release.outputs.upload_url }}
-        asset_path: './frida-inject.gz'
-        asset_name: 'fridmira-inject-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.gz'
-        asset_content_type: application/gzip
+          ## ✨ 增强特性 / Enhanced Features
+          - 符号混淆、线程掩盖、RPC增强 / Symbol obfuscation, thread masking, RPC enhancement
+          - 文件/socket名混淆、内置反检测 / File/socket name obfuscation, built-in anti-detection
+          - GUM内存混淆、内存标识符隐藏 / GUM memory obfuscation, memory identifier hiding
+          - 细粒度功能控制、环境变量优先级 / Fine-grained control, environment variable priority
 
-    - name: Upload frida-gadget
-      uses: actions/upload-release-asset@v1.0.2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create_release.outputs.upload_url }}
-        asset_path: './frida-gadget.so.gz'
-        asset_name: 'fridmira-gadget-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.so.gz'
-        asset_content_type: application/gzip
+          ## 🎛️ 控制方式 / Control Methods
+          ```bash
+          # 命令行控制 / Command Line Control
+          ./frida-server --fridmira                    # 启用所有功能 / Enable all features
+          ./frida-server --fridmira --fridmira-no-gum  # 禁用GUM内存混淆 / Disable GUM memory obfuscation
+          ./frida-server --fridmira --fridmira-no-symbol --fridmira-no-thread  # 组合控制 / Combined control
 
-    - name: Upload frida-gumjs
-      uses: actions/upload-release-asset@v1.0.2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create_release.outputs.upload_url }}
-        asset_path: './libfrida-gumjs-1.0.a.gz'
-        asset_name: 'fridmira-gumjs-${{ env.FRIDA_VERSION }}-${{ matrix.arch }}.a.gz'
-        asset_content_type: application/gzip
+          # 环境变量控制 / Environment Variable Control
+          export FRIDMIRA_MODE=enabled          # 全局开关 / Global switch
+          export FRIDMIRA_GUM_MODE=disabled     # GUM特定控制 / GUM-specific control
+          export FRIDMIRA_VERBOSE=1             # 详细输出 / Verbose output
+          ```
+
+          ## 📦 使用方法 / Usage
+          ```bash
+          # 下载并使用 / Download and use
+          wget https://github.com/${{ github.repository }}/releases/download/${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FRIDMIRA_VERSION }}/fridmira-server-${{ needs.check_version.outputs.FRIDA_VERSION }}-android-arm64.gz
+          gunzip fridmira-server-*.gz
+          adb push fridmira-server-* /data/local/tmp/
+          adb shell chmod 755 /data/local/tmp/fridmira-server-*
+          adb shell /data/local/tmp/fridmira-server-* --fridmira &
+          ```
+
+          ## 🛡️ 反检测能力 / Anti-Detection Capabilities
+          - ✅ 符号混淆 / Symbol obfuscation
+          - ✅ 线程掩盖 / Thread masking
+          - ✅ 内存混淆 / Memory obfuscation
+          - ✅ RPC增强 / RPC enhancement
+          - ✅ 文件混淆 / File obfuscation
+          - ✅ 内置反检测 / Built-in anti-detection
+
+        prerelease: false
+        draft: false
 
   build_summary:
-    needs: [check_version, create_release, android_build]
+    needs: [check_version, android_build]
     runs-on: ubuntu-22.04
     if: always()
     steps:
