@@ -1,14 +1,14 @@
-From cef0668ea9d41f41c6cfa26fc1b3910698a2ae44 Mon Sep 17 00:00:00 2001
+From f6f3b93732ee03b0c1dd7c23b0e7be09ac71fbe6 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 23:36:57 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 470 +++++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 451 insertions(+), 19 deletions(-)
+ server/server.vala | 492 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 466 insertions(+), 26 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..172571a 100644
+index 67bf4b3..d99a6f1 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -166,12 +166,46 @@ index 67bf4b3..172571a 100644
  		options.report_crashes = report_crashes;
  
  #if (IOS || TVOS) && !HAVE_EMBEDDED_ASSETS
-@@ -198,17 +309,87 @@ namespace Frida.Server {
+@@ -180,11 +291,15 @@ namespace Frida.Server {
+ 
+ #if DARWIN
+ 		var worker = new Thread<int> ("frida-server-main-loop", () => {
+-			var exit_code = run_application (device_id, endpoint_params, options, on_ready);
+-
+-			_stop_run_loop ();
+-
+-			return exit_code;
++			try {
++				var exit_code = run_application (device_id, endpoint_params, options, on_ready);
++				_stop_run_loop ();
++				return exit_code;
++			} catch (Error e) {
++				stderr.printf ("FridMira: Fatal error in main thread: %s\n", e.message);
++				_stop_run_loop ();
++				return 1;
++			}
+ 		});
+ 		_start_run_loop ();
+ 
+@@ -192,23 +307,98 @@ namespace Frida.Server {
+ 
+ 		return exit_code;
+ #else
+-		return run_application (device_id, endpoint_params, options, on_ready);
++		try {
++			return run_application (device_id, endpoint_params, options, on_ready);
++		} catch (Error e) {
++			stderr.printf ("FridMira: Fatal error: %s\n", e.message);
++			return 1;
++		}
+ #endif
+ 	}
  
  	private static int run_application (string? device_id, EndpointParameters endpoint_params, ControlServiceOptions options,
- 			ReadyHandler on_ready) {
+-			ReadyHandler on_ready) {
 -		TemporaryDirectory.always_use ((directory != null) ? directory : DEFAULT_DIRECTORY);
 -		TemporaryDirectory.use_sysroot (options.sysroot);
++			ReadyHandler on_ready) throws Error {
 +		if (verbose) {
 +			stdout.printf ("FridMira: Starting application...\n");
 +		}
@@ -263,7 +297,7 @@ index 67bf4b3..172571a 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +398,50 @@ namespace Frida.Server {
+@@ -217,9 +407,50 @@ namespace Frida.Server {
  			});
  		}
  
@@ -314,7 +348,7 @@ index 67bf4b3..172571a 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +506,75 @@ namespace Frida.Server {
+@@ -284,22 +515,74 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -394,11 +428,10 @@ index 67bf4b3..172571a 100644
  					return;
 +				}
 +				stderr.printf ("FridMira: CRITICAL ERROR during application start: %s\n", e.message);
-+				stderr.printf ("FridMira: Error type: %s\n", e.get_type().name());
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +583,19 @@ namespace Frida.Server {
+@@ -308,12 +591,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -418,7 +451,7 @@ index 67bf4b3..172571a 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,26 +603,39 @@ namespace Frida.Server {
+@@ -321,26 +611,39 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -459,7 +492,7 @@ index 67bf4b3..172571a 100644
  				loop.quit ();
  				return false;
  			});
-@@ -357,4 +652,141 @@ namespace Frida.Server {
+@@ -357,4 +660,141 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
