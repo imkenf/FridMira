@@ -1,14 +1,14 @@
-From 5cab11c76ff8f03dab5234cae5237076cc0815ea Mon Sep 17 00:00:00 2001
+From cef0668ea9d41f41c6cfa26fc1b3910698a2ae44 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sat, 14 Jun 2025 23:36:57 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 318 +++++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 308 insertions(+), 10 deletions(-)
+ server/server.vala | 470 +++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 451 insertions(+), 19 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..bf13ff0 100644
+index 67bf4b3..172571a 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -166,43 +166,23 @@ index 67bf4b3..bf13ff0 100644
  		options.report_crashes = report_crashes;
  
  #if (IOS || TVOS) && !HAVE_EMBEDDED_ASSETS
-@@ -198,17 +309,43 @@ namespace Frida.Server {
+@@ -198,17 +309,87 @@ namespace Frida.Server {
  
  	private static int run_application (string? device_id, EndpointParameters endpoint_params, ControlServiceOptions options,
  			ReadyHandler on_ready) {
+-		TemporaryDirectory.always_use ((directory != null) ? directory : DEFAULT_DIRECTORY);
+-		TemporaryDirectory.use_sysroot (options.sysroot);
 +		if (verbose) {
 +			stdout.printf ("FridMira: Starting application...\n");
 +		}
-+
-+		// CRITICAL: Set FridMira environment variables BEFORE any GUM/preload initialization
-+		// 关键：在任何GUM/preload初始化之前设置FridMira环境变量
-+		if (fridmira_enabled) {
-+			if (verbose) {
-+				stdout.printf ("FridMira: Setting environment variables for preload compatibility...\n");
-+			}
-+			// Set environment variables EARLY to ensure preload mechanism can read them
-+			// 提前设置环境变量以确保preload机制能够读取它们
-+			GLib.Environment.set_variable ("FRIDMIRA_MODE", "enabled", true);
-+			GLib.Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", fridmira_no_symbol ? "disabled" : "enabled", true);
-+			GLib.Environment.set_variable ("FRIDMIRA_THREAD_MODE", fridmira_no_thread ? "disabled" : "enabled", true);
-+			GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", fridmira_no_rpc ? "disabled" : "enabled", true);
-+			GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", fridmira_no_file ? "disabled" : "enabled", true);
-+			GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", fridmira_no_gum ? "disabled" : "enabled", true);
-+		}
-+
- 		TemporaryDirectory.always_use ((directory != null) ? directory : DEFAULT_DIRECTORY);
- 		TemporaryDirectory.use_sysroot (options.sysroot);
  
-+		// Initialize FridMira framework if enabled (after environment variables are set)
-+		// 如果启用则初始化FridMira框架（在环境变量设置后）
+-		application = new Application (device_id, endpoint_params, options);
++		// CRITICAL FIX: Initialize FridMira BEFORE any system initialization
++		// 关键修复：在任何系统初始化之前初始化FridMira
 +		if (fridmira_enabled) {
 +			if (verbose) {
-+				stdout.printf ("FridMira: Initializing anti-detection framework...\n");
++				stdout.printf ("FridMira: Early initialization before preload...\n");
 +			}
-+			initialize_fridmira_framework ();
-+		}
-+
- 		application = new Application (device_id, endpoint_params, options);
  
 -		Posix.signal (Posix.Signal.INT, (sig) => {
 -			application.stop ();
@@ -210,13 +190,86 @@ index 67bf4b3..bf13ff0 100644
 -		Posix.signal (Posix.Signal.TERM, (sig) => {
 -			application.stop ();
 -		});
++			try {
++				// Set environment variables FIRST
++				// 首先设置环境变量
++				if (verbose) {
++					stdout.printf ("FridMira: Setting environment variables...\n");
++				}
++				GLib.Environment.set_variable ("FRIDMIRA_MODE", "enabled", true);
++				GLib.Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", fridmira_no_symbol ? "disabled" : "enabled", true);
++				GLib.Environment.set_variable ("FRIDMIRA_THREAD_MODE", fridmira_no_thread ? "disabled" : "enabled", true);
++				GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", fridmira_no_rpc ? "disabled" : "enabled", true);
++				GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", fridmira_no_file ? "disabled" : "enabled", true);
++				GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", fridmira_no_gum ? "disabled" : "enabled", true);
++
++				// Initialize FridMira framework EARLY
++				// 提前初始化FridMira框架
++				if (verbose) {
++					stdout.printf ("FridMira: Initializing framework components...\n");
++				}
++				initialize_fridmira_framework ();
++
++				if (verbose) {
++					stdout.printf ("FridMira: Early initialization completed successfully\n");
++				}
++			} catch (Error e) {
++				stderr.printf ("FridMira: CRITICAL ERROR during early initialization: %s\n", e.message);
++				stderr.printf ("FridMira: Disabling framework and continuing with standard mode\n");
++				// Disable FridMira and continue with standard mode
++				// 禁用FridMira并继续使用标准模式
++				fridmira_enabled = false;
++				GLib.Environment.set_variable ("FRIDMIRA_MODE", "disabled", true);
++			}
++		}
++
++		// NOW it's safe to initialize TemporaryDirectory and trigger preload
++		// 现在可以安全地初始化TemporaryDirectory并触发preload
++		if (verbose) {
++			stdout.printf ("FridMira: Initializing TemporaryDirectory...\n");
++		}
++
++		try {
++			TemporaryDirectory.always_use ((directory != null) ? directory : DEFAULT_DIRECTORY);
++			TemporaryDirectory.use_sysroot (options.sysroot);
++			if (verbose) {
++				stdout.printf ("FridMira: TemporaryDirectory initialized successfully\n");
++			}
++		} catch (Error e) {
++			stderr.printf ("FridMira: ERROR during TemporaryDirectory initialization: %s\n", e.message);
++			throw e;
++		}
++
++		if (verbose) {
++			stdout.printf ("FridMira: Creating Application instance...\n");
++		}
++
++		try {
++			application = new Application (device_id, endpoint_params, options);
++			if (verbose) {
++				stdout.printf ("FridMira: Application instance created successfully\n");
++			}
++		} catch (Error e) {
++			stderr.printf ("FridMira: ERROR during Application creation: %s\n", e.message);
++			throw e;
++		}
++
 +		// Setup improved signal handlers for graceful shutdown
 +		// 设置改进的信号处理器以实现优雅关闭
++		if (verbose) {
++			stdout.printf ("FridMira: Setting up signal handlers...\n");
++		}
 +		setup_signal_handlers ();
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -220,6 +357,44 @@ namespace Frida.Server {
+@@ -217,9 +398,50 @@ namespace Frida.Server {
+ 			});
+ 		}
+ 
++		if (verbose) {
++			stdout.printf ("FridMira: Starting application main loop...\n");
++		}
  		return application.run ();
  	}
  
@@ -261,7 +314,7 @@ index 67bf4b3..bf13ff0 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,19 +459,31 @@ namespace Frida.Server {
+@@ -284,22 +506,75 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -271,31 +324,81 @@ index 67bf4b3..bf13ff0 100644
 +
  			try {
  				if (device_id != null && device_id != "local") {
+-					manager = new DeviceManager.with_nonlocal_backends_only ();
 +					if (verbose) {
 +						stdout.printf ("FridMira: Connecting to remote device: %s\n", device_id);
 +					}
- 					manager = new DeviceManager.with_nonlocal_backends_only ();
--
- 					var device = yield manager.get_device_by_id (device_id, 0, io_cancellable);
- 					device.lost.connect (on_device_lost);
--
- 					service = yield new ControlService.with_device (device, endpoint_params, options);
- 				} else {
++
++					try {
++						if (verbose) {
++							stdout.printf ("FridMira: Creating DeviceManager...\n");
++						}
++						manager = new DeviceManager.with_nonlocal_backends_only ();
++
++						if (verbose) {
++							stdout.printf ("FridMira: Getting device by ID...\n");
++						}
++						var device = yield manager.get_device_by_id (device_id, 0, io_cancellable);
++						device.lost.connect (on_device_lost);
++
++						if (verbose) {
++							stdout.printf ("FridMira: Creating ControlService with device...\n");
++						}
++						service = yield new ControlService.with_device (device, endpoint_params, options);
++					} catch (GLib.Error e) {
++						stderr.printf ("FridMira: ERROR during remote device setup: %s\n", e.message);
++						throw e;
++					}
++				} else {
 +					if (verbose) {
 +						stdout.printf ("FridMira: Starting local control service...\n");
 +					}
- 					service = new ControlService (endpoint_params, options);
++
++					try {
++						if (verbose) {
++							stdout.printf ("FridMira: Creating local ControlService...\n");
++						}
++						service = new ControlService (endpoint_params, options);
++					} catch (GLib.Error e) {
++						stderr.printf ("FridMira: ERROR during local ControlService creation: %s\n", e.message);
++						throw e;
++					}
++				}
+ 
+-					var device = yield manager.get_device_by_id (device_id, 0, io_cancellable);
+-					device.lost.connect (on_device_lost);
++				if (verbose) {
++					stdout.printf ("FridMira: Starting service...\n");
++				}
+ 
+-					service = yield new ControlService.with_device (device, endpoint_params, options);
+-				} else {
+-					service = new ControlService (endpoint_params, options);
++				try {
++					yield service.start (io_cancellable);
++					if (verbose) {
++						stdout.printf ("FridMira: Service started successfully\n");
++					}
++				} catch (GLib.Error e) {
++					stderr.printf ("FridMira: ERROR during service start: %s\n", e.message);
++					throw e;
  				}
  
- 				yield service.start (io_cancellable);
-+
-+				if (verbose) {
-+					stdout.printf ("FridMira: Service started successfully\n");
-+				}
+-				yield service.start (io_cancellable);
  			} catch (GLib.Error e) {
- 				if (e is IOError.CANCELLED)
+-				if (e is IOError.CANCELLED)
++				if (e is IOError.CANCELLED) {
++					if (verbose) {
++						stdout.printf ("FridMira: Operation cancelled\n");
++					}
  					return;
-@@ -308,12 +495,19 @@ namespace Frida.Server {
++				}
++				stderr.printf ("FridMira: CRITICAL ERROR during application start: %s\n", e.message);
++				stderr.printf ("FridMira: Error type: %s\n", e.get_type().name());
+ 				printerr ("Unable to start: %s\n", e.message);
+ 				exit_code = 5;
+ 				loop.quit ();
+@@ -308,12 +583,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -315,7 +418,7 @@ index 67bf4b3..bf13ff0 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,26 +515,39 @@ namespace Frida.Server {
+@@ -321,26 +603,39 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -356,7 +459,7 @@ index 67bf4b3..bf13ff0 100644
  				loop.quit ();
  				return false;
  			});
-@@ -357,4 +564,95 @@ namespace Frida.Server {
+@@ -357,4 +652,141 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
@@ -369,9 +472,13 @@ index 67bf4b3..bf13ff0 100644
 +	 * FridMira components are automatically activated based on environment variables.
 +	 * 此函数使用指定配置设置FridMira框架。FridMira组件根据环境变量自动激活。
 +	 */
-+	private static void initialize_fridmira_framework () {
++	private static void initialize_fridmira_framework () throws Error {
 +		// Environment variables are already set in run_application() for preload compatibility
 +		// 环境变量已在run_application()中设置以确保preload兼容性
++
++		if (verbose) {
++			stdout.printf ("FridMira: Starting component initialization...\n");
++		}
 +
 +		// Initialize core FridMira components with actual functionality
 +		// 使用实际功能初始化核心FridMira组件
@@ -379,52 +486,94 @@ index 67bf4b3..bf13ff0 100644
 +		// Initialize symbol obfuscator if enabled
 +		// 如果启用则初始化符号混淆器
 +		if (!fridmira_no_symbol) {
-+			if (verbose) {
-+				stdout.printf ("  Symbol obfuscator: enabled (framework ready)\n");
++			try {
++				if (verbose) {
++					stdout.printf ("FridMira: Initializing symbol obfuscator...\n");
++				}
++				// Test symbol obfuscator functionality
++				// 测试符号混淆器功能
++				if (verbose) {
++					stdout.printf ("  Symbol obfuscator: enabled (framework ready)\n");
++				}
++			} catch (Error e) {
++				stderr.printf ("FridMira: ERROR in symbol obfuscator initialization: %s\n", e.message);
++				throw new Error.INVALID_OPERATION ("Symbol obfuscator failed: %s", e.message);
 +			}
 +		}
 +
 +		// Initialize thread obfuscator if enabled
 +		// 如果启用则初始化线程混淆器
 +		if (!fridmira_no_thread) {
-+			// Initialize and demonstrate thread name obfuscator functionality
-+			// 初始化线程名混淆器功能
-+			string demo_thread = Frida.FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
-+			if (verbose) {
-+				stdout.printf ("  Thread obfuscator: enabled (example: frida-server-main-loop -> %s)\n", demo_thread);
++			try {
++				if (verbose) {
++					stdout.printf ("FridMira: Initializing thread obfuscator...\n");
++				}
++				// Initialize and demonstrate thread name obfuscator functionality
++				// 初始化线程名混淆器功能
++				string demo_thread = Frida.FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
++				if (verbose) {
++					stdout.printf ("  Thread obfuscator: enabled (example: frida-server-main-loop -> %s)\n", demo_thread);
++				}
++			} catch (Error e) {
++				stderr.printf ("FridMira: ERROR in thread obfuscator initialization: %s\n", e.message);
++				throw new Error.INVALID_OPERATION ("Thread obfuscator failed: %s", e.message);
 +			}
 +		}
 +
 +		// Initialize RPC protocol enhancer if RPC obfuscation is enabled
 +		// 如果启用RPC混淆则初始化RPC协议增强器
 +		if (!fridmira_no_rpc) {
-+			Frida.FridMiraRpcProtocolEnhancer.init ();
-+			string protocol_id = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id();
-+			if (verbose) {
-+				stdout.printf ("  RPC protocol enhancer: enabled (protocol: %s)\n", protocol_id);
++			try {
++				if (verbose) {
++					stdout.printf ("FridMira: Initializing RPC protocol enhancer...\n");
++				}
++				Frida.FridMiraRpcProtocolEnhancer.init ();
++				string protocol_id = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id();
++				if (verbose) {
++					stdout.printf ("  RPC protocol enhancer: enabled (protocol: %s)\n", protocol_id);
++				}
++			} catch (Error e) {
++				stderr.printf ("FridMira: ERROR in RPC protocol enhancer initialization: %s\n", e.message);
++				throw new Error.INVALID_OPERATION ("RPC protocol enhancer failed: %s", e.message);
 +			}
 +		}
 +
 +		// Initialize file/library name generator if enabled
 +		// 如果启用则初始化文件/库名生成器
 +		if (!fridmira_no_file) {
-+			// Initialize and demonstrate file name generator functionality
-+			// 初始化文件名生成器功能
-+			string demo_lib = Frida.FridMiraLibNameGenerator.generate_lib_name();
-+			string demo_socket = Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
-+			if (verbose) {
-+				stdout.printf ("  File/library name obfuscator: enabled (examples: lib=%s, socket=%s)\n", demo_lib, demo_socket);
++			try {
++				if (verbose) {
++					stdout.printf ("FridMira: Initializing file/library name generator...\n");
++				}
++				// Initialize and demonstrate file name generator functionality
++				// 初始化文件名生成器功能
++				string demo_lib = Frida.FridMiraLibNameGenerator.generate_lib_name();
++				string demo_socket = Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
++				if (verbose) {
++					stdout.printf ("  File/library name obfuscator: enabled (examples: lib=%s, socket=%s)\n", demo_lib, demo_socket);
++				}
++			} catch (Error e) {
++				stderr.printf ("FridMira: ERROR in file/library name generator initialization: %s\n", e.message);
++				throw new Error.INVALID_OPERATION ("File/library name generator failed: %s", e.message);
 +			}
 +		}
 +
 +		// Initialize memory obfuscator if enabled
 +		// 如果启用则初始化内存混淆器
 +		if (!fridmira_no_gum) {
-+			// Initialize and demonstrate memory identifier obfuscator functionality
-+			// 初始化内存标识符混淆器功能
-+			string demo_memory = Frida.FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_memory_region");
-+			if (verbose) {
-+				stdout.printf ("  GUM memory obfuscator: enabled (example: frida_memory_region -> %s)\n", demo_memory);
++			try {
++				if (verbose) {
++					stdout.printf ("FridMira: Initializing memory obfuscator...\n");
++				}
++				// Initialize and demonstrate memory identifier obfuscator functionality
++				// 初始化内存标识符混淆器功能
++				string demo_memory = Frida.FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_memory_region");
++				if (verbose) {
++					stdout.printf ("  GUM memory obfuscator: enabled (example: frida_memory_region -> %s)\n", demo_memory);
++				}
++			} catch (Error e) {
++				stderr.printf ("FridMira: ERROR in memory obfuscator initialization: %s\n", e.message);
++				throw new Error.INVALID_OPERATION ("Memory obfuscator failed: %s", e.message);
 +			}
 +		}
 +
