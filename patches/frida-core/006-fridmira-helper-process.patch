@@ -1,4 +1,4 @@
-From cbcf63ba37a30eebbda1111d2413b53f9306bb76 Mon Sep 17 00:00:00 2001
+From 6fdac9aa94655013c924f1880336f312e2d0360c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sun, 15 Jun 2025 18:40:36 +0800
 Subject: [PATCH 006/006] Add socket name obfuscation to Linux helper process
@@ -8,7 +8,7 @@ Subject: [PATCH 006/006] Add socket name obfuscation to Linux helper process
  1 file changed, 30 insertions(+), 1 deletion(-)
 
 diff --git a/src/linux/frida-helper-process.vala b/src/linux/frida-helper-process.vala
-index 9f41c88..102d349 100644
+index 9f41c88..c99c0e4 100644
 --- a/src/linux/frida-helper-process.vala
 +++ b/src/linux/frida-helper-process.vala
 @@ -321,9 +321,21 @@ namespace Frida {
