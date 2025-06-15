@@ -1,29 +1,31 @@
-From 281ad827509d015b7bc53fc2bf6c52ca7a4b34f6 Mon Sep 17 00:00:00 2001
+From b472095e10863461e1192ed023bfd32dc8e92d3c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Sun, 15 Jun 2025 20:25:18 +0800
 Subject: [PATCH 000/000] fix test
 
 ---
- src/linux/linux-host-session.vala | 6 +++++-
- 1 file changed, 5 insertions(+), 1 deletion(-)
+ src/linux/linux-host-session.vala | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
 
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbe..0df4b1f 100644
+index 55a0fbe..8badcc4 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
-@@ -810,7 +810,11 @@ namespace Frida {
+@@ -810,8 +810,12 @@ namespace Frida {
  		}
  
  		public async void preload (Cancellable? cancellable) throws Error, IOError {
 -			yield enumerate_applications (new ApplicationQueryOptions (), cancellable);
+-
 +			try {
 +				yield enumerate_applications (new ApplicationQueryOptions (), cancellable);
 +			} catch (Error e) {
 +				stderr.printf ("FridMira: [WARNING] SystemServerAgent.preload: enumerate_applications() failed: %s\n", e.message);
++				return;
 +			}
- 
  			try {
  				yield get_process_name ("", 0, cancellable);
+ 			} catch (Error e) {
 -- 
 2.45.1.windows.1
 
