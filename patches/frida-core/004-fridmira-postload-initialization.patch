@@ -1,14 +1,14 @@
-From d6e6860e69a8bfed19d220f8410d1737302b8076 Mon Sep 17 00:00:00 2001
+From a5e14bd08c63e9d58e3536eeea06a3967ef99a5f Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 10:03:21 +0800
-Subject: [PATCH 004/007] feat: implement post-preload FridMira initialization
+Subject: [PATCH 004/007] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 26 +++++++++++++++++++++++---
- 1 file changed, 23 insertions(+), 3 deletions(-)
+ src/control-service.vala | 24 ++++++++++++++++++++++--
+ 1 file changed, 22 insertions(+), 2 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470..4524b41 100644
+index cc64470..98ceeb3 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,4 +1,8 @@
@@ -47,15 +47,6 @@ index cc64470..4524b41 100644
  				}
  
  				state = STARTED;
-@@ -445,7 +465,7 @@ namespace Frida {
- 					transports.unset (transport_id);
- 					return false;
- 				});
--				expiry_source.attach (MainContext.get_thread_default ());
-+				source.attach (MainContext.get_thread_default ());
- 
- 				transports[transport_id] = new Transport (id, expiry_source);
- 
 -- 
 2.45.1.windows.1
 
