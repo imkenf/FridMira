@@ -1,20 +1,20 @@
-From b88b9bc05a6983d8a21fab83eb416f869ce1e976 Mon Sep 17 00:00:00 2001
+From ed857e576f5d7db8a0022ccc3aaa90fcbd484383 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 11:56:28 +0800
 Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/base/fridmira.vala | 1143 ++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 1143 insertions(+)
+ lib/base/fridmira.vala | 1146 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 1146 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..80e5b19
+index 0000000..8c55bc2
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,1143 @@
+@@ -0,0 +1,1146 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -1022,8 +1022,11 @@ index 0000000..80e5b19
 +	 * This function is designed to be called from control-service.vala after preload
 +	 * completion to implement the "post-preload initialization" strategy.
 +	 * 此函数设计为在preload完成后从control-service.vala调用，以实现"预加载后初始化"策略。
++	 *
++	 * @internal This function is for internal FridMira use only and should not be
++	 * exposed in the public Frida API.
 +	 */
-+	public static void initialize_fridmira_framework () throws Error {
++	internal static void initialize_fridmira_framework () throws Error {
 +		// Check if FridMira is enabled via environment variable
 +		// 通过环境变量检查FridMira是否启用
 +		string? fridmira_mode = GLib.Environment.get_variable ("FRIDMIRA_MODE");
