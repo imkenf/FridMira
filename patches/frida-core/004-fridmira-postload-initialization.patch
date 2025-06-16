@@ -1,4 +1,4 @@
-From 2d0171cfbce09958b7090925ebf35782f4ac50f6 Mon Sep 17 00:00:00 2001
+From 8f7557f30560e74e64629eb0c8e942af44f29103 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 12:02:22 +0800
 Subject: [PATCH 004/007] FridMira post-preload initialization
@@ -8,7 +8,7 @@ Subject: [PATCH 004/007] FridMira post-preload initialization
  1 file changed, 24 insertions(+), 2 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470..e71b6b2 100644
+index cc64470..cc04d6d 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -22,7 +22,7 @@ index cc64470..e71b6b2 100644
 +	[CCode (cname = "_frida_internal_init_fridmira")]
 +	internal extern void initialize_fridmira () throws IOError;
 +
-+	public class ControlService : Object, Object.ConstructionCall {
++	public class ControlService : Object {
  		public EndpointParameters endpoint_params {
  			get;
  			construct;
