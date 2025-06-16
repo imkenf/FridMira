@@ -1,29 +1,32 @@
-From bcbc062f9efe7434136b86db580d152ac4a8f940 Mon Sep 17 00:00:00 2001
+From 2d0171cfbce09958b7090925ebf35782f4ac50f6 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 12:02:22 +0800
 Subject: [PATCH 004/007] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 23 +++++++++++++++++++++--
- 1 file changed, 21 insertions(+), 2 deletions(-)
+ src/control-service.vala | 26 ++++++++++++++++++++++++--
+ 1 file changed, 24 insertions(+), 2 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470..71e44ae 100644
+index cc64470..e71b6b2 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
-@@ -1,5 +1,10 @@
+@@ -1,5 +1,13 @@
  namespace Frida {
 -	public sealed class ControlService : Object {
-+	[CCode (cname = "_frida_internal_init_fridmira")]
-+	public static extern void initialize_fridmira_framework () throws IOError;
-+}
++	[DBus (name = "re.frida.Control")]
++	private interface Control : GLib.Object {
++		// ... existing code ...
++	}
 +
-+namespace Frida {
++	[CCode (cname = "_frida_internal_init_fridmira")]
++	internal extern void initialize_fridmira () throws IOError;
++
 +	public class ControlService : Object, Object.ConstructionCall {
  		public EndpointParameters endpoint_params {
  			get;
  			construct;
-@@ -127,7 +132,21 @@ namespace Frida {
+@@ -127,7 +135,21 @@ namespace Frida {
  				if (options.enable_preload) {
  					var base_host_session = host_session as LocalHostSession;
  					if (base_host_session != null)
@@ -36,13 +39,13 @@ index cc64470..71e44ae 100644
 +				// Implementation of "post-preload initialization" strategy from analysis document
 +				// 实施分析文档中的"预加载后初始化"策略
 +				try {
-+					Frida.FridMira.initialize ();
-+				} catch (Error e) {
++					initialize_fridmira ();
++				} catch (IOError e) {
 +					// Log error but don't fail the service start
 +					// 记录错误但不让服务启动失败
-+					stderr.printf ("FridMira: Warning - Framework initialization failed: %s\n", e.message);
-+					stderr.printf ("FridMira: Service will continue without FridMira protection\n");
-+					GLib.Environment.set_variable ("FRIDMIRA_MODE", "disabled", true);
++					stderr.printf ("FridMira: FATAL - Framework initialization failed: %s. Service will continue without FridMira protection.\n", e.message);
++					// Mark as disabled so other parts of the system know it's not active.
++					GLib.Environment.set_variable ("FRIDMIRA_MODE_EFFECTIVE", "disabled", true);
  				}
  
  				state = STARTED;
