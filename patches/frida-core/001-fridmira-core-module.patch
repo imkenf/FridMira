@@ -1,4 +1,4 @@
-From bed67520c736af4f4154da6cf21704c590629bac Mon Sep 17 00:00:00 2001
+From 6688e6685717a82e5361205018602011dd7dee35 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 11:56:28 +0800
 Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
@@ -11,7 +11,7 @@ Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..df7a7c3
+index 0000000..fc5384d
 --- /dev/null
 +++ b/lib/base/fridmira.vala
 @@ -0,0 +1,1108 @@
@@ -43,7 +43,7 @@ index 0000000..df7a7c3
 +	 * 所有FridMira组件的中央激活状态。这确保了在预加载阶段之后，框架被明确
 +	 * 初始化之前，没有任何反检测功能是激活的。
 +	 */
-+	internal static class FridMiraState {
++	internal class FridMiraState {
 +		public static bool framework_active = false;
 +		public static bool symbol_active = false;
 +		public static bool thread_active = false;
