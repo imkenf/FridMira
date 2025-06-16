@@ -1,14 +1,14 @@
-From 8f7557f30560e74e64629eb0c8e942af44f29103 Mon Sep 17 00:00:00 2001
+From bc4fe68ca19f1e54f8cd82198a5e8bfff7aa48e6 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 12:02:22 +0800
 Subject: [PATCH 004/007] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 26 ++++++++++++++++++++++++--
- 1 file changed, 24 insertions(+), 2 deletions(-)
+ src/control-service.vala | 74 +++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 69 insertions(+), 5 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470..cc04d6d 100644
+index cc64470..1dbf8ba 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -26,12 +26,79 @@ index cc64470..cc04d6d 100644
  		public EndpointParameters endpoint_params {
  			get;
  			construct;
-@@ -127,7 +135,21 @@ namespace Frida {
+@@ -97,6 +105,41 @@ namespace Frida {
+ 			main_handler = new ConnectionHandler (this, null);
+ 		}
+ 
++		private class FridMiraEnvBackup {
++			private string?[] values;
++			private static string[] KEYS = {
++				"FRIDMIRA_MODE",
++				"FRIDMIRA_SYMBOL_MODE",
++				"FRIDMIRA_THREAD_MODE",
++				"FRIDMIRA_RPC_MODE",
++				"FRIDMIRA_FILE_MODE",
++				"FRIDMIRA_GUM_MODE"
++			};
++
++			public FridMiraEnvBackup () {
++				values = new string?[KEYS.length];
++				for (int i = 0; i < KEYS.length; i++) {
++					values[i] = Environment.get_variable (KEYS[i]);
++				}
++			}
++
++			public void unset_all () {
++				for (int i = 0; i < KEYS.length; i++) {
++					if (values[i] != null) {
++						Environment.unset_variable (KEYS[i]);
++					}
++				}
++			}
++
++			public void restore () {
++				for (int i = 0; i < KEYS.length; i++) {
++					if (values[i] != null) {
++						Environment.set_variable (KEYS[i], values[i], true);
++					}
++				}
++			}
++		}
++
+ 		private void assign_session (HostSession session, HostSessionProvider provider) {
+ 			host_session = session;
+ 			host_session.spawn_added.connect (notify_spawn_added);
+@@ -110,6 +153,8 @@ namespace Frida {
+ 			host_session.uninjected.connect (notify_uninjected);
+ 
+ 			this.provider = provider;
++
++			service.incoming.connect (on_server_connection);
+ 		}
+ 
+ 		public async void start (Cancellable? cancellable = null) throws Error, IOError {
+@@ -119,15 +164,34 @@ namespace Frida {
+ 
+ 			main_context = MainContext.ref_thread_default ();
+ 
+-			service.incoming.connect (on_server_connection);
+-
+ 			try {
+ 				yield service.start (cancellable);
+ 
  				if (options.enable_preload) {
  					var base_host_session = host_session as LocalHostSession;
- 					if (base_host_session != null)
+-					if (base_host_session != null)
 -						base_host_session.preload.begin (io_cancellable);
-+						yield base_host_session.preload (io_cancellable);
++					if (base_host_session != null) {
++						var env_backup = new FridMiraEnvBackup ();
++						env_backup.unset_all ();
++						try {
++							yield base_host_session.preload (io_cancellable);
++						} finally {
++							env_backup.restore ();
++						}
++					}
 +				}
 +
 +				// GOLDEN MOMENT: Initialize FridMira framework AFTER preload completion
