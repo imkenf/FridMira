@@ -1,14 +1,14 @@
-From b3192e917520da35530e7932b6b6c1396d7125e3 Mon Sep 17 00:00:00 2001
+From 7cbb70fd7696cae399dec7699f9a2504bd601441 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Sat, 14 Jun 2025 23:36:57 +0800
-Subject: [PATCH 003/006] Integrate FridMira server functionality
+Date: Mon, 16 Jun 2025 09:53:11 +0800
+Subject: [PATCH 003/007] Integrate FridMira server functionality
 
 ---
- server/server.vala | 510 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 484 insertions(+), 26 deletions(-)
+ server/server.vala | 503 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 477 insertions(+), 26 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..31313bd 100644
+index 67bf4b3..d903d19 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -187,7 +187,7 @@ index 67bf4b3..31313bd 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +307,98 @@ namespace Frida.Server {
+@@ -192,23 +307,91 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
@@ -211,11 +211,11 @@ index 67bf4b3..31313bd 100644
 +		}
  
 -		application = new Application (device_id, endpoint_params, options);
-+		// CRITICAL FIX: Initialize FridMira BEFORE any system initialization
-+		// 关键修复：在任何系统初始化之前初始化FridMira
++		// IMPROVED: Set FridMira environment variables early, but delay framework initialization
++		// 改进：提前设置FridMira环境变量，但延迟框架初始化
 +		if (fridmira_enabled) {
 +			if (verbose) {
-+				stdout.printf ("FridMira: Early initialization before preload...\n");
++				stdout.printf ("FridMira: Setting environment variables for delayed initialization...\n");
 +			}
  
 -		Posix.signal (Posix.Signal.INT, (sig) => {
@@ -225,7 +225,7 @@ index 67bf4b3..31313bd 100644
 -			application.stop ();
 -		});
 +			try {
-+				// Set environment variables FIRST
++				// Set environment variables FIRST (safe operation)
 +				// 首先设置环境变量
 +				if (verbose) {
 +					stdout.printf ("FridMira: Setting environment variables...\n");
@@ -237,18 +237,11 @@ index 67bf4b3..31313bd 100644
 +				GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", fridmira_no_file ? "disabled" : "enabled", true);
 +				GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", fridmira_no_gum ? "disabled" : "enabled", true);
 +
-+				// Initialize FridMira framework EARLY
-+				// 提前初始化FridMira框架
 +				if (verbose) {
-+					stdout.printf ("FridMira: Initializing framework components...\n");
-+				}
-+				initialize_fridmira_framework ();
-+
-+				if (verbose) {
-+					stdout.printf ("FridMira: Early initialization completed successfully\n");
++					stdout.printf ("FridMira: Environment variables set, framework initialization will be delayed until after preload\n");
 +				}
 +			} catch (Error e) {
-+				stderr.printf ("FridMira: CRITICAL ERROR during early initialization: %s\n", e.message);
++				stderr.printf ("FridMira: ERROR during environment setup: %s\n", e.message);
 +				stderr.printf ("FridMira: Disabling framework and continuing with standard mode\n");
 +				// Disable FridMira and continue with standard mode
 +				// 禁用FridMira并继续使用标准模式
@@ -257,8 +250,8 @@ index 67bf4b3..31313bd 100644
 +			}
 +		}
 +
-+		// NOW it's safe to initialize TemporaryDirectory and trigger preload
-+		// 现在可以安全地初始化TemporaryDirectory并触发preload
++		// NOW it's safe to initialize TemporaryDirectory and trigger preload with STANDARD functions
++		// 现在可以安全地初始化TemporaryDirectory并使用标准函数触发preload
 +		if (verbose) {
 +			stdout.printf ("FridMira: Initializing TemporaryDirectory...\n");
 +		}
@@ -297,7 +290,7 @@ index 67bf4b3..31313bd 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +407,64 @@ namespace Frida.Server {
+@@ -217,9 +400,64 @@ namespace Frida.Server {
  			});
  		}
  
@@ -362,7 +355,7 @@ index 67bf4b3..31313bd 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +529,74 @@ namespace Frida.Server {
+@@ -284,22 +522,74 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -416,7 +409,7 @@ index 67bf4b3..31313bd 100644
 -					var device = yield manager.get_device_by_id (device_id, 0, io_cancellable);
 -					device.lost.connect (on_device_lost);
 +				if (verbose) {
-+					stdout.printf ("FridMira: Starting service...\n");
++					stdout.printf ("FridMira: Starting service (including preload if enabled)...\n");
 +				}
  
 -					service = yield new ControlService.with_device (device, endpoint_params, options);
@@ -425,7 +418,7 @@ index 67bf4b3..31313bd 100644
 +				try {
 +					yield service.start (io_cancellable);
 +					if (verbose) {
-+						stdout.printf ("FridMira: Service started successfully\n");
++						stdout.printf ("FridMira: Service started successfully (preload completed if enabled)\n");
 +					}
 +				} catch (GLib.Error e) {
 +					stderr.printf ("FridMira: ERROR during service start: %s\n", e.message);
@@ -445,12 +438,12 @@ index 67bf4b3..31313bd 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +605,19 @@ namespace Frida.Server {
+@@ -308,12 +598,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
 +				if (verbose) {
-+					stdout.printf ("FridMira: Application ready\n");
++					stdout.printf ("FridMira: Application ready and fully protected by FridMira\n");
 +				}
  				ready (true);
  				return false;
@@ -465,7 +458,7 @@ index 67bf4b3..31313bd 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,26 +625,43 @@ namespace Frida.Server {
+@@ -321,26 +618,43 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -510,7 +503,7 @@ index 67bf4b3..31313bd 100644
  				loop.quit ();
  				return false;
  			});
-@@ -357,4 +678,141 @@ namespace Frida.Server {
+@@ -357,4 +671,141 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}

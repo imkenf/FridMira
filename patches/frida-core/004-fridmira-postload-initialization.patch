@@ -1,0 +1,61 @@
+From d6e6860e69a8bfed19d220f8410d1737302b8076 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Mon, 16 Jun 2025 10:03:21 +0800
+Subject: [PATCH 004/007] feat: implement post-preload FridMira initialization
+
+---
+ src/control-service.vala | 26 +++++++++++++++++++++++---
+ 1 file changed, 23 insertions(+), 3 deletions(-)
+
+diff --git a/src/control-service.vala b/src/control-service.vala
+index cc64470..4524b41 100644
+--- a/src/control-service.vala
++++ b/src/control-service.vala
+@@ -1,4 +1,8 @@
+ namespace Frida {
++	// Forward declaration for FridMira framework initialization
++	// FridMira框架初始化的前向声明
++	public extern void initialize_fridmira_framework () throws Error;
++
+ 	public sealed class ControlService : Object {
+ 		public EndpointParameters endpoint_params {
+ 			get;
+@@ -126,8 +130,24 @@ namespace Frida {
+ 
+ 				if (options.enable_preload) {
+ 					var base_host_session = host_session as LocalHostSession;
+-					if (base_host_session != null)
+-						base_host_session.preload.begin (io_cancellable);
++					if (base_host_session != null) {
++						yield base_host_session.preload (io_cancellable);
++					}
++				}
++
++				// GOLDEN MOMENT: Initialize FridMira framework AFTER preload completion
++				// 黄金时刻：在preload完成后初始化FridMira框架
++				string? fridmira_mode = GLib.Environment.get_variable ("FRIDMIRA_MODE");
++				if (fridmira_mode != null && fridmira_mode.down () == "enabled") {
++					try {
++						initialize_fridmira_framework ();
++					} catch (Error e) {
++						// Log error but don't fail the service start
++						// 记录错误但不让服务启动失败
++						stderr.printf ("FridMira: Warning - Framework initialization failed: %s\n", e.message);
++						stderr.printf ("FridMira: Service will continue without FridMira protection\n");
++						GLib.Environment.set_variable ("FRIDMIRA_MODE", "disabled", true);
++					}
+ 				}
+ 
+ 				state = STARTED;
+@@ -445,7 +465,7 @@ namespace Frida {
+ 					transports.unset (transport_id);
+ 					return false;
+ 				});
+-				expiry_source.attach (MainContext.get_thread_default ());
++				source.attach (MainContext.get_thread_default ());
+ 
+ 				transports[transport_id] = new Transport (id, expiry_source);
+ 
+-- 
+2.45.1.windows.1
+
