@@ -1,20 +1,20 @@
-From ed857e576f5d7db8a0022ccc3aaa90fcbd484383 Mon Sep 17 00:00:00 2001
+From 3860876c6aaa31e10394bb2c7b52451644b8246f Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 11:56:28 +0800
 Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/base/fridmira.vala | 1146 ++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 1146 insertions(+)
+ lib/base/fridmira.vala | 1147 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 1147 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..8c55bc2
+index 0000000..a0c6036
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,1146 @@
+@@ -0,0 +1,1147 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -1026,7 +1026,8 @@ index 0000000..8c55bc2
 +	 * @internal This function is for internal FridMira use only and should not be
 +	 * exposed in the public Frida API.
 +	 */
-+	internal static void initialize_fridmira_framework () throws Error {
++	[NoWrapper]
++	public static void initialize_fridmira_framework () throws Error {
 +		// Check if FridMira is enabled via environment variable
 +		// 通过环境变量检查FridMira是否启用
 +		string? fridmira_mode = GLib.Environment.get_variable ("FRIDMIRA_MODE");
