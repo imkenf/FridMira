@@ -1,4 +1,4 @@
-From a51d01aed104fe8251e46a530600c7427ce99b2b Mon Sep 17 00:00:00 2001
+From 67baf1698e60987752e1ac4d9153ec00e754b0a7 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 11:56:28 +0800
 Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
@@ -11,7 +11,7 @@ Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..08d1ffa
+index 0000000..8745019
 --- /dev/null
 +++ b/lib/base/fridmira.vala
 @@ -0,0 +1,1153 @@
@@ -1067,7 +1067,7 @@ index 0000000..08d1ffa
 +				}
 +			} catch (Error e) {
 +				stderr.printf ("FridMira: ERROR in symbol obfuscator initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("Symbol obfuscator failed: %s", e.message);
++				throw new IOError.FAILED ("Symbol obfuscator failed: %s", e.message);
 +			}
 +		}
 +
@@ -1087,7 +1087,7 @@ index 0000000..08d1ffa
 +				}
 +			} catch (Error e) {
 +				stderr.printf ("FridMira: ERROR in thread obfuscator initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("Thread obfuscator failed: %s", e.message);
++				throw new IOError.FAILED ("Thread obfuscator failed: %s", e.message);
 +			}
 +		}
 +
@@ -1106,7 +1106,7 @@ index 0000000..08d1ffa
 +				}
 +			} catch (Error e) {
 +				stderr.printf ("FridMira: ERROR in RPC protocol enhancer initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("RPC protocol enhancer failed: %s", e.message);
++				throw new IOError.FAILED ("RPC protocol enhancer failed: %s", e.message);
 +			}
 +		}
 +
@@ -1127,7 +1127,7 @@ index 0000000..08d1ffa
 +				}
 +			} catch (Error e) {
 +				stderr.printf ("FridMira: ERROR in file/library name generator initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("File/library name generator failed: %s", e.message);
++				throw new IOError.FAILED ("File/library name generator failed: %s", e.message);
 +			}
 +		}
 +
@@ -1147,7 +1147,7 @@ index 0000000..08d1ffa
 +				}
 +			} catch (Error e) {
 +				stderr.printf ("FridMira: ERROR in memory obfuscator initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("Memory obfuscator failed: %s", e.message);
++				throw new IOError.FAILED ("Memory obfuscator failed: %s", e.message);
 +			}
 +		}
 +
