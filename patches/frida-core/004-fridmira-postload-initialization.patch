@@ -1,17 +1,29 @@
-From d8d82225968c3f193a76690a2468ac3cc4aa7407 Mon Sep 17 00:00:00 2001
+From 988fae345fed0bdbb49fbb1921bfc5ca851206d0 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 12:02:22 +0800
 Subject: [PATCH 004/007] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 16 +++++++++++++++-
- 1 file changed, 15 insertions(+), 1 deletion(-)
+ src/control-service.vala | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470..f872ffc 100644
+index cc64470..c014aaa 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
-@@ -127,7 +127,21 @@ namespace Frida {
+@@ -1,5 +1,10 @@
+ namespace Frida {
+-	public sealed class ControlService : Object {
++	[CCode (cname = "_frida_internal_init_fridmira")]
++	public static extern void initialize_fridmira_framework () throws IOError;
++}
++
++namespace Frida {
++	public class ControlService : Object, Object.ContructionCall {
+ 		public EndpointParameters endpoint_params {
+ 			get;
+ 			construct;
+@@ -127,7 +132,21 @@ namespace Frida {
  				if (options.enable_preload) {
  					var base_host_session = host_session as LocalHostSession;
  					if (base_host_session != null)
@@ -24,7 +36,7 @@ index cc64470..f872ffc 100644
 +				// Implementation of "post-preload initialization" strategy from analysis document
 +				// 实施分析文档中的"预加载后初始化"策略
 +				try {
-+					Frida.initialize_fridmira_framework ();
++					Frida.FridMira.initialize ();
 +				} catch (Error e) {
 +					// Log error but don't fail the service start
 +					// 记录错误但不让服务启动失败
