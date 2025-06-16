@@ -1,14 +1,14 @@
-From bc4fe68ca19f1e54f8cd82198a5e8bfff7aa48e6 Mon Sep 17 00:00:00 2001
+From 898fec14b25021796febe3b814184541911f509d Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 12:02:22 +0800
 Subject: [PATCH 004/007] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 74 +++++++++++++++++++++++++++++++++++++---
- 1 file changed, 69 insertions(+), 5 deletions(-)
+ src/control-service.vala | 78 ++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 72 insertions(+), 6 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470..1dbf8ba 100644
+index cc64470..e25ecc2 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -26,61 +26,23 @@ index cc64470..1dbf8ba 100644
  		public EndpointParameters endpoint_params {
  			get;
  			construct;
-@@ -97,6 +105,41 @@ namespace Frida {
- 			main_handler = new ConnectionHandler (this, null);
- 		}
- 
-+		private class FridMiraEnvBackup {
-+			private string?[] values;
-+			private static string[] KEYS = {
-+				"FRIDMIRA_MODE",
-+				"FRIDMIRA_SYMBOL_MODE",
-+				"FRIDMIRA_THREAD_MODE",
-+				"FRIDMIRA_RPC_MODE",
-+				"FRIDMIRA_FILE_MODE",
-+				"FRIDMIRA_GUM_MODE"
-+			};
-+
-+			public FridMiraEnvBackup () {
-+				values = new string?[KEYS.length];
-+				for (int i = 0; i < KEYS.length; i++) {
-+					values[i] = Environment.get_variable (KEYS[i]);
-+				}
-+			}
-+
-+			public void unset_all () {
-+				for (int i = 0; i < KEYS.length; i++) {
-+					if (values[i] != null) {
-+						Environment.unset_variable (KEYS[i]);
-+					}
-+				}
-+			}
-+
-+			public void restore () {
-+				for (int i = 0; i < KEYS.length; i++) {
-+					if (values[i] != null) {
-+						Environment.set_variable (KEYS[i], values[i], true);
-+					}
-+				}
-+			}
-+		}
-+
- 		private void assign_session (HostSession session, HostSessionProvider provider) {
- 			host_session = session;
- 			host_session.spawn_added.connect (notify_spawn_added);
-@@ -110,6 +153,8 @@ namespace Frida {
+@@ -110,6 +118,10 @@ namespace Frida {
  			host_session.uninjected.connect (notify_uninjected);
  
  			this.provider = provider;
++
++			main_context = MainContext.ref_thread_default ();
 +
 +			service.incoming.connect (on_server_connection);
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -119,15 +164,34 @@ namespace Frida {
+@@ -117,17 +129,34 @@ namespace Frida {
+ 				throw new Error.INVALID_OPERATION ("Invalid operation");
+ 			state = STARTING;
  
- 			main_context = MainContext.ref_thread_default ();
- 
+-			main_context = MainContext.ref_thread_default ();
+-
 -			service.incoming.connect (on_server_connection);
 -
  			try {
@@ -88,34 +50,76 @@ index cc64470..1dbf8ba 100644
  
  				if (options.enable_preload) {
  					var base_host_session = host_session as LocalHostSession;
--					if (base_host_session != null)
+ 					if (base_host_session != null)
 -						base_host_session.preload.begin (io_cancellable);
-+					if (base_host_session != null) {
-+						var env_backup = new FridMiraEnvBackup ();
-+						env_backup.unset_all ();
-+						try {
-+							yield base_host_session.preload (io_cancellable);
-+						} finally {
-+							env_backup.restore ();
-+						}
-+					}
++						yield base_host_session.preload (io_cancellable);
 +				}
 +
-+				// GOLDEN MOMENT: Initialize FridMira framework AFTER preload completion
-+				// 黄金时刻：在preload完成后初始化FridMira框架
-+				// Implementation of "post-preload initialization" strategy from analysis document
-+				// 实施分析文档中的"预加载后初始化"策略
-+				try {
-+					initialize_fridmira ();
-+				} catch (IOError e) {
-+					// Log error but don't fail the service start
-+					// 记录错误但不让服务启动失败
-+					stderr.printf ("FridMira: FATAL - Framework initialization failed: %s. Service will continue without FridMira protection.\n", e.message);
-+					// Mark as disabled so other parts of the system know it's not active.
-+					GLib.Environment.set_variable ("FRIDMIRA_MODE_EFFECTIVE", "disabled", true);
++				// GOLDEN MOMENT: Set environment variables and initialize FridMira framework AFTER preload completion
++				// 黄金时刻：在preload完成后设置环境变量并初始化FridMira框架
++				if (options.fridmira_enabled) {
++					try {
++						GLib.Environment.set_variable ("FRIDMIRA_MODE", "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", options.fridmira_no_symbol ? "disabled" : "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_THREAD_MODE", options.fridmira_no_thread ? "disabled" : "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", options.fridmira_no_rpc ? "disabled" : "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", options.fridmira_no_file ? "disabled" : "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", options.fridmira_no_gum ? "disabled" : "enabled", true);
++
++						initialize_fridmira ();
++					} catch (IOError e) {
++						// Log error but don't fail the service start
++						// 记录错误但不让服务启动失败
++						stderr.printf ("FridMira: FATAL - Framework initialization failed: %s. Service will continue without FridMira protection.\n", e.message);
++						// Mark as disabled so other parts of the system know it's not active.
++						GLib.Environment.set_variable ("FRIDMIRA_MODE_EFFECTIVE", "disabled", true);
++					}
  				}
  
  				state = STARTED;
+@@ -1142,5 +1171,42 @@ namespace Frida {
+ 			set;
+ 			default = true;
+ 		}
++
++		/* FridMira options */
++		public bool fridmira_enabled {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_symbol {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_thread {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_rpc {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_file {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_gum {
++			get;
++			set;
++			default = false;
++		}
+ 	}
+ }
 -- 
 2.45.1.windows.1
 
