@@ -1,4 +1,4 @@
-From bb3bc8b4b499e2a64f9282c9a5d10186de2043f4 Mon Sep 17 00:00:00 2001
+From b88b9bc05a6983d8a21fab83eb416f869ce1e976 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 11:56:28 +0800
 Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
@@ -11,7 +11,7 @@ Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..b552ec1
+index 0000000..80e5b19
 --- /dev/null
 +++ b/lib/base/fridmira.vala
 @@ -0,0 +1,1143 @@
@@ -1023,7 +1023,7 @@ index 0000000..b552ec1
 +	 * completion to implement the "post-preload initialization" strategy.
 +	 * 此函数设计为在preload完成后从control-service.vala调用，以实现"预加载后初始化"策略。
 +	 */
-+	public void initialize_fridmira_framework () throws Error {
++	public static void initialize_fridmira_framework () throws Error {
 +		// Check if FridMira is enabled via environment variable
 +		// 通过环境变量检查FridMira是否启用
 +		string? fridmira_mode = GLib.Environment.get_variable ("FRIDMIRA_MODE");
