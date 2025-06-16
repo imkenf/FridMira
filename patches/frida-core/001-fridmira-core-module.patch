@@ -1,22 +1,20 @@
-From df042d1f9eac1d5db805c7a5c185d5d3326f8bf0 Mon Sep 17 00:00:00 2001
+From 3c7c25010f5fa8cb57b9203029086ca5abd8277e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 11:56:28 +0800
 Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/base/fridmira.vala   | 1153 ++++++++++++++++++++++++++++++++++++++
- lib/base/internal-init.h |   11 +
- 2 files changed, 1164 insertions(+)
+ lib/base/fridmira.vala | 1149 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 1149 insertions(+)
  create mode 100644 lib/base/fridmira.vala
- create mode 100644 lib/base/internal-init.h
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..3a32ffe
+index 0000000..7086fcc
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,1153 @@
+@@ -0,0 +1,1149 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -1031,11 +1029,7 @@ index 0000000..3a32ffe
 +     * exposed in the public Frida API.
 +     */
 +
-+    [CCode (
-+        cname            = "frida_initialize_fridmira_internal",
-+        cheader_filename = "internal-init.h",
-+        has_type_id      = false
-+    )]
++    [CCode (cname = "_frida_initialize_fridmira_framework_internal")]
 +    public static void initialize_fridmira_framework () throws IOError {
 +        // Check if FridMira is enabled via environment variable
 +        // 通过环境变量检查FridMira是否启用
@@ -1170,23 +1164,6 @@ index 0000000..3a32ffe
 +                (gum_mode != null && gum_mode.down () == "disabled") ? "disabled" : "enabled");
 +        }
 +    }
-diff --git a/lib/base/internal-init.h b/lib/base/internal-init.h
-new file mode 100644
-index 0000000..16dd333
---- /dev/null
-+++ b/lib/base/internal-init.h
-@@ -0,0 +1,11 @@
-+/*
-+ * internal-init.h - Internal FridMira initialization stub
-+ * 仅用于满足编译期的 #include 引用，函数原型由 Vala 生成。
-+ */
-+
-+#ifndef FRIDA_INTERNAL_INIT_H
-+#define FRIDA_INTERNAL_INIT_H
-+
-+/* empty on purpose */
-+
-+#endif /* FRIDA_INTERNAL_INIT_H */
 -- 
 2.45.1.windows.1
 
