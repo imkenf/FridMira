@@ -1,14 +1,14 @@
-From 7cbb70fd7696cae399dec7699f9a2504bd601441 Mon Sep 17 00:00:00 2001
+From 5a36d5ede95b9a4a9aca09014d60a3a293e3daec Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Mon, 16 Jun 2025 09:53:11 +0800
+Date: Mon, 16 Jun 2025 11:59:06 +0800
 Subject: [PATCH 003/007] Integrate FridMira server functionality
 
 ---
- server/server.vala | 503 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 477 insertions(+), 26 deletions(-)
+ server/server.vala | 369 +++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 343 insertions(+), 26 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..d903d19 100644
+index 67bf4b3..1540757 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -355,7 +355,7 @@ index 67bf4b3..d903d19 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +522,74 @@ namespace Frida.Server {
+@@ -284,22 +522,75 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -420,6 +420,7 @@ index 67bf4b3..d903d19 100644
 +					if (verbose) {
 +						stdout.printf ("FridMira: Service started successfully (preload completed if enabled)\n");
 +					}
++
 +				} catch (GLib.Error e) {
 +					stderr.printf ("FridMira: ERROR during service start: %s\n", e.message);
 +					throw e;
@@ -438,7 +439,7 @@ index 67bf4b3..d903d19 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +598,19 @@ namespace Frida.Server {
+@@ -308,12 +599,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -458,7 +459,7 @@ index 67bf4b3..d903d19 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,26 +618,43 @@ namespace Frida.Server {
+@@ -321,26 +619,43 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -503,147 +504,12 @@ index 67bf4b3..d903d19 100644
  				loop.quit ();
  				return false;
  			});
-@@ -357,4 +671,141 @@ namespace Frida.Server {
+@@ -357,4 +672,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
 +
-+	/**
-+	 * Initialize FridMira anti-detection framework
-+	 * 初始化FridMira反检测框架
-+	 *
-+	 * This function sets up the FridMira framework with the specified configuration.
-+	 * FridMira components are automatically activated based on environment variables.
-+	 * 此函数使用指定配置设置FridMira框架。FridMira组件根据环境变量自动激活。
-+	 */
-+	private static void initialize_fridmira_framework () throws Error {
-+		// Environment variables are already set in run_application() for preload compatibility
-+		// 环境变量已在run_application()中设置以确保preload兼容性
 +
-+		if (verbose) {
-+			stdout.printf ("FridMira: Starting component initialization...\n");
-+		}
-+
-+		// Initialize core FridMira components with actual functionality
-+		// 使用实际功能初始化核心FridMira组件
-+
-+		// Initialize symbol obfuscator if enabled
-+		// 如果启用则初始化符号混淆器
-+		if (!fridmira_no_symbol) {
-+			try {
-+				if (verbose) {
-+					stdout.printf ("FridMira: Initializing symbol obfuscator...\n");
-+				}
-+				// Test symbol obfuscator functionality
-+				// 测试符号混淆器功能
-+				if (verbose) {
-+					stdout.printf ("  Symbol obfuscator: enabled (framework ready)\n");
-+				}
-+			} catch (Error e) {
-+				stderr.printf ("FridMira: ERROR in symbol obfuscator initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("Symbol obfuscator failed: %s", e.message);
-+			}
-+		}
-+
-+		// Initialize thread obfuscator if enabled
-+		// 如果启用则初始化线程混淆器
-+		if (!fridmira_no_thread) {
-+			try {
-+				if (verbose) {
-+					stdout.printf ("FridMira: Initializing thread obfuscator...\n");
-+				}
-+				// Initialize and demonstrate thread name obfuscator functionality
-+				// 初始化线程名混淆器功能
-+				string demo_thread = Frida.FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
-+				if (verbose) {
-+					stdout.printf ("  Thread obfuscator: enabled (example: frida-server-main-loop -> %s)\n", demo_thread);
-+				}
-+			} catch (Error e) {
-+				stderr.printf ("FridMira: ERROR in thread obfuscator initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("Thread obfuscator failed: %s", e.message);
-+			}
-+		}
-+
-+		// Initialize RPC protocol enhancer if RPC obfuscation is enabled
-+		// 如果启用RPC混淆则初始化RPC协议增强器
-+		if (!fridmira_no_rpc) {
-+			try {
-+				if (verbose) {
-+					stdout.printf ("FridMira: Initializing RPC protocol enhancer...\n");
-+				}
-+				Frida.FridMiraRpcProtocolEnhancer.init ();
-+				string protocol_id = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id();
-+				if (verbose) {
-+					stdout.printf ("  RPC protocol enhancer: enabled (protocol: %s)\n", protocol_id);
-+				}
-+			} catch (Error e) {
-+				stderr.printf ("FridMira: ERROR in RPC protocol enhancer initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("RPC protocol enhancer failed: %s", e.message);
-+			}
-+		}
-+
-+		// Initialize file/library name generator if enabled
-+		// 如果启用则初始化文件/库名生成器
-+		if (!fridmira_no_file) {
-+			try {
-+				if (verbose) {
-+					stdout.printf ("FridMira: Initializing file/library name generator...\n");
-+				}
-+				// Initialize and demonstrate file name generator functionality
-+				// 初始化文件名生成器功能
-+				string demo_lib = Frida.FridMiraLibNameGenerator.generate_lib_name();
-+				string demo_socket = Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
-+				if (verbose) {
-+					stdout.printf ("  File/library name obfuscator: enabled (examples: lib=%s, socket=%s)\n", demo_lib, demo_socket);
-+				}
-+			} catch (Error e) {
-+				stderr.printf ("FridMira: ERROR in file/library name generator initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("File/library name generator failed: %s", e.message);
-+			}
-+		}
-+
-+		// Initialize memory obfuscator if enabled
-+		// 如果启用则初始化内存混淆器
-+		if (!fridmira_no_gum) {
-+			try {
-+				if (verbose) {
-+					stdout.printf ("FridMira: Initializing memory obfuscator...\n");
-+				}
-+				// Initialize and demonstrate memory identifier obfuscator functionality
-+				// 初始化内存标识符混淆器功能
-+				string demo_memory = Frida.FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_memory_region");
-+				if (verbose) {
-+					stdout.printf ("  GUM memory obfuscator: enabled (example: frida_memory_region -> %s)\n", demo_memory);
-+				}
-+			} catch (Error e) {
-+				stderr.printf ("FridMira: ERROR in memory obfuscator initialization: %s\n", e.message);
-+				throw new Error.INVALID_OPERATION ("Memory obfuscator failed: %s", e.message);
-+			}
-+		}
-+
-+		// Log successful initialization if verbose mode is enabled
-+		// 如果启用详细模式则记录成功初始化
-+		if (verbose) {
-+			stdout.printf ("FridMira framework initialized successfully with active components:\n");
-+			stdout.printf ("  Symbol obfuscation: %s\n", fridmira_no_symbol ? "disabled" : "enabled");
-+			stdout.printf ("  Thread obfuscation: %s\n", fridmira_no_thread ? "disabled" : "enabled");
-+			stdout.printf ("  RPC obfuscation: %s\n", fridmira_no_rpc ? "disabled" : "enabled");
-+			stdout.printf ("  File obfuscation: %s\n", fridmira_no_file ? "disabled" : "enabled");
-+			stdout.printf ("  GUM memory obfuscation: %s\n", fridmira_no_gum ? "disabled" : "enabled");
-+
-+			// Show preload status with reasoning
-+			// 显示preload状态及原因
-+			string preload_status;
-+			if (fridmira_no_preload) {
-+				preload_status = "disabled (--no-preload)";
-+			} else if (enable_preload) {
-+				preload_status = "enabled (blacklist mode)";
-+			} else {
-+				preload_status = "disabled (--disable-preload)";
-+			}
-+			stdout.printf ("  Preload optimization: %s\n", preload_status);
-+		}
-+	}
  }
 -- 
 2.45.1.windows.1
