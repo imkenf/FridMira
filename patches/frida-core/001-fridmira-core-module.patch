@@ -1,4 +1,4 @@
-From 3860876c6aaa31e10394bb2c7b52451644b8246f Mon Sep 17 00:00:00 2001
+From 58cf0b53c3865634896c145e49dfdf66ead67eae Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Mon, 16 Jun 2025 11:56:28 +0800
 Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
@@ -11,7 +11,7 @@ Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..a0c6036
+index 0000000..b7f3282
 --- /dev/null
 +++ b/lib/base/fridmira.vala
 @@ -0,0 +1,1147 @@
@@ -1026,7 +1026,7 @@ index 0000000..a0c6036
 +	 * @internal This function is for internal FridMira use only and should not be
 +	 * exposed in the public Frida API.
 +	 */
-+	[NoWrapper]
++	[CCode (cname = "frida_initialize_fridmira_framework_internal")]
 +	public static void initialize_fridmira_framework () throws Error {
 +		// Check if FridMira is enabled via environment variable
 +		// 通过环境变量检查FridMira是否启用
