@@ -1,0 +1,421 @@
+From 28577dc01be116bc082262fd162610e166df2428 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Sat, 14 Jun 2025 05:17:04 +0800
+Subject: [PATCH 4/6] fridmira: Enhanced RPC module with FridMira protocol support and discovery
+
+---
+ lib/base/rpc.vala | 347 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 342 insertions(+), 5 deletions(-)
+
+diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
+index c465452..c7788fc 100644
+--- a/lib/base/rpc.vala
++++ b/lib/base/rpc.vala
+@@ -1,4 +1,39 @@
++/*
++ * FRIDMIRA ENHANCED RPC MODULE / FRIDMIRA增强RPC模块
++ *
++ * This module provides enhanced RPC communication capabilities with FridMira
++ * anti-detection support. Key features include:
++ *
++ * 此模块提供增强的RPC通信能力，支持FridMira反检测功能。主要特性包括：
++ *
++ * - Dynamic Protocol Support / 动态协议支持:
++ *   Supports both standard "frida:rpc" and FridMira dynamic protocols
++ *   支持标准"frida:rpc"和FridMira动态协议
++ *
++ * - Protocol Discovery / 协议发现:
++ *   Automatic discovery of server's dynamic protocol parameters
++ *   自动发现服务器的动态协议参数
++ *
++ * - Session Management / 会话管理:
++ *   Per-session protocol tracking and memory management
++ *   按会话协议跟踪和内存管理
++ *
++ * - Anti-Detection / 反检测:
++ *   Breaks static protocol fingerprints for enhanced stealth
++ *   破坏静态协议指纹以增强隐蔽性
++ */
++
+ namespace Frida {
++	/**
++	 * Enhanced RPC Client with FridMira Anti-Detection Support
++	 * 支持FridMira反检测的增强RPC客户端
++	 *
++	 * This class extends the standard Frida RPC client with dynamic protocol
++	 * capabilities, session management, and protocol discovery features.
++	 *
++	 * 此类扩展了标准Frida RPC客户端，增加了动态协议能力、
++	 * 会话管理和协议发现功能。
++	 */
+ 	public sealed class RpcClient : Object {
+ 		public weak RpcPeer peer {
+ 			get;
+@@ -7,19 +42,156 @@ namespace Frida {
+
+ 		private Gee.HashMap<string, PendingResponse> pending_responses = new Gee.HashMap<string, PendingResponse> ();
+
++		// FridMira Session Management / FridMira会话管理
++		// Unique session identifier for protocol enhancement / 用于协议增强的唯一会话标识符
++		private string _session_id;
++
++		/**
++		 * Constructor: Initialize RPC client with FridMira session support
++		 * 构造函数：初始化支持FridMira会话的RPC客户端
++		 *
++		 * @param peer The RPC peer to communicate with / 要通信的RPC对等端
++		 */
+ 		public RpcClient (RpcPeer peer) {
+ 			Object (peer: peer);
++			// Generate unique session ID for FridMira protocol enhancement
++			// 为FridMira协议增强生成唯一会话ID
++			_session_id = Uuid.string_random();
+ 		}
+
++		/**
++		 * Destructor: Clean up FridMira session resources
++		 * 析构函数：清理FridMira会话资源
++		 */
++		~RpcClient() {
++			// Clean up session protocol memory in FridMira enhancer
++			// 清理FridMira增强器中的会话协议记忆
++			Frida.FridMiraRpcProtocolEnhancer.forget_session(_session_id);
++		}
++
++		/**
++		 * FridMira Protocol Discovery API / FridMira协议发现API
++		 *
++		 * Discover dynamic protocol parameters from FridMira-enhanced server
++		 * 从FridMira增强服务器发现动态协议参数
++		 *
++		 * This method sends a special discovery request to retrieve the current
++		 * dynamic protocol identifiers, commands, and response codes used by
++		 * the FridMira-enhanced server for anti-detection purposes.
++		 *
++		 * 此方法发送特殊的发现请求，获取FridMira增强服务器当前使用的
++		 * 动态协议标识符、命令和响应代码，用于反检测目的。
++		 *
++		 * @param cancellable Optional cancellation token / 可选的取消令牌
++		 * @return Protocol information JSON object / 协议信息JSON对象
++		 * @throws Error Communication or protocol errors / 通信或协议错误
++		 * @throws IOError IO operation errors / IO操作错误
++		 */
++		public async Json.Node discover_protocol(Cancellable? cancellable) throws Error, IOError {
++			// Generate unique request ID for this discovery operation
++			// 为此发现操作生成唯一请求ID
++			string request_id = Uuid.string_random ();
++
++			// Build discovery request using fixed "fridmira:discover" protocol
++			// 使用固定的"fridmira:discover"协议构建发现请求
++			var discovery_request = new Json.Builder ();
++			discovery_request
++				.begin_array ()
++				.add_string_value ("fridmira:discover")     // Fixed discovery protocol / 固定发现协议
++				.add_string_value (request_id)              // Unique request ID / 唯一请求ID
++				.add_string_value ("get_protocol_info")     // Discovery command / 发现命令
++				.end_array ();
++			string raw_request = Json.to_string (discovery_request.get_root (), false);
++
++			bool waiting = false;
++
++			// Create pending response handler for async operation
++			// 为异步操作创建待处理响应处理器
++			var pending = new PendingResponse (() => {
++				if (waiting)
++					discover_protocol.callback ();
++				return false;
++			});
++			pending_responses[request_id] = pending;
++
++			try {
++				// Send discovery request to server
++				// 向服务器发送发现请求
++				yield peer.post_rpc_message (raw_request, null, cancellable);
++			} catch (Error e) {
++				// Handle communication errors
++				// 处理通信错误
++				if (pending_responses.unset (request_id))
++					pending.complete_with_error (e);
++			}
++
++			// Wait for response if not completed immediately
++			// 如果没有立即完成则等待响应
++			if (!pending.completed) {
++				// Set up cancellation handling
++				// 设置取消处理
++				var cancel_source = new CancellableSource (cancellable);
++				cancel_source.set_callback (() => {
++					if (pending_responses.unset (request_id))
++						pending.complete_with_error (new IOError.CANCELLED ("Operation was cancelled"));
++					return false;
++				});
++				cancel_source.attach (MainContext.get_thread_default ());
++
++				// Suspend execution until response received
++				// 暂停执行直到收到响应
++				waiting = true;
++				yield;
++				waiting = false;
++
++				cancel_source.destroy ();
++			}
++
++			// Check for cancellation
++			// 检查是否取消
++			cancellable.set_error_if_cancelled ();
++
++			// Handle any errors that occurred
++			// 处理发生的任何错误
++			if (pending.error != null)
++				throw_api_error (pending.error);
++
++			// Return discovered protocol information
++			// 返回发现的协议信息
++			return pending.result;
++		}
++
++		/**
++		 * Enhanced RPC Call with FridMira Protocol Support / 支持FridMira协议的增强RPC调用
++		 *
++		 * Execute RPC method call using dynamic protocol identifiers for anti-detection
++		 * 使用动态协议标识符执行RPC方法调用以实现反检测
++		 *
++		 * @param method The method name to call / 要调用的方法名
++		 * @param args Method arguments array / 方法参数数组
++		 * @param data Optional binary data / 可选的二进制数据
++		 * @param cancellable Optional cancellation token / 可选的取消令牌
++		 * @return Method execution result / 方法执行结果
++		 * @throws Error RPC execution errors / RPC执行错误
++		 * @throws IOError IO operation errors / IO操作错误
++		 */
+ 		public async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable) throws Error, IOError {
++			// Generate unique request ID for this RPC call
++			// 为此RPC调用生成唯一请求ID
+ 			string request_id = Uuid.string_random ();
+
++			// Build RPC request using FridMira dynamic protocol identifiers
++			// 使用FridMira动态协议标识符构建RPC请求
+ 			var request = new Json.Builder ();
+ 			request
+ 				.begin_array ()
+-				.add_string_value ("frida:rpc")
++				// Use dynamic protocol ID instead of static "frida:rpc"
++				// 使用动态协议ID而不是静态的"frida:rpc"
++				.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_protocol_id(_session_id))
+ 				.add_string_value (request_id)
+-				.add_string_value ("call")
++				// Use dynamic call command instead of static "call"
++				// 使用动态调用命令而不是静态的"call"
++				.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_call_command(_session_id))
+ 				.add_string_value (method)
+ 				.begin_array ();
+ 			foreach (var arg in args)
+@@ -69,8 +241,38 @@ namespace Frida {
+ 			return pending.result;
+ 		}
+
++		/**
++		 * Enhanced Message Handler with FridMira Protocol Support / 支持FridMira协议的增强消息处理器
++		 *
++		 * Handle incoming RPC messages with support for both standard Frida protocol
++		 * and FridMira dynamic protocols for anti-detection capabilities.
++		 *
++		 * 处理传入的RPC消息，支持标准Frida协议和FridMira动态协议以实现反检测能力。
++		 *
++		 * @param json The JSON message string to process / 要处理的JSON消息字符串
++		 * @return true if message was handled, false otherwise / 如果消息被处理返回true，否则false
++		 */
+ 		public bool try_handle_message (string json) {
+-			if (json.index_of ("\"frida:rpc\"") == -1)
++			// Priority 1: Check for protocol discovery messages
++			// 优先级1：检查协议发现消息
++			if (json.index_of ("\"fridmira:discover\"") != -1)
++				return handle_protocol_discovery (json);
++
++			// Priority 2: Dual protocol support - check for standard or dynamic protocols
++			// 优先级2：双协议支持 - 检查标准协议或动态协议
++			bool has_standard = json.index_of ("\"frida:rpc\"") != -1;
++			bool has_dynamic = false;
++
++			// Check if message contains dynamic protocol identifier
++			// 检查消息是否包含动态协议标识符
++			string dynamic_protocol = Frida.FridMiraRpcProtocolEnhancer.get_dynamic_protocol_id();
++			if (dynamic_protocol != "" && dynamic_protocol != "frida:rpc") {
++				has_dynamic = json.index_of ("\"" + dynamic_protocol + "\"") != -1;
++			}
++
++			// Reject messages that don't match any supported protocol
++			// 拒绝不匹配任何支持协议的消息
++			if (!has_standard && !has_dynamic)
+ 				return false;
+
+ 			var parser = new Json.Parser ();
+@@ -90,7 +292,110 @@ namespace Frida {
+ 			return handled;
+ 		}
+
++		/**
++		 * FridMira Protocol Discovery Handler / FridMira协议发现处理器
++		 *
++		 * Process protocol discovery requests and provide current dynamic protocol parameters
++		 * 处理协议发现请求并提供当前动态协议参数
++		 *
++		 * This method handles special "fridmira:discover" messages that allow clients
++		 * to dynamically discover the current protocol identifiers used by the server.
++		 *
++		 * 此方法处理特殊的"fridmira:discover"消息，允许客户端动态发现
++		 * 服务器使用的当前协议标识符。
++		 *
++		 * @param json The JSON discovery message / JSON发现消息
++		 * @return true if discovery message was processed / 如果发现消息被处理返回true
++		 */
++		private bool handle_protocol_discovery (string json) {
++			// Parse incoming JSON message
++			// 解析传入的JSON消息
++			var parser = new Json.Parser ();
++			try {
++				parser.load_from_data (json);
++			} catch (GLib.Error e) {
++				// Invalid JSON format - not a discovery message
++				// 无效的JSON格式 - 不是发现消息
++				return false;
++			}
++			var message = parser.get_root ().get_object ();
++
++			// Verify message type is "send"
++			// 验证消息类型为"send"
++			var type = message.get_string_member ("type");
++			if (type == "send") {
++				// Extract payload array from message
++				// 从消息中提取载荷数组
++				var payload = message.get_member ("payload");
++				if (payload != null && payload.get_node_type () == Json.NodeType.ARRAY) {
++					var discovery_message = payload.get_array ();
++					if (discovery_message.get_length () >= 3) {
++						// Parse discovery message components
++						// 解析发现消息组件
++						string? protocol_type = discovery_message.get_element (0).get_string ();
++						string? request_id = discovery_message.get_element (1).get_string ();
++						string? command = discovery_message.get_element (2).get_string ();
++
++						// Validate discovery request format
++						// 验证发现请求格式
++						if (protocol_type == "fridmira:discover" && command == "get_protocol_info") {
++							// Build protocol information response object
++							// 构建协议信息响应对象
++							var response = new Json.Builder ();
++							response
++								.begin_object ()
++								// Current dynamic protocol ID
++								// 当前动态协议ID
++								.set_member_name ("protocol_id")
++								.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_protocol_id())
++								// Current dynamic call command
++								// 当前动态调用命令
++								.set_member_name ("call_command")
++								.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_call_command())
++								// Current dynamic OK response
++								// 当前动态OK响应
++								.set_member_name ("ok_response")
++								.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_ok_response())
++								.end_object ();
++
++							// Build complete discovery response array
++							// 构建完整的发现响应数组
++							var result_array = new Json.Builder ();
++							result_array
++								.begin_array ()
++								.add_string_value ("fridmira:discover")  // Response protocol / 响应协议
++								.add_string_value (request_id)           // Original request ID / 原始请求ID
++								.add_string_value ("ok")                 // Success status / 成功状态
++								.add_value (response.get_root ())        // Protocol info object / 协议信息对象
++								.end_array ();
++
++							// TODO: Send response back to client
++							// TODO: 将响应发送回客户端
++							// Note: Currently only marks as handled, actual response sending
++							// needs to be implemented in the calling context
++							// 注意：目前只是标记为已处理，实际响应发送需要在调用上下文中实现
++							return true;
++						}
++					}
++				}
++			}
++			// Not a valid discovery message
++			// 不是有效的发现消息
++			return false;
++		}
++
++		/**
++		 * Enhanced RPC Message Handler with Protocol Validation / 带协议验证的增强RPC消息处理器
++		 *
++		 * Process RPC response messages with support for both standard and dynamic protocols
++		 * 处理RPC响应消息，支持标准协议和动态协议
++		 *
++		 * @param message The parsed JSON message object / 解析后的JSON消息对象
++		 * @return true if RPC message was handled / 如果RPC消息被处理返回true
++		 */
+ 		private bool try_handle_rpc_message (Json.Object message) {
++			// Extract payload array from message
++			// 从消息中提取载荷数组
+ 			var payload = message.get_member ("payload");
+ 			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
+ 				return false;
+@@ -98,21 +403,53 @@ namespace Frida {
+ 			if (rpc_message.get_length () < 4)
+ 				return false;
+
++			// Extract protocol type from first element
++			// 从第一个元素提取协议类型
+ 			string? type = rpc_message.get_element (0).get_string ();
+-			if (type == null || type != "frida:rpc")
++			if (type == null)
++				return false;
++
++			// Enhanced protocol validation: Support both standard and dynamic protocols
++			// 增强协议验证：支持标准协议和动态协议
++			bool is_valid_protocol = false;
++			if (type == "frida:rpc") {
++				// Standard Frida RPC protocol
++				// 标准Frida RPC协议
++				is_valid_protocol = true;
++			} else if (Frida.FridMiraRpcProtocolEnhancer.is_valid_protocol(type)) {
++				// FridMira dynamic protocol
++				// FridMira动态协议
++				is_valid_protocol = true;
++			}
++
++			// Reject messages with unsupported protocol
++			// 拒绝使用不支持协议的消息
++			if (!is_valid_protocol)
+ 				return false;
+
++						// Extract and validate request ID
++			// 提取并验证请求ID
+ 			var request_id_value = rpc_message.get_element (1);
+ 			if (request_id_value.get_value_type () != typeof (string))
+ 				return false;
+ 			string request_id = request_id_value.get_string ();
+
++			// Find and remove pending response for this request
++			// 查找并移除此请求的待处理响应
+ 			PendingResponse response;
+ 			if (!pending_responses.unset (request_id, out response))
+ 				return false;
+
++			// Extract response status with enhanced validation
++			// 提取响应状态并进行增强验证
+ 			var status = rpc_message.get_string_element (2);
+-			if (status == "ok")
++			// Enhanced status validation: Support both standard "ok" and dynamic OK responses
++			// 增强状态验证：支持标准"ok"和动态OK响应
++			bool is_success = (status == "ok") || Frida.FridMiraRpcProtocolEnhancer.is_valid_ok_response(status);
++
++			// Complete the pending response based on status
++			// 根据状态完成待处理响应
++			if (is_success)
+ 				response.complete_with_result (rpc_message.get_element (3));
+ 			else
+ 				response.complete_with_error (new Error.NOT_SUPPORTED (rpc_message.get_string_element (3)));
+--
+2.45.1.windows.1

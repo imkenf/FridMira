@@ -1,0 +1,34 @@
+From 9c044442e36c556369ca839751dd830b28aa3686 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Sat, 14 Jun 2025 11:38:11 +0800
+Subject: [PATCH] fridmira: Add socket name obfuscation to Linux helper backend
+
+---
+ src/linux/frida-helper-backend.vala | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/src/linux/frida-helper-backend.vala b/src/linux/frida-helper-backend.vala
+index 1bbe475..f6c9bf3 100644
+--- a/src/linux/frida-helper-backend.vala
++++ b/src/linux/frida-helper-backend.vala
+@@ -1252,7 +1252,17 @@ namespace Frida {
+ 		}
+
+ 		private static string make_fallback_address () {
+-			return "/frida-" + Uuid.string_random ();
++			// FridMira Socket Name Obfuscation - Generate realistic socket names
++			// FridMira Socket名混淆 - 生成逼真的socket名
++			string default_address = "/frida-" + Uuid.string_random ();
++
++			// Apply FridMira socket name obfuscation if available and enabled
++			// 应用FridMira socket名混淆（如果可用且启用）
++			if (Frida.FridMiraLibNameGenerator.is_enhanced_mode_enabled()) {
++				return "/" + Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
++			}
++
++			return default_address;
+ 		}
+
+ 		private Future<RemoteAgent> establish_connection (LoaderLaunch launch, InjectSpec spec, BootstrapResult bres,
+--
+2.45.1.windows.1
