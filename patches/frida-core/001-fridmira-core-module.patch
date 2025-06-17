@@ -1,22 +1,20 @@
-From 434d79a2c601bbd4ff62f796d88c79ddd8e39bf7 Mon Sep 17 00:00:00 2001
+From 06090fee82bc5d6c77b5a752f24e14d810043c70 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Tue, 17 Jun 2025 12:08:17 +0800
+Date: Tue, 17 Jun 2025 15:34:14 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/mira/fridmira.vala | 1062 ++++++++++++++++++++++++++++++++++++++++
- lib/mira/meson.build   |   15 +
- 2 files changed, 1077 insertions(+)
+ lib/mira/fridmira.vala | 1072 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 1072 insertions(+)
  create mode 100644 lib/mira/fridmira.vala
- create mode 100644 lib/mira/meson.build
 
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 0000000..a6ad633
+index 0000000..b60fdcf
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
-@@ -0,0 +1,1062 @@
+@@ -0,0 +1,1072 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -1076,30 +1074,19 @@ index 0000000..a6ad633
 +					(gum_mode != null && gum_mode.down () == "disabled") ? "disabled" : "enabled");
 +				stdout.printf ("  Note: Component initialization deferred for stability\n");
 +			}
++
++			// Plug in the RPC enhancer if it's enabled
++			// 如果已启用，则插入RPC增强器
++			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++				FridMiraRpcProtocolEnhancer.init ();
++				Frida.RpcClient.enhancer = new FridMiraRpcEnhancerAdapter ();
++				if (verbose) {
++					stdout.printf ("FridMira: RPC protocol enhancer has been plugged into the core.\n");
++				}
++			}
 +		}
 +	}
 +}
-diff --git a/lib/mira/meson.build b/lib/mira/meson.build
-new file mode 100644
-index 0000000..448cd1e
---- /dev/null
-+++ b/lib/mira/meson.build
-@@ -0,0 +1,15 @@
-+mira_sources = [
-+  'fridmira.vala',
-+]
-+
-+mira_lib = static_library('frida-mira', mira_sources,
-+  vala_args: base_vala_args,
-+  c_args: frida_component_cflags,
-+  dependencies: [glib_dep, gobject_dep, gio_dep, base_dep],
-+  install: false,
-+)
-+
-+mira_dep = declare_dependency(
-+  link_with: mira_lib,
-+  include_directories: include_directories('.'),
-+)
 -- 
 2.45.1.windows.1
 

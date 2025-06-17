@@ -1,0 +1,264 @@
+From 8d96b70a18280631c2fef4a0198dd98aaf53eca5 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Tue, 17 Jun 2025 15:37:05 +0800
+Subject: [PATCH 002/006] Add FridMira RPC Protocol Module
+
+---
+ lib/mira/fridmira-rpc.vala | 245 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 245 insertions(+)
+ create mode 100644 lib/mira/fridmira-rpc.vala
+
+diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
+new file mode 100644
+index 0000000..16d0331
+--- /dev/null
++++ b/lib/mira/fridmira-rpc.vala
+@@ -0,0 +1,245 @@
++/**
++ * FridMira: RPC Protocol Module
++ * FridMira: RPC协议模块
++ *
++ * This module contains the adapter that plugs FridMira's RPC enhancement
++ * capabilities into the core Frida RPC client.
++ *
++ * 此模块包含将FridMira的RPC增强能力插入Frida核心RPC客户端的适配器。
++ */
++
++using Gee;
++
++namespace Frida {
++	/**
++	 * Adapter to plug FridMira's RPC enhancement into the core RPC client.
++	 * 适配器，用于将FridMira的RPC增强功能插入核心RPC客户端。
++	 *
++	 * This class implements the RpcProtocolEnhancer interface and acts as a
++	 * bridge between the generic RPC client and the static FridMira protocol
++	 * logic. It also contains the self-contained discovery mechanism.
++	 *
++	 * 此类实现RpcProtocolEnhancer接口，充当通用RPC客户端和静态FridMira协议
++	 * 逻辑之间的桥梁。它还包含自包含的发现机制。
++	 */
++	public class FridMiraRpcEnhancerAdapter : Object, RpcProtocolEnhancer {
++		private Gee.HashMap<string, PendingResponse> pending_discoveries = new Gee.HashMap<string, PendingResponse> ();
++
++		public string get_protocol_id (string? session_id) {
++			return FridMiraRpcProtocolEnhancer.get_protocol_id (session_id);
++		}
++
++		public string get_call_command (string? session_id) {
++			return FridMiraRpcProtocolEnhancer.get_call_command (session_id);
++		}
++
++		public string get_ok_response (string? session_id) {
++			return FridMiraRpcProtocolEnhancer.get_ok_response (session_id);
++		}
++
++		public string get_dynamic_protocol_id () {
++			return FridMiraRpcProtocolEnhancer.get_dynamic_protocol_id ();
++		}
++
++		public bool is_valid_protocol (string protocol) {
++			return FridMiraRpcProtocolEnhancer.is_valid_protocol (protocol);
++		}
++
++		public bool is_valid_ok_response (string status) {
++			return FridMiraRpcProtocolEnhancer.is_valid_ok_response (status);
++		}
++
++		public void forget_session (string session_id) {
++			FridMiraRpcProtocolEnhancer.forget_session (session_id);
++		}
++
++		/**
++		 * Handles both discovery requests (server-side) and responses (client-side).
++		 * 处理发现请求（服务器端）和响应（客户端）。
++		 */
++		public bool try_handle_message (string json, RpcPeer peer) {
++			if (json.index_of ("\"fridmira:discover\"") == -1)
++				return false;
++
++			var parser = new Json.Parser ();
++			try {
++				parser.load_from_data (json);
++			} catch (GLib.Error e) {
++				return false;
++			}
++			var message_node = parser.get_root ();
++			if (message_node.get_node_type () != Json.NodeType.OBJECT)
++				return false;
++			var message = message_node.get_object ();
++
++			var type = message.get_string_member ("type");
++			if (type != "send")
++				return false;
++
++			var payload = message.get_member ("payload");
++			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
++				return false;
++
++			var discovery_message = payload.get_array ();
++			if (discovery_message.get_length () < 3)
++				return false;
++
++			string? protocol_type = discovery_message.get_element (0).get_string ();
++			if (protocol_type != "fridmira:discover")
++				return false;
++
++			string? request_id = discovery_message.get_element (1).get_string ();
++			string? command = discovery_message.get_element (2).get_string ();
++
++			// Handle discovery request (acting as server)
++			if (command == "get_protocol_info") {
++				var response_payload = new Json.Builder ();
++				response_payload
++					.begin_object ()
++					.set_member_name ("protocol_id")
++					.add_string_value (FridMiraRpcProtocolEnhancer.get_protocol_id (null))
++					.set_member_name ("call_command")
++					.add_string_value (FridMiraRpcProtocolEnhancer.get_call_command (null))
++					.set_member_name ("ok_response")
++					.add_string_value (FridMiraRpcProtocolEnhancer.get_ok_response (null))
++					.end_object ();
++
++				var response_message = new Json.Builder ();
++				response_message
++					.begin_array ()
++					.add_string_value ("fridmira:discover")
++					.add_string_value (request_id)
++					.add_string_value ("ok")
++					.add_value (response_payload.get_root ())
++					.end_array ();
++
++				var full_response = new Json.Builder ();
++				full_response
++					.begin_object ()
++					.set_member_name ("type")
++					.add_string_value ("send")
++					.set_member_name ("payload")
++					.add_value (response_message.get_root ())
++					.end_object ();
++
++				try {
++					peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
++				} catch (Error e) {
++					warning ("FridMira: Failed to send discovery response: %s", e.message);
++				}
++
++				return true;
++			}
++			// Handle discovery response (acting as client)
++			else if (command == "ok") {
++				PendingResponse pending;
++				if (pending_discoveries.unset (request_id, out pending)) {
++					if (discovery_message.get_length () >= 4)
++						pending.complete_with_result (discovery_message.get_element (3));
++					else
++						pending.complete_with_error (new Error.INVALID_DATA ("Malformed discovery response"));
++				}
++				return true;
++			}
++
++			return false;
++		}
++
++		public async Json.Node discover_protocol (RpcPeer peer, Cancellable? cancellable) throws Error, IOError {
++			string request_id = Uuid.string_random ();
++
++			var discovery_request = new Json.Builder ();
++			discovery_request
++				.begin_array ()
++				.add_string_value ("fridmira:discover")
++				.add_string_value (request_id)
++				.add_string_value ("get_protocol_info")
++				.end_array ();
++
++			var full_request = new Json.Builder ();
++			full_request
++				.begin_object ()
++				.set_member_name ("type")
++				.add_string_value ("send")
++				.set_member_name ("payload")
++				.add_value (discovery_request.get_root ())
++				.end_object ();
++			string raw_request = Json.to_string (full_request.get_root (), false);
++
++			bool waiting = false;
++
++			var pending = new PendingResponse (() => {
++				if (waiting)
++					discover_protocol.callback ();
++				return false;
++			});
++			pending_discoveries[request_id] = pending;
++
++			try {
++				yield peer.post_rpc_message (raw_request, null, cancellable);
++			} catch (Error e) {
++				if (pending_discoveries.unset (request_id))
++					pending.complete_with_error (e);
++			}
++
++			if (!pending.completed) {
++				var cancel_source = new CancellableSource (cancellable);
++				cancel_source.set_callback (() => {
++					if (pending_discoveries.unset (request_id))
++						pending.complete_with_error (new IOError.CANCELLED ("Operation was cancelled"));
++					return false;
++				});
++				cancel_source.attach (MainContext.get_thread_default ());
++
++				waiting = true;
++				yield;
++				waiting = false;
++
++				cancel_source.destroy ();
++			}
++
++			cancellable.set_error_if_cancelled ();
++
++			if (pending.error != null)
++				throw_api_error (pending.error);
++
++			return pending.result;
++		}
++
++		private class PendingResponse {
++			private SourceFunc? handler;
++
++			public bool completed {
++				get {
++					return result != null || error != null;
++				}
++			}
++
++			public Json.Node? result {
++				get;
++				private set;
++			}
++
++			public GLib.Error? error {
++				get;
++				private set;
++			}
++
++			public PendingResponse (owned SourceFunc handler) {
++				this.handler = (owned) handler;
++			}
++
++			public void complete_with_result (Json.Node result) {
++				this.result = result;
++				handler ();
++				handler = null;
++			}
++
++			public void complete_with_error (GLib.Error error) {
++				this.error = error;
++				handler ();
++				handler = null;
++			}
++		}
++	}
++}
+-- 
+2.45.1.windows.1
+
