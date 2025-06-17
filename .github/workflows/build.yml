@@ -19,7 +19,7 @@ permissions:
 
 env:
   FRIDA_VERSION: "16.7.19"
-  FRIDMIRA_VERSION: "v1.0"
+  FRIDMIRA_VERSION: "v1.10"
 
 jobs:
   check_version:
