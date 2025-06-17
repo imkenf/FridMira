@@ -105,42 +105,8 @@ jobs:
           body: |
             # 🚀 FridMira for Frida ${{ needs.check_version.outputs.FRIDA_VERSION }}
 
-            ## ✨ 增强特性 / Enhanced Features
-            - 符号混淆、线程掩盖、RPC增强 / Symbol obfuscation, thread masking, RPC enhancement
-            - 文件/socket名混淆、内置反检测 / File/socket name obfuscation, built-in anti-detection
-            - GUM内存混淆、内存标识符隐藏 / GUM memory obfuscation, memory identifier hiding
-            - 细粒度功能控制、环境变量优先级 / Fine-grained control, environment variable priority
-
-            ## 🎛️ 控制方式 / Control Methods
-            ```bash
-            # 命令行控制 / Command Line Control
-            ./frida-server --fridmira                    # 启用所有功能 / Enable all features
-            ./frida-server --fridmira --fridmira-no-gum  # 禁用GUM内存混淆 / Disable GUM memory obfuscation
-            ./frida-server --fridmira --fridmira-no-symbol --fridmira-no-thread  # 组合控制 / Combined control
-
-            # 环境变量控制 / Environment Variable Control
-            export FRIDMIRA_MODE=enabled          # 全局开关 / Global switch
-            export FRIDMIRA_GUM_MODE=disabled     # GUM特定控制 / GUM-specific control
-            export FRIDMIRA_VERBOSE=1             # 详细输出 / Verbose output
-            ```
-
-            ## 📦 使用方法 / Usage
-            ```bash
-            # 下载并使用 / Download and use
-            wget https://github.com/${{ github.repository }}/releases/download/${{ needs.check_version.outputs.FRIDA_VERSION }}-${{ needs.check_version.outputs.FRIDMIRA_VERSION }}/fridmira-server-${{ needs.check_version.outputs.FRIDA_VERSION }}-android-arm64.gz
-            gunzip fridmira-server-*.gz
-            adb push fridmira-server-* /data/local/tmp/
-            adb shell chmod 755 /data/local/tmp/fridmira-server-*
-            adb shell /data/local/tmp/fridmira-server-* --fridmira &
-            ```
-
-            ## 🛡️ 反检测能力 / Anti-Detection Capabilities
-            - ✅ 符号混淆 / Symbol obfuscation
-            - ✅ 线程掩盖 / Thread masking
-            - ✅ 内存混淆 / Memory obfuscation
-            - ✅ RPC增强 / RPC enhancement
-            - ✅ 文件混淆 / File obfuscation
-            - ✅ 内置反检测 / Built-in anti-detection
+            ## ✨ 更新说明
+            - Fix Preload
 
           prerelease: false
           draft: false
