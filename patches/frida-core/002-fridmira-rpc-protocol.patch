@@ -1,4 +1,4 @@
-From a843635440eab8b4551c0dcb8e773317ec6b623b Mon Sep 17 00:00:00 2001
+From a18d75e9818fbdddb4396e063051fce23628b902 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Tue, 17 Jun 2025 15:37:05 +0800
 Subject: [PATCH 002/006] Add FridMira RPC Protocol Module
@@ -310,7 +310,7 @@ index c465452..dc8dfc8 100644
  				response.complete_with_error (new Error.NOT_SUPPORTED (rpc_message.get_string_element (3)));
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 0000000..f3b343b
+index 0000000..11aeb56
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
 @@ -0,0 +1,245 @@
@@ -453,7 +453,7 @@ index 0000000..f3b343b
 +					if (discovery_message.get_length () >= 4)
 +						pending.complete_with_result (discovery_message.get_element (3));
 +					else
-+						pending.complete_with_error (new Error.INVALID_DATA ("Malformed discovery response"));
++						pending.complete_with_error (new Error.INVALID_ARGUMENT ("Malformed discovery response"));
 +				}
 +				return true;
 +			}

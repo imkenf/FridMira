@@ -1,20 +1,20 @@
-From 7fbadc6cb70af3686a2e65ebb7d12562aa1cc991 Mon Sep 17 00:00:00 2001
+From fe3e083d7614b1aa4675b537b98e44468884de3a Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Tue, 17 Jun 2025 15:34:14 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/mira/fridmira.vala | 1072 ++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 1072 insertions(+)
+ lib/mira/fridmira.vala | 1076 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 1076 insertions(+)
  create mode 100644 lib/mira/fridmira.vala
 
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 0000000..e3fafc5
+index 0000000..81afb26
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
-@@ -0,0 +1,1072 @@
+@@ -0,0 +1,1076 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -165,6 +165,10 @@ index 0000000..e3fafc5
 +							}
 +							break; // Use first found configuration file / 使用第一个找到的配置文件
 +						}
++					}
++				} catch (FileError e) {
++					if (Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++						stderr.printf("FridMira: Warning - Failed to load config %s (FileError): %s\n", config_path, e.message);
 +					}
 +				} catch (Error e) {
 +					if (Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
