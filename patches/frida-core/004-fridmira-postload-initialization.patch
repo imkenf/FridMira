@@ -1,0 +1,125 @@
+From 221b4c2772bda28b114574ba3444251904d759e9 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Tue, 17 Jun 2025 16:11:09 +0800
+Subject: [PATCH 004/006] FridMira post-preload initialization
+
+---
+ src/control-service.vala | 78 ++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 72 insertions(+), 6 deletions(-)
+
+diff --git a/src/control-service.vala b/src/control-service.vala
+index cc64470..360fab3 100644
+--- a/src/control-service.vala
++++ b/src/control-service.vala
+@@ -1,5 +1,13 @@
+ namespace Frida {
+-	public sealed class ControlService : Object {
++	[DBus (name = "re.frida.Control")]
++	private interface Control : GLib.Object {
++		// ... existing code ...
++	}
++
++	[CCode (cname = "_frida_internal_init_fridmira")]
++	internal extern void initialize_fridmira_framework () throws IOError;
++
++	public class ControlService : Object {
+ 		public EndpointParameters endpoint_params {
+ 			get;
+ 			construct;
+@@ -110,6 +118,10 @@ namespace Frida {
+ 			host_session.uninjected.connect (notify_uninjected);
+ 
+ 			this.provider = provider;
++
++			main_context = MainContext.ref_thread_default ();
++
++			service.incoming.connect (on_server_connection);
+ 		}
+ 
+ 		public async void start (Cancellable? cancellable = null) throws Error, IOError {
+@@ -117,17 +129,34 @@ namespace Frida {
+ 				throw new Error.INVALID_OPERATION ("Invalid operation");
+ 			state = STARTING;
+ 
+-			main_context = MainContext.ref_thread_default ();
+-
+-			service.incoming.connect (on_server_connection);
+-
+ 			try {
+ 				yield service.start (cancellable);
+ 
+ 				if (options.enable_preload) {
+ 					var base_host_session = host_session as LocalHostSession;
+ 					if (base_host_session != null)
+-						base_host_session.preload.begin (io_cancellable);
++						yield base_host_session.preload (io_cancellable);
++				}
++
++				// GOLDEN MOMENT: Set environment variables and initialize FridMira framework AFTER preload completion
++				// 黄金时刻：在preload完成后设置环境变量并初始化FridMira框架
++				if (options.fridmira_enabled) {
++					try {
++						GLib.Environment.set_variable ("FRIDMIRA_MODE", "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", options.fridmira_no_symbol ? "disabled" : "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_THREAD_MODE", options.fridmira_no_thread ? "disabled" : "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", options.fridmira_no_rpc ? "disabled" : "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", options.fridmira_no_file ? "disabled" : "enabled", true);
++						GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", options.fridmira_no_gum ? "disabled" : "enabled", true);
++
++						initialize_fridmira_framework ();
++					} catch (IOError e) {
++						// Log error but don't fail the service start
++						// 记录错误但不让服务启动失败
++						stderr.printf ("FridMira: FATAL - Framework initialization failed: %s. Service will continue without FridMira protection.\n", e.message);
++						// Mark as disabled so other parts of the system know it's not active.
++						GLib.Environment.set_variable ("FRIDMIRA_MODE_EFFECTIVE", "disabled", true);
++					}
+ 				}
+ 
+ 				state = STARTED;
+@@ -1142,5 +1171,42 @@ namespace Frida {
+ 			set;
+ 			default = true;
+ 		}
++
++		/* FridMira options */
++		public bool fridmira_enabled {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_symbol {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_thread {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_rpc {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_file {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_gum {
++			get;
++			set;
++			default = false;
++		}
+ 	}
+ }
+-- 
+2.45.1.windows.1
+
