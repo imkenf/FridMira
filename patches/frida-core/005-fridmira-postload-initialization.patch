@@ -1,0 +1,161 @@
+From 26cd9c9354da3712bc7a4eaeb8915e771ccfda42 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Tue, 17 Jun 2025 16:11:09 +0800
+Subject: [PATCH 004/006] FridMira post-preload initialization
+
+---
+ src/control-service.vala | 114 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 108 insertions(+), 6 deletions(-)
+
+diff --git a/src/control-service.vala b/src/control-service.vala
+index cc64470..55f19da 100644
+--- a/src/control-service.vala
++++ b/src/control-service.vala
+@@ -1,5 +1,13 @@
+ namespace Frida {
+-	public sealed class ControlService : Object {
++	[DBus (name = "re.frida.Control")]
++	private interface Control : GLib.Object {
++		// ... existing code ...
++	}
++
++	[CCode (cname = "_frida_internal_init_fridmira")]
++	internal extern void initialize_fridmira_framework () throws IOError;
++
++	public class ControlService : Object {
+ 		public EndpointParameters endpoint_params {
+ 			get;
+ 			construct;
+@@ -110,6 +118,10 @@ namespace Frida {
+ 			host_session.uninjected.connect (notify_uninjected);
+ 
+ 			this.provider = provider;
++
++			main_context = MainContext.ref_thread_default ();
++
++			service.incoming.connect (on_server_connection);
+ 		}
+ 
+ 		public async void start (Cancellable? cancellable = null) throws Error, IOError {
+@@ -117,17 +129,70 @@ namespace Frida {
+ 				throw new Error.INVALID_OPERATION ("Invalid operation");
+ 			state = STARTING;
+ 
+-			main_context = MainContext.ref_thread_default ();
+-
+-			service.incoming.connect (on_server_connection);
+-
+ 			try {
+ 				yield service.start (cancellable);
+ 
+ 				if (options.enable_preload) {
+ 					var base_host_session = host_session as LocalHostSession;
+ 					if (base_host_session != null)
+-						base_host_session.preload.begin (io_cancellable);
++						yield base_host_session.preload (io_cancellable);
++				}
++
++				// GOLDEN MOMENT: Set environment variables and initialize FridMira framework AFTER preload completion
++				// 黄金时刻：在preload完成后设置环境变量并初始化FridMira框架
++				if (options.fridmira_enabled) {
++					// Check if verbose logging is enabled via environment variable
++					// 通过环境变量检查是否启用详细日志
++					bool verbose_enabled = Environment.get_variable("FRIDA_VERBOSE") != null;
++
++					if (verbose_enabled) {
++						stdout.printf ("FridMira: ==========================================\n");
++						stdout.printf ("FridMira: Anti-Detection Framework Initialization\n");
++						stdout.printf ("FridMira: ==========================================\n");
++						stdout.printf ("FridMira: Framework Status: ENABLED\n");
++						stdout.printf ("FridMira: Module Configuration:\n");
++						stdout.printf ("FridMira:   SymbolObfuscator: %s\n", options.fridmira_no_symbol ? "DISABLED" : "ENABLED");
++						stdout.printf ("FridMira:   ThreadObfuscator: %s\n", options.fridmira_no_thread ? "DISABLED" : "ENABLED");
++						stdout.printf ("FridMira:   RpcEnhancer: %s\n", options.fridmira_no_rpc ? "DISABLED" : "ENABLED");
++						stdout.printf ("FridMira:   FileObfuscator: %s\n", options.fridmira_no_file ? "DISABLED" : "ENABLED");
++						stdout.printf ("FridMira:   GumMemoryObfuscator: %s\n", options.fridmira_no_gum ? "DISABLED" : "ENABLED");
++						stdout.printf ("FridMira: Setting environment variables...\n");
++					}
++
++					try {
++						GLib.Environment.set_variable ("FRIDMIRA_MODE", "1", true);
++						GLib.Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", options.fridmira_no_symbol ? "0" : "1", true);
++						GLib.Environment.set_variable ("FRIDMIRA_THREAD_MODE", options.fridmira_no_thread ? "0" : "1", true);
++						GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", options.fridmira_no_rpc ? "0" : "1", true);
++						GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", options.fridmira_no_file ? "0" : "1", true);
++						GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", options.fridmira_no_gum ? "0" : "1", true);
++
++						if (verbose_enabled) {
++							stdout.printf ("FridMira: Environment variables set successfully\n");
++							stdout.printf ("FridMira: Initializing framework components...\n");
++						}
++
++						Frida.FridMira.initialize_fridmira_framework ();
++
++						if (verbose_enabled) {
++							stdout.printf ("FridMira: Framework initialization completed successfully\n");
++							stdout.printf ("FridMira: All anti-detection modules are now active\n");
++							stdout.printf ("FridMira: ==========================================\n");
++						}
++					} catch (IOError e) {
++						// Log error but don't fail the service start
++						// 记录错误但不让服务启动失败
++						stderr.printf ("FridMira: FATAL - Framework initialization failed: %s. Service will continue without FridMira protection.\n", e.message);
++						// Mark as disabled so other parts of the system know it's not active.
++						GLib.Environment.set_variable ("FRIDMIRA_MODE_EFFECTIVE", "0", true);
++					}
++				} else {
++					// Check if verbose logging is enabled for standard mode
++					// 检查标准模式是否启用详细日志
++					bool verbose_enabled = Environment.get_variable("FRIDA_VERBOSE") != null;
++					if (verbose_enabled) {
++						stdout.printf ("FridMira: Framework Status: DISABLED (running standard Frida)\n");
++					}
+ 				}
+ 
+ 				state = STARTED;
+@@ -1142,5 +1207,42 @@ namespace Frida {
+ 			set;
+ 			default = true;
+ 		}
++
++		/* FridMira options */
++		public bool fridmira_enabled {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_symbol {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_thread {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_rpc {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_file {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_gum {
++			get;
++			set;
++			default = false;
++		}
+ 	}
+ }
+-- 
+2.45.1.windows.1
+
