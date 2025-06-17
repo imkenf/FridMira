@@ -1,4 +1,4 @@
-From 48b7a12395f9179f171f03ee113bdcf172d28c97 Mon Sep 17 00:00:00 2001
+From cb898e4da595ee99fce5c26c144023213acb23ed Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Tue, 17 Jun 2025 15:38:08 +0800
 Subject: [PATCH 003/006] Add FridMira framework to library build system
@@ -24,7 +24,7 @@ index 6c6e05b..c39d37f 100644
  subdir('payload')
 diff --git a/lib/mira/meson.build b/lib/mira/meson.build
 new file mode 100644
-index 0000000..25636a3
+index 0000000..f4a5124
 --- /dev/null
 +++ b/lib/mira/meson.build
 @@ -0,0 +1,16 @@
@@ -33,7 +33,7 @@ index 0000000..25636a3
 +  'fridmira-rpc.vala',
 +]
 +
-+mira_lib = static_library('frida-mira', mira_sources,
++mira = static_library('frida-mira', mira_sources,
 +  vala_args: base_vala_args,
 +  c_args: frida_component_cflags,
 +  dependencies: [glib_dep, gobject_dep, gio_dep, base_dep],
@@ -41,7 +41,7 @@ index 0000000..25636a3
 +)
 +
 +mira_dep = declare_dependency(
-+  link_with: mira_lib,
++  link_with: mira,
 +  include_directories: include_directories('.'),
 +)
 diff --git a/src/meson.build b/src/meson.build
