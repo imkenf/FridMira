@@ -1,4 +1,4 @@
-From 06090fee82bc5d6c77b5a752f24e14d810043c70 Mon Sep 17 00:00:00 2001
+From 7fbadc6cb70af3686a2e65ebb7d12562aa1cc991 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Tue, 17 Jun 2025 15:34:14 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
@@ -11,7 +11,7 @@ Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
 
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 0000000..b60fdcf
+index 0000000..e3fafc5
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
 @@ -0,0 +1,1072 @@
@@ -1079,7 +1079,7 @@ index 0000000..b60fdcf
 +			// 如果已启用，则插入RPC增强器
 +			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
 +				FridMiraRpcProtocolEnhancer.init ();
-+				Frida.RpcClient.enhancer = new FridMiraRpcEnhancerAdapter ();
++				Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter ();
 +				if (verbose) {
 +					stdout.printf ("FridMira: RPC protocol enhancer has been plugged into the core.\n");
 +				}
