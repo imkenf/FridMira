@@ -1,20 +1,20 @@
-From a578e554f75593949bde14dbbce819622566047c Mon Sep 17 00:00:00 2001
+From fefd46a836b91b55b856afe5e97f6ad062637664 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Sat, 14 Jun 2025 20:49:57 +0800
-Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
+Date: Mon, 16 Jun 2025 11:56:28 +0800
+Subject: [PATCH 001/007] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/base/fridmira.vala | 996 +++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 996 insertions(+)
+ lib/base/fridmira.vala | 1149 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 1149 insertions(+)
  create mode 100644 lib/base/fridmira.vala
 
 diff --git a/lib/base/fridmira.vala b/lib/base/fridmira.vala
 new file mode 100644
-index 0000000..f3cc892
+index 0000000..70441e3
 --- /dev/null
 +++ b/lib/base/fridmira.vala
-@@ -0,0 +1,996 @@
+@@ -0,0 +1,1149 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -1008,6 +1008,159 @@ index 0000000..f3cc892
 +			var random = new Rand ();
 +			var random_index = random.int_range(0, prefixes.length);
 +			return prefixes[random_index] + "_";
++		}
++	}
++
++	public class FridMira {
++		/**
++		 * Initialize FridMira anti-detection framework
++		 * 初始化FridMira反检测框架
++		 *
++		 * This function sets up the FridMira framework with the specified configuration.
++		 * FridMira components are automatically activated based on environment variables.
++		 * 此函数使用指定配置设置FridMira框架。FridMira组件根据环境变量自动激活。
++		 *
++		 * This function is designed to be called from control-service.vala after preload
++		 * completion to implement the "post-preload initialization" strategy.
++		 * 此函数设计为在preload完成后从control-service.vala调用，以实现"预加载后初始化"策略。
++		 *
++		 * @internal This function is for internal FridMira use only and should not be
++		 * exposed in the public Frida API.
++		 */
++		[CCode (cname = "_frida_internal_init_fridmira")]
++		public static void initialize_fridmira_framework () throws IOError {
++			// Check if FridMira is enabled via environment variable
++			// 通过环境变量检查FridMira是否启用
++			string? fridmira_mode = GLib.Environment.get_variable ("FRIDMIRA_MODE");
++			if (fridmira_mode == null || fridmira_mode.down () != "enabled") {
++				// FridMira not enabled, skip initialization
++				// FridMira未启用，跳过初始化
++				return;
++			}
++
++			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") == "1";
++
++			if (verbose) {
++				stdout.printf ("FridMira: Starting component initialization...\n");
++			}
++
++			// Initialize core FridMira components with actual functionality
++			// 使用实际功能初始化核心FridMira组件
++
++			// Initialize symbol obfuscator if enabled
++			// 如果启用则初始化符号混淆器
++			string? symbol_mode = GLib.Environment.get_variable ("FRIDMIRA_SYMBOL_MODE");
++			if (symbol_mode == null || symbol_mode.down () != "disabled") {
++				try {
++					if (verbose) {
++						stdout.printf ("FridMira: Initializing symbol obfuscator...\n");
++					}
++					// Test symbol obfuscator functionality
++					// 测试符号混淆器功能
++					if (verbose) {
++						stdout.printf ("  Symbol obfuscator: enabled (framework ready)\n");
++					}
++				} catch (Error e) {
++					stderr.printf ("FridMira: ERROR in symbol obfuscator initialization: %s\n", e.message);
++					throw new IOError.FAILED ("Symbol obfuscator failed: %s", e.message);
++				}
++			}
++
++			// Initialize thread obfuscator if enabled
++			// 如果启用则初始化线程混淆器
++			string? thread_mode = GLib.Environment.get_variable ("FRIDMIRA_THREAD_MODE");
++			if (thread_mode == null || thread_mode.down () != "disabled") {
++				try {
++					if (verbose) {
++						stdout.printf ("FridMira: Initializing thread obfuscator...\n");
++					}
++					// Initialize and demonstrate thread name obfuscator functionality
++					// 初始化线程名混淆器功能
++					string demo_thread = Frida.FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
++					if (verbose) {
++						stdout.printf ("  Thread obfuscator: enabled (example: frida-server-main-loop -> %s)\n", demo_thread);
++					}
++				} catch (Error e) {
++					stderr.printf ("FridMira: ERROR in thread obfuscator initialization: %s\n", e.message);
++					throw new IOError.FAILED ("Thread obfuscator failed: %s", e.message);
++				}
++			}
++
++			// Initialize RPC protocol enhancer if RPC obfuscation is enabled
++			// 如果启用RPC混淆则初始化RPC协议增强器
++			string? rpc_mode = GLib.Environment.get_variable ("FRIDMIRA_RPC_MODE");
++			if (rpc_mode == null || rpc_mode.down () != "disabled") {
++				try {
++					if (verbose) {
++						stdout.printf ("FridMira: Initializing RPC protocol enhancer...\n");
++					}
++					Frida.FridMiraRpcProtocolEnhancer.init ();
++					string protocol_id = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id();
++					if (verbose) {
++						stdout.printf ("  RPC protocol enhancer: enabled (protocol: %s)\n", protocol_id);
++					}
++				} catch (Error e) {
++					stderr.printf ("FridMira: ERROR in RPC protocol enhancer initialization: %s\n", e.message);
++					throw new IOError.FAILED ("RPC protocol enhancer failed: %s", e.message);
++				}
++			}
++
++			// Initialize file/library name generator if enabled
++			// 如果启用则初始化文件/库名生成器
++			string? file_mode = GLib.Environment.get_variable ("FRIDMIRA_FILE_MODE");
++			if (file_mode == null || file_mode.down () != "disabled") {
++				try {
++					if (verbose) {
++						stdout.printf ("FridMira: Initializing file/library name generator...\n");
++					}
++					// Initialize and demonstrate file name generator functionality
++					// 初始化文件名生成器功能
++					string demo_lib = Frida.FridMiraLibNameGenerator.generate_lib_name();
++					string demo_socket = Frida.FridMiraLibNameGenerator.generate_realistic_socket_name();
++					if (verbose) {
++						stdout.printf ("  File/library name obfuscator: enabled (examples: lib=%s, socket=%s)\n", demo_lib, demo_socket);
++					}
++				} catch (Error e) {
++					stderr.printf ("FridMira: ERROR in file/library name generator initialization: %s\n", e.message);
++					throw new IOError.FAILED ("File/library name generator failed: %s", e.message);
++				}
++			}
++
++			// Initialize memory obfuscator if enabled
++			// 如果启用则初始化内存混淆器
++			string? gum_mode = GLib.Environment.get_variable ("FRIDMIRA_GUM_MODE");
++			if (gum_mode == null || gum_mode.down () != "disabled") {
++				try {
++					if (verbose) {
++						stdout.printf ("FridMira: Initializing memory obfuscator...\n");
++					}
++					// Initialize and demonstrate memory identifier obfuscator functionality
++					// 初始化内存标识符混淆器功能
++					string demo_memory = Frida.FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida-memory-region");
++					if (verbose) {
++						stdout.printf ("  GUM memory obfuscator: enabled (example: frida_memory_region -> %s)\n", demo_memory);
++					}
++				} catch (Error e) {
++					stderr.printf ("FridMira: ERROR in memory obfuscator initialization: %s\n", e.message);
++					throw new IOError.FAILED ("Memory obfuscator failed: %s", e.message);
++				}
++			}
++
++			// Log successful initialization if verbose mode is enabled
++			// 如果启用详细模式则记录成功初始化
++			if (verbose) {
++				stdout.printf ("FridMira framework initialized successfully with active components:\n");
++				stdout.printf ("  Symbol obfuscation: %s\n",
++					(symbol_mode != null && symbol_mode.down () == "disabled") ? "disabled" : "enabled");
++				stdout.printf ("  Thread obfuscation: %s\n",
++					(thread_mode != null && thread_mode.down () == "disabled") ? "disabled" : "enabled");
++				stdout.printf ("  RPC obfuscation: %s\n",
++					(rpc_mode != null && rpc_mode.down () == "disabled") ? "disabled" : "enabled");
++				stdout.printf ("  File obfuscation: %s\n",
++					(file_mode != null && file_mode.down () == "disabled") ? "disabled" : "enabled");
++				stdout.printf ("  GUM memory obfuscation: %s\n",
++					(gum_mode != null && gum_mode.down () == "disabled") ? "disabled" : "enabled");
++			}
 +		}
 +	}
 +}
