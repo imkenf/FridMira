@@ -1,20 +1,20 @@
-From fb2ba497081f9a19c4ddd0b3e712f1275dc6b4d4 Mon Sep 17 00:00:00 2001
+From 7b81a0ddb2f85a3f62cd50decbe906b2b970bb8b Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Tue, 17 Jun 2025 15:34:14 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/mira/fridmira.vala | 1209 ++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 1209 insertions(+)
+ lib/mira/fridmira.vala | 1279 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 1279 insertions(+)
  create mode 100644 lib/mira/fridmira.vala
 
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 0000000..654d2a0
+index 0000000..15b47e6
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
-@@ -0,0 +1,1209 @@
+@@ -0,0 +1,1279 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -1040,6 +1040,57 @@ index 0000000..654d2a0
 +
 +	public class FridMira {
 +		/**
++		 * FridMira Bootstrap Initialization - 预引导初始化
++		 *
++		 * 轻量级的bootstrap初始化，在核心组件加载前进行关键混淆设置
++		 * Lightweight bootstrap initialization for critical obfuscation before core components load
++		 *
++		 * 调用时机 / Timing:
++		 * - Environment.configure()之前 / Before Environment.configure()
++		 * - TemporaryDirectory初始化之前 / Before TemporaryDirectory initialization
++		 * - 任何preload操作之前 / Before any preload operations
++		 *
++		 * 目标：防止检测窗口期的特征暴露
++		 * Goal: Prevent feature exposure during detection window
++		 */
++		public static void bootstrap_initialization (bool verbose = false) {
++			// 设置bootstrap标记和基础环境变量
++			// Set bootstrap markers and basic environment variables
++			GLib.Environment.set_variable ("FRIDMIRA_MODE", "1", true);
++			GLib.Environment.set_variable ("FRIDMIRA_BOOTSTRAP", "1", true);
++
++			// 准备混淆的临时目录名
++			// Prepare obfuscated temporary directory name
++			string obfuscated_temp_name = generate_obfuscated_temp_name ();
++			GLib.Environment.set_variable ("FRIDMIRA_TEMP_DIR_NAME", obfuscated_temp_name, true);
++
++			if (verbose) {
++				stdout.printf ("FridMira: Bootstrap initialized - temp dir: %s\n", obfuscated_temp_name);
++			}
++		}
++
++		/**
++		 * 生成混淆的临时目录名
++		 * Generate obfuscated temporary directory name
++		 */
++		private static string generate_obfuscated_temp_name () {
++			// 使用当前时间戳和进程ID生成看起来合理的系统目录名
++			// Use current timestamp and process ID to generate reasonable-looking system directory name
++			int64 timestamp = GLib.get_real_time () / 1000000;  // 秒级时间戳
++			int pid = (int) Posix.getpid ();
++
++			// 生成类似系统临时目录的名称，避免"frida"字样
++			// Generate system-like temporary directory name, avoiding "frida" keywords
++			string[] prefixes = {"sys", "tmp", "cache", "local", "run", "var"};
++			string[] suffixes = {"daemon", "service", "helper", "worker", "proc"};
++
++			int prefix_idx = (int) (timestamp % prefixes.length);
++			int suffix_idx = (int) (pid % suffixes.length);
++
++			return @"$(prefixes[prefix_idx]).$(suffix_idx).$(suffixes[suffix_idx])";
++		}
++
++		/**
 +		 * Initialize FridMira anti-detection framework
 +		 * 初始化FridMira反检测框架
 +		 *
@@ -1065,11 +1116,30 @@ index 0000000..654d2a0
 +				return;
 +			}
 +
-+			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
++			// FIXED: 统一verbose检查逻辑 - 支持多种verbose启用方式
++			bool verbose = false;
++
++			// 1. 检查FRIDA_VERBOSE环境变量 (由server.vala的-v参数设置)
++			string? frida_verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE");
++			if (frida_verbose != null) {
++				verbose = true;
++			}
++
++			// 2. 检查FRIDMIRA_VERBOSE环境变量 (FridMira专用)
++			string? fridmira_verbose = GLib.Environment.get_variable ("FRIDMIRA_VERBOSE");
++			if (fridmira_verbose == "1") {
++				verbose = true;
++			}
++
++			// 3. 检查命令行-v参数是否已设置verbose logging
++			// 通过检查Environment.is_verbose_logging_enabled()状态
++			// 注意：这个检查依赖于server.vala中的Environment.set_verbose_logging_enabled(verbose)调用
 +
 +			if (verbose) {
 +				stdout.printf ("FridMira: ------------------------------------------\n");
 +				stdout.printf ("FridMira: Starting component-by-component initialization\n");
++				stdout.printf ("FridMira: Verbose mode: FRIDA_VERBOSE=%s, FRIDMIRA_VERBOSE=%s\n",
++				              frida_verbose ?? "null", fridmira_verbose ?? "null");
 +				stdout.printf ("FridMira: ------------------------------------------\n");
 +			}
 +

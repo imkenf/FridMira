@@ -1,14 +1,14 @@
-From cfa12746a4ef1be9d9b30e99ae4d9def6048a31d Mon Sep 17 00:00:00 2001
+From 59f8e87e1d0a929ae705a5105748ea30f6d149ee Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Tue, 17 Jun 2025 15:39:05 +0800
-Subject: [PATCH 003/007] Integrate FridMira server functionality
+Subject: [PATCH 004/007] Integrate FridMira server functionality
 
 ---
- server/server.vala | 358 +++++++++++++++++++++++++++++++++++++++++----
- 1 file changed, 332 insertions(+), 26 deletions(-)
+ server/server.vala | 389 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 363 insertions(+), 26 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..8bdc213 100644
+index 67bf4b3..198431e 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -152,7 +152,23 @@ index 67bf4b3..8bdc213 100644
  		if (output_version) {
  			stdout.printf ("%s\n", version_string ());
  			return 0;
-@@ -89,9 +195,17 @@ namespace Frida.Server {
+@@ -78,6 +184,15 @@ namespace Frida.Server {
+ 
+ 		Environment.set_verbose_logging_enabled (verbose);
+ 
++		// FIXED: 同时设置FRIDA_VERBOSE环境变量，确保FridMira能够检测到verbose模式
++		// 这样FridMira的Environment.get_variable("FRIDA_VERBOSE")检查就能正常工作
++		if (verbose) {
++			GLib.Environment.set_variable ("FRIDA_VERBOSE", "1", true);
++			if (fridmira_enabled) {
++				stdout.printf ("FridMira: Verbose mode enabled via -v parameter\n");
++			}
++		}
++
+ 		EndpointParameters endpoint_params;
+ 		try {
+ 			endpoint_params = new EndpointParameters (listen_address, 0, parse_certificate (certpath), origin,
+@@ -89,9 +204,17 @@ namespace Frida.Server {
  		}
  
  		var options = new ControlServiceOptions ();
@@ -171,7 +187,16 @@ index 67bf4b3..8bdc213 100644
  #if (IOS || TVOS) && !HAVE_EMBEDDED_ASSETS
  		string? program_path = null;
  		Gum.Process.enumerate_modules (m => {
-@@ -179,12 +293,32 @@ namespace Frida.Server {
+@@ -176,15 +299,41 @@ namespace Frida.Server {
+ 		}
+ #endif
+ 
++		// FridMira bootstrap初始化 - 在核心组件加载前进行基础混淆
++		// FridMira bootstrap initialization - Basic obfuscation before core components load
++		if (fridmira_enabled) {
++			Frida.FridMira.bootstrap_initialization (verbose);
++		}
++
  		Environment.configure ();
  
  #if DARWIN
@@ -209,7 +234,7 @@ index 67bf4b3..8bdc213 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +326,61 @@ namespace Frida.Server {
+@@ -192,23 +341,77 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
@@ -249,7 +274,23 @@ index 67bf4b3..8bdc213 100644
 +		}
 +
 +		try {
-+			TemporaryDirectory.always_use ((directory != null) ? directory : DEFAULT_DIRECTORY);
++			// 使用混淆的临时目录名（如果FridMira已bootstrap）
++			// Use obfuscated temporary directory name (if FridMira bootstrapped)
++			string temp_dir_name;
++			string? obfuscated_name = GLib.Environment.get_variable ("FRIDMIRA_TEMP_DIR_NAME");
++			if (obfuscated_name != null && options.fridmira_enabled) {
++				temp_dir_name = obfuscated_name;
++				if (verbose) {
++					stdout.printf ("FridMira: Using obfuscated temp dir: %s\n", temp_dir_name);
++				}
++			} else {
++				temp_dir_name = (directory != null) ? directory : DEFAULT_DIRECTORY;
++				if (verbose) {
++					stdout.printf ("FridMira: Using standard temp dir: %s\n", temp_dir_name);
++				}
++			}
++
++			TemporaryDirectory.always_use (temp_dir_name);
 +			TemporaryDirectory.use_sysroot (options.sysroot);
 +			if (verbose) {
 +				stdout.printf ("FridMira: TemporaryDirectory initialized successfully\n");
@@ -282,7 +323,7 @@ index 67bf4b3..8bdc213 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +389,64 @@ namespace Frida.Server {
+@@ -217,9 +420,64 @@ namespace Frida.Server {
  			});
  		}
  
@@ -347,7 +388,7 @@ index 67bf4b3..8bdc213 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +511,75 @@ namespace Frida.Server {
+@@ -284,22 +542,75 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -431,7 +472,7 @@ index 67bf4b3..8bdc213 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +588,19 @@ namespace Frida.Server {
+@@ -308,12 +619,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -451,7 +492,7 @@ index 67bf4b3..8bdc213 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,26 +608,43 @@ namespace Frida.Server {
+@@ -321,26 +639,43 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -496,7 +537,7 @@ index 67bf4b3..8bdc213 100644
  				loop.quit ();
  				return false;
  			});
-@@ -357,4 +661,6 @@ namespace Frida.Server {
+@@ -357,4 +692,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
