@@ -1,20 +1,20 @@
-From 7b81a0ddb2f85a3f62cd50decbe906b2b970bb8b Mon Sep 17 00:00:00 2001
+From 35f2bf06ccef979e4586b4c25fa3f43597b763a8 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Tue, 17 Jun 2025 15:34:14 +0800
 Subject: [PATCH 001/006] Add comprehensive anti-detection framework to
  lib/base
 
 ---
- lib/mira/fridmira.vala | 1279 ++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 1279 insertions(+)
+ lib/mira/fridmira.vala | 1278 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 1278 insertions(+)
  create mode 100644 lib/mira/fridmira.vala
 
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 0000000..15b47e6
+index 0000000..4fab5f9
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
-@@ -0,0 +1,1279 @@
+@@ -0,0 +1,1278 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework
 + * FridMira: Frida 反检测框架
@@ -1074,10 +1074,9 @@ index 0000000..15b47e6
 +		 * Generate obfuscated temporary directory name
 +		 */
 +		private static string generate_obfuscated_temp_name () {
-+			// 使用当前时间戳和进程ID生成看起来合理的系统目录名
-+			// Use current timestamp and process ID to generate reasonable-looking system directory name
++			// 使用当前时间戳生成看起来合理的系统目录名
++			// Use current timestamp to generate reasonable-looking system directory name
 +			int64 timestamp = GLib.get_real_time () / 1000000;  // 秒级时间戳
-+			int pid = (int) Posix.getpid ();
 +
 +			// 生成类似系统临时目录的名称，避免"frida"字样
 +			// Generate system-like temporary directory name, avoiding "frida" keywords
@@ -1085,9 +1084,9 @@ index 0000000..15b47e6
 +			string[] suffixes = {"daemon", "service", "helper", "worker", "proc"};
 +
 +			int prefix_idx = (int) (timestamp % prefixes.length);
-+			int suffix_idx = (int) (pid % suffixes.length);
++			int suffix_idx = (int) ((timestamp / 10) % suffixes.length);
 +
-+			return @"$(prefixes[prefix_idx]).$(suffix_idx).$(suffixes[suffix_idx])";
++			return prefixes[prefix_idx] + "." + suffix_idx.to_string() + "." + suffixes[suffix_idx];
 +		}
 +
 +		/**
