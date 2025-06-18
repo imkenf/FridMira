@@ -1,14 +1,14 @@
-From 59f8e87e1d0a929ae705a5105748ea30f6d149ee Mon Sep 17 00:00:00 2001
+From d68efd9a9647c2fbf1cd27183c59c9cae395d159 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Tue, 17 Jun 2025 15:39:05 +0800
 Subject: [PATCH 004/007] Integrate FridMira server functionality
 
 ---
- server/server.vala | 389 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 363 insertions(+), 26 deletions(-)
+ server/server.vala | 395 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 369 insertions(+), 26 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..198431e 100644
+index 67bf4b3..dad4723 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -234,11 +234,17 @@ index 67bf4b3..198431e 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +341,77 @@ namespace Frida.Server {
+@@ -192,23 +341,83 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
 -		return run_application (device_id, endpoint_params, options, on_ready);
++		// FridMira bootstrap初始化 - 在核心组件加载前进行基础混淆 (非Darwin平台)
++		// FridMira bootstrap initialization - Basic obfuscation before core components load (non-Darwin platforms)
++		if (fridmira_enabled) {
++			Frida.FridMira.bootstrap_initialization (verbose);
++		}
++
 +		try {
 +			return run_application (device_id, endpoint_params, options, on_ready);
 +		} catch (Error e) {
@@ -323,7 +329,7 @@ index 67bf4b3..198431e 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +420,64 @@ namespace Frida.Server {
+@@ -217,9 +426,64 @@ namespace Frida.Server {
  			});
  		}
  
@@ -388,7 +394,7 @@ index 67bf4b3..198431e 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +542,75 @@ namespace Frida.Server {
+@@ -284,22 +548,75 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -472,7 +478,7 @@ index 67bf4b3..198431e 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +619,19 @@ namespace Frida.Server {
+@@ -308,12 +625,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -492,7 +498,7 @@ index 67bf4b3..198431e 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,26 +639,43 @@ namespace Frida.Server {
+@@ -321,26 +645,43 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -537,7 +543,7 @@ index 67bf4b3..198431e 100644
  				loop.quit ();
  				return false;
  			});
-@@ -357,4 +692,6 @@ namespace Frida.Server {
+@@ -357,4 +698,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
