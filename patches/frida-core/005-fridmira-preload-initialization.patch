@@ -1,15 +1,15 @@
-From ccec7ef17ae7b0f61be594f01a7a181c4bd7034a Mon Sep 17 00:00:00 2001
+From 6db97d2c336aba751ce4da578d39e7bb171394f9 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Thu, 19 Jun 2025 09:42:51 +0800
 Subject: [PATCH 005/005] Add FridMira framework initialization after preload
  completion
 
 ---
- src/control-service.vala | 188 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 178 insertions(+), 10 deletions(-)
+ src/control-service.vala | 186 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 177 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470..37698c2 100644
+index cc64470..3ae5967 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -183,15 +183,6 @@ index cc64470..37698c2 100644
  				}
  
  				state = STARTED;
-@@ -445,7 +576,7 @@ namespace Frida {
- 					transports.unset (transport_id);
- 					return false;
- 				});
--				expiry_source.attach (MainContext.get_thread_default ());
-+				source.attach (MainContext.get_thread_default ());
- 
- 				transports[transport_id] = new Transport (id, expiry_source);
- 
 @@ -1142,5 +1273,42 @@ namespace Frida {
  			set;
  			default = true;
