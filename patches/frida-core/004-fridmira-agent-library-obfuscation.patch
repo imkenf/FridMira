@@ -1,37 +1,38 @@
-From 4d57ba1929efc58a71a54f7dc0a77eb4f01981b4 Mon Sep 17 00:00:00 2001
+From 6c4a0f121aee791cc42332b7c39c1e6f5578ee07 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Thu, 19 Jun 2025 09:30:05 +0800
-Subject: [PATCH 004/005] Agent Library Management Module
+Subject: [PATCH 004/006] Agent Library Management Module
 
 ---
- src/agent-container.vala              | 35 +++++++++++++++++++++++++--
- src/linux/linux-host-session.vala     | 20 ++++++++++-----
- src/windows/windows-host-session.vala | 28 +++++++++++++--------
- 3 files changed, 65 insertions(+), 18 deletions(-)
+ src/agent-container.vala              | 31 ++++++++++++++++++++++++++-
+ src/linux/linux-host-session.vala     | 16 ++++++++------
+ src/windows/windows-host-session.vala | 19 +++++++++-------
+ 3 files changed, 51 insertions(+), 15 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
-index eecfa1f..4654c0a 100644
+index eecfa1f..c4244aa 100644
 --- a/src/agent-container.vala
 +++ b/src/agent-container.vala
-@@ -21,14 +21,37 @@ namespace Frida {
+@@ -21,12 +21,34 @@ namespace Frida {
  		public static async AgentContainer create (string agent_filename, Cancellable? cancellable) throws Error, IOError {
  			var container = new AgentContainer ();
  
-+			// FridMira: Create obfuscated Agent library copy for stealth operation
-+			// FridMira: 创建混淆的Agent库副本以进行隐蔽操作
-+			// This creates a copy of the Agent library with an obfuscated name in a temporary
-+			// directory, making it appear as a system library to avoid detection
-+			// 在临时目录中创建一个具有混淆名称的Agent库副本，
-+			// 仿系统库以避免检测
++			// FridMira: Agent library obfuscation (DISABLED by default for compatibility)
++			// FridMira: Agent库混淆（默认禁用以确保兼容性）
++			// Only activated when FRIDMIRA_AGENT_MODE=1 is explicitly set
++			// 只有明确设置FRIDMIRA_AGENT_MODE=1时才激活
 +			string actual_agent_path = agent_filename;
++
  			try {
 -				container.module = new Module (agent_filename, 0);
++				// This function checks internally if Agent obfuscation is enabled
++				// 此函数内部检查是否启用Agent混淆
 +				actual_agent_path = FridMiraAgentLibraryManager.create_obfuscated_agent_copy(agent_filename);
 +			} catch (Error e) {
-+				// Fallback to original path on failure for graceful degradation
-+				// 失败时回退到原路径
++				// Graceful fallback - no impact on standard Frida operation
++				// 优雅回退 - 不影响标准Frida操作
 +				if (Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
-+					stderr.printf("FridMira: Failed to obfuscate agent path, using original: %s\n", e.message);
++					stderr.printf("FridMira: Agent obfuscation failed, using standard path: %s\n", e.message);
 +				}
 +			}
 +
@@ -43,36 +44,30 @@ index eecfa1f..4654c0a 100644
  
 +			// FridMira: Resolve obfuscated Agent entry point symbol
 +			// FridMira: 解析混淆的Agent入口点符号
-+			// Instead of using the standard "frida_agent_main" symbol, we use a dynamically
-+			// generated symbol name that blends with system libraries for enhanced stealth
-+			// 不使用标准的"frida_agent_main"符号，而是使用动态生成的符号名，
-+			// 与系统库融合以增强隐蔽性
++			// Standard Agent entry point lookup - symbol obfuscation requires compile-time patching
++			// 标准Agent入口点查找 - 符号混淆需要编译时补丁
  			void * main_func_symbol;
--			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
-+			var main_func_found = container.module.symbol (FridMiraAgentLibraryManager.get_agent_entry_symbol(), out main_func_symbol);
+ 			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
  			assert (main_func_found);
- 			container.main_impl = (AgentMainFunc) main_func_symbol;
- 
-@@ -100,6 +123,14 @@ namespace Frida {
+@@ -100,6 +122,13 @@ namespace Frida {
  #endif
  
  			module = null;
 +
 +			// FridMira: Clean up obfuscated Agent library files for complete stealth
-+			// FridMira: 清理混淆的Agent库文件以实现完全隐蔽
-+			// This removes any temporary obfuscated Agent library copies and cleans up
-+			// temporary directories to leave no traces of FridMira operation
-+			// 移除任何临时的混淆Agent库副本并清理临时目录，
-+			// 清理FridMira操作的痕迹
++			// FridMira: Safe cleanup of Agent resources (no-op if obfuscation disabled)
++			// FridMira: 安全清理Agent资源（如果混淆禁用则无操作）
++			// Only cleans up if Agent obfuscation was actually used
++			// 只有在实际使用Agent混淆时才清理
 +			FridMiraAgentLibraryManager.cleanup_agent_files();
  		}
  
  		private void start_worker_thread () {
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbe..8536913 100644
+index 55a0fbe..f6bf37f 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
-@@ -357,12 +357,20 @@ namespace Frida {
+@@ -357,12 +357,16 @@ namespace Frida {
  			yield helper.kill (pid, cancellable);
  		}
  
@@ -86,13 +81,9 @@ index 55a0fbe..8536913 100644
 +			Cancellable? cancellable, out Object? transport) throws Error, IOError {
 +		uint id;
 +
-+		// FridMira: Use obfuscated Agent entry point symbol for enhanced stealth
-+		// FridMira: 使用混淆的Agent入口点符号以增强隐蔽性
-+		// This replaces the hardcoded "frida_agent_main" with a dynamically generated
-+		// symbol name that blends with system libraries, making detection more difficult
-+		// 这将硬编码的"frida_agent_main"替换为动态生成的符号名，
-+		// 与系统库融合以增强隐蔽性
-+		string entrypoint = FridMiraAgentLibraryManager.get_agent_entry_symbol();
++		// Standard Agent entry point - symbol obfuscation requires compile-time patching
++		// 标准Agent入口点 - 符号混淆需要编译时补丁
++		string entrypoint = "frida_agent_main";
 +
 +		string parameters = make_agent_parameters (pid, "", options);
 +		AgentFeatures features = CONTROL_CHANNEL;
@@ -100,39 +91,32 @@ index 55a0fbe..8536913 100644
  #if HAVE_EMBEDDED_ASSETS
  			id = yield linjector.inject_library_resource (pid, agent, entrypoint, parameters, features, cancellable);
 diff --git a/src/windows/windows-host-session.vala b/src/windows/windows-host-session.vala
-index 1f9c32e..a06da9a 100644
+index 1f9c32e..26518e6 100644
 --- a/src/windows/windows-host-session.vala
 +++ b/src/windows/windows-host-session.vala
-@@ -218,16 +218,24 @@ namespace Frida {
+@@ -218,16 +218,19 @@ namespace Frida {
  			System.kill (pid);
  		}
  
 -		protected override async Future<IOStream> perform_attach_to (uint pid, HashTable<string, Variant> options,
 -				Cancellable? cancellable, out Object? transport) throws Error, IOError {
 -			var t = new PipeTransport ();
--
++			protected override async Future<IOStream> perform_attach_to (uint pid, HashTable<string, Variant> options,
++			Cancellable? cancellable, out Object? transport) throws Error, IOError {
++		var t = new PipeTransport ();
+ 
 -			var stream_request = Pipe.open (t.local_address, cancellable);
--
++		var stream_request = Pipe.open (t.local_address, cancellable);
+ 
 -			var winjector = injector as Winjector;
 -			var id = yield winjector.inject_library_resource (pid, agent, "frida_agent_main",
 -				make_agent_parameters (pid, t.remote_address, options), cancellable);
 -			injectee_by_pid[pid] = id;
-+			protected override async Future<IOStream> perform_attach_to (uint pid, HashTable<string, Variant> options,
-+			Cancellable? cancellable, out Object? transport) throws Error, IOError {
-+		var t = new PipeTransport ();
-+
-+		var stream_request = Pipe.open (t.local_address, cancellable);
-+
 +		var winjector = injector as Winjector;
 +
-+		// FridMira: Use obfuscated Agent entry point symbol for enhanced stealth on Windows
-+		// FridMira: 在Windows平台使用混淆的Agent入口点符号以增强隐蔽性
-+		// This replaces the hardcoded "frida_agent_main" with a dynamically generated
-+		// symbol name that appears as a legitimate Windows system component
-+		// 这将硬编码的"frida_agent_main"替换为动态生成的符号名，
-+		// 仿Windows系统组件
-+		var id = yield winjector.inject_library_resource (pid, agent,
-+			FridMiraAgentLibraryManager.get_agent_entry_symbol(),
++		// Standard Agent entry point - symbol obfuscation requires compile-time patching
++		// 标准Agent入口点 - 符号混淆需要编译时补丁
++		var id = yield winjector.inject_library_resource (pid, agent, "frida_agent_main",
 +			make_agent_parameters (pid, t.remote_address, options), cancellable);
 +		injectee_by_pid[pid] = id;
  

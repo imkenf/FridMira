@@ -1,17 +1,17 @@
-From cb5851ca0501c93447765f11ef1974ee389666d7 Mon Sep 17 00:00:00 2001
+From 632f981a7c491f08026f4c3204a2e17aee1f88d9 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Thu, 19 Jun 2025 09:16:16 +0800
-Subject: [PATCH 001/005] Frida Anti-Detection Framework Core
+Subject: [PATCH 001/006] Frida Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 255 ++++++++++++++++++++
+ lib/mira/fridmira-agent.vala  | 264 +++++++++++++++++++++
  lib/mira/fridmira-file.vala   | 275 ++++++++++++++++++++++
  lib/mira/fridmira-memory.vala | 226 ++++++++++++++++++
  lib/mira/fridmira-rpc.vala    | 432 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++++++++
  lib/mira/fridmira.vala        | 405 +++++++++++++++++++++++++++++++
- 7 files changed, 1972 insertions(+)
+ 7 files changed, 1981 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -22,10 +22,10 @@ Subject: [PATCH 001/005] Frida Anti-Detection Framework Core
 
 diff --git a/lib/mira/fridmira-agent.vala b/lib/mira/fridmira-agent.vala
 new file mode 100644
-index 0000000..94f7c8b
+index 0000000..7f6f60d
 --- /dev/null
 +++ b/lib/mira/fridmira-agent.vala
-@@ -0,0 +1,255 @@
+@@ -0,0 +1,264 @@
 +/**
 + * FridMira: Agent Library Management Module
 + * FridMira: Agent库管理模块
@@ -75,21 +75,28 @@ index 0000000..94f7c8b
 +		 * Check if Agent library obfuscation is enabled
 +		 * 检查是否启用Agent库混淆
 +		 *
-+		 * Priority order: FRIDMIRA_AGENT_MODE > FRIDMIRA_MODE > default(disabled)
-+		 * 优先级顺序：FRIDMIRA_AGENT_MODE > FRIDMIRA_MODE > 默认(禁用)
++		 * SECURITY: Agent obfuscation is DISABLED by default to ensure compatibility
++		 * 安全：Agent混淆默认禁用以确保兼容性
++		 *
++		 * Only enabled when FRIDMIRA_AGENT_MODE=1 is explicitly set
++		 * 只有明确设置FRIDMIRA_AGENT_MODE=1 时才启用
++		 *
++		 * Priority: FRIDMIRA_AGENT_MODE=1 (explicit) > default(DISABLED)
++		 * 优先级：FRIDMIRA_AGENT_MODE=1 > 默认（禁用）
 +		 */
 +		private static bool is_mode_enabled() {
-+			// Check specific feature flag first
-+			// 优先检查功能开关
++			// ONLY enable when explicitly requested with FRIDMIRA_AGENT_MODE=1
++			// 只有明确请求FRIDMIRA_AGENT_MODE=1时才启用
 +			string? agent_mode = GLib.Environment.get_variable("FRIDMIRA_AGENT_MODE");
-+			if (agent_mode != null) {
-+				return agent_mode == "1";
++			if (agent_mode == "1") {
++				return true;
 +			}
 +
-+			// Fall back to global flag (default disabled)
-+			// 回退到全局开关（默认禁用）
-+			string? global_mode = GLib.Environment.get_variable("FRIDMIRA_MODE");
-+			return (global_mode == "1");
++			// DEFAULT: Always disabled for compatibility with standard Frida
++			// 默认：始终禁用以兼容标准Frida
++			// NOTE: Global FRIDMIRA_MODE does NOT affect Agent obfuscation
++			// 注意：全局FRIDMIRA_MODE不影响Agent混淆
++			return false;
 +		}
 +
 +		/**
@@ -205,15 +212,17 @@ index 0000000..94f7c8b
 +		 * Get Agent entry point symbol name
 +		 * 获取Agent入口点符号名
 +		 *
-+		 * Currently returns standard symbol for compatibility.
-+		 * Future extension point for symbol obfuscation.
-+		 * 目前返回标准符号以保持兼容性。未来符号混淆的扩展点。
++		 * Note: Agent entry point symbol obfuscation requires compile-time patching
++		 * of the Agent library binary, which is beyond runtime obfuscation scope.
++		 * 注意：Agent入口点符号混淆需要在编译时对Agent库二进制进行补丁，
++		 * 这超出了运行时混淆的范围。
++		 *
++		 * Current focus: Runtime library path/name obfuscation for maximum stealth
++		 * 当前重点：运行时库路径/名称混淆以获得最大隐蔽性
 +		 */
 +		public static string get_agent_entry_symbol() {
-+			// TODO: Future extension for symbol obfuscation
-+			// Currently maintain standard symbol for compatibility
-+			// 待办：未来符号混淆扩展
-+			// 目前保持标准符号以保持兼容性
++			// Agent入口点符号在编译时确定，无法在运行时修改
++			// The Agent entry point symbol is determined at compile time and cannot be modified at runtime
 +			return "frida_agent_main";
 +		}
 +

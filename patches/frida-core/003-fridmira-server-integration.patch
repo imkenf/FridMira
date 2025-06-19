@@ -1,14 +1,14 @@
-From 101694d8615536964bc3ce3769c156c0cdb4a7b4 Mon Sep 17 00:00:00 2001
+From 12820a4ee7c82e4101c8baa838478104b0269e83 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Thu, 19 Jun 2025 09:27:29 +0800
-Subject: [PATCH 003/005] Integrate FridMira server functionality
+Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 389 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 363 insertions(+), 26 deletions(-)
+ server/server.vala | 415 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 390 insertions(+), 25 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..c02e8df 100644
+index 67bf4b3..76db15a 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -187,13 +187,18 @@ index 67bf4b3..c02e8df 100644
  #if (IOS || TVOS) && !HAVE_EMBEDDED_ASSETS
  		string? program_path = null;
  		Gum.Process.enumerate_modules (m => {
-@@ -179,12 +302,32 @@ namespace Frida.Server {
+@@ -179,12 +302,38 @@ namespace Frida.Server {
  		Environment.configure ();
  
  #if DARWIN
 -		var worker = new Thread<int> ("frida-server-main-loop", () => {
 -			var exit_code = run_application (device_id, endpoint_params, options, on_ready);
--
++		// FridMira bootstrap初始化 - 在核心组件加载前进行基础混淆 (Darwin平台)
++		// FridMira bootstrap initialization - Basic obfuscation before core components load (Darwin platforms)
++		if (fridmira_enabled) {
++			Frida.FridMira.bootstrap_initialization (verbose);
++		}
+ 
 -			_stop_run_loop ();
 +		// Apply FridMira thread name obfuscation for anti-detection
 +		// 应用FridMira线程名混淆以实现反检测
@@ -225,7 +230,7 @@ index 67bf4b3..c02e8df 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +335,83 @@ namespace Frida.Server {
+@@ -192,23 +341,105 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
@@ -255,8 +260,27 @@ index 67bf4b3..c02e8df 100644
 +		}
  
 -		application = new Application (device_id, endpoint_params, options);
-+		// NOTE: All FridMira environment variable setting has been moved to ControlService.start()
-+		// 注意：所有FridMira环境变量设置已移动到ControlService.start()
++		// Verify FridMira startup flow consistency
++		// 验证FridMira启动流程一致性
++		if (options.fridmira_enabled && verbose) {
++			string? bootstrap_status = GLib.Environment.get_variable ("FRIDMIRA_BOOTSTRAP");
++			string? temp_dir_name = GLib.Environment.get_variable ("FRIDMIRA_TEMP_DIR_NAME");
++			string? fridmira_mode = GLib.Environment.get_variable ("FRIDMIRA_MODE");
++
++			stdout.printf ("FridMira: ==========================================\n");
++			stdout.printf ("FridMira: Startup Flow Verification\n");
++			stdout.printf ("FridMira: ==========================================\n");
++			stdout.printf ("FridMira: FRIDMIRA_MODE: %s\n", fridmira_mode ?? "NOT SET");
++			stdout.printf ("FridMira: FRIDMIRA_BOOTSTRAP: %s\n", bootstrap_status ?? "NOT SET");
++			stdout.printf ("FridMira: FRIDMIRA_TEMP_DIR_NAME: %s\n", temp_dir_name ?? "NOT SET");
++
++			if (bootstrap_status != "1") {
++				stdout.printf ("FridMira: ⚠️  WARNING: Bootstrap not completed, some features may not work\n");
++			} else {
++				stdout.printf ("FridMira: ✅ Bootstrap completed successfully\n");
++			}
++			stdout.printf ("FridMira: ==========================================\n");
++		}
  
 -		Posix.signal (Posix.Signal.INT, (sig) => {
 -			application.stop ();
@@ -264,6 +288,9 @@ index 67bf4b3..c02e8df 100644
 -		Posix.signal (Posix.Signal.TERM, (sig) => {
 -			application.stop ();
 -		});
++		// NOTE: All FridMira environment variable setting has been moved to ControlService.start()
++		// 注意：所有FridMira环境变量设置已移动到ControlService.start()
++
 +		// NOW it's safe to initialize TemporaryDirectory and trigger preload with STANDARD functions
 +		// 现在可以安全地初始化TemporaryDirectory并使用标准函数触发preload
 +		if (verbose) {
@@ -320,7 +347,7 @@ index 67bf4b3..c02e8df 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +420,64 @@ namespace Frida.Server {
+@@ -217,9 +448,64 @@ namespace Frida.Server {
  			});
  		}
  
@@ -385,7 +412,7 @@ index 67bf4b3..c02e8df 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +542,75 @@ namespace Frida.Server {
+@@ -284,22 +570,75 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -469,7 +496,7 @@ index 67bf4b3..c02e8df 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +619,19 @@ namespace Frida.Server {
+@@ -308,12 +647,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -489,7 +516,7 @@ index 67bf4b3..c02e8df 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,26 +639,43 @@ namespace Frida.Server {
+@@ -321,26 +667,43 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -534,7 +561,7 @@ index 67bf4b3..c02e8df 100644
  				loop.quit ();
  				return false;
  			});
-@@ -357,4 +692,6 @@ namespace Frida.Server {
+@@ -357,4 +720,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
