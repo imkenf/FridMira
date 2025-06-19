@@ -1,14 +1,14 @@
-From 30881eea1fa97765d7b4a0e22188a0c1d070c626 Mon Sep 17 00:00:00 2001
+From d3c5e7ca7eb1c02862f8732171b92b9dfabaefae Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Thu, 19 Jun 2025 09:27:29 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 438 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 411 insertions(+), 27 deletions(-)
+ server/server.vala | 436 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 410 insertions(+), 26 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..988fb30 100644
+index 67bf4b3..2e6a5db 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -28,7 +28,7 @@ index 67bf4b3..988fb30 100644
  	private enum PolicySoftenerFlavor {
  		SYSTEM,
  		INTERNAL;
-@@ -29,12 +39,73 @@ namespace Frida.Server {
+@@ -29,6 +39,67 @@ namespace Frida.Server {
  
  	private delegate void ReadyHandler (bool success);
  
@@ -96,13 +96,6 @@ index 67bf4b3..988fb30 100644
  	const OptionEntry[] option_entries = {
  		{ "version", 0, 0, OptionArg.NONE, ref output_version, "Output version information and exit", null },
  		{ "device", 0, 0, OptionArg.STRING, ref device_id, "Serve device with the given ID", "ID" },
- 		{ "listen", 'l', 0, OptionArg.STRING, ref listen_address, "Listen on ADDRESS", "ADDRESS" },
- 		{ "certificate", 0, 0, OptionArg.FILENAME, ref certpath, "Enable TLS using CERTIFICATE", "CERTIFICATE" },
--		{ "origin", 0, 0, OptionArg.STRING, ref origin, "Only accept requests with “Origin” header matching ORIGIN " +
-+		{ "origin", 0, 0, OptionArg.STRING, ref origin, "Only accept requests with "Origin" header matching ORIGIN " +
- 			"(by default any origin will be accepted)", "ORIGIN" },
- 		{ "token", 0, 0, OptionArg.STRING, ref token, "Require authentication using TOKEN", "TOKEN" },
- 		{ "asset-root", 0, 0, OptionArg.FILENAME, ref asset_root, "Serve static files inside ROOT (by default no files are served)",
 @@ -48,6 +119,23 @@ namespace Frida.Server {
  		{ "ignore-crashes", 'C', OptionFlags.REVERSE, OptionArg.NONE, ref report_crashes,
  			"Disable native crash reporter integration", null },
