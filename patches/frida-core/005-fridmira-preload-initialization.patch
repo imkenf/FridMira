@@ -1,4 +1,4 @@
-From 68b0144377160626b9fa8fa282676798e952e562 Mon Sep 17 00:00:00 2001
+From ccec7ef17ae7b0f61be594f01a7a181c4bd7034a Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Thu, 19 Jun 2025 09:42:51 +0800
 Subject: [PATCH 005/005] Add FridMira framework initialization after preload
@@ -6,10 +6,10 @@ Subject: [PATCH 005/005] Add FridMira framework initialization after preload
 
 ---
  src/control-service.vala | 188 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 177 insertions(+), 11 deletions(-)
+ 1 file changed, 178 insertions(+), 10 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470..f626d57 100644
+index cc64470..37698c2 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -38,7 +38,7 @@ index cc64470..f626d57 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,20 +129,137 @@ namespace Frida {
+@@ -117,17 +129,136 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -82,32 +82,27 @@ index cc64470..f626d57 100644
 +							}
 +						}
 +					}
- 				}
- 
--				state = STARTED;
-+				try {
-+					yield service.start (cancellable);
 +
 +					if (options.enable_preload) {
 +						var base_host_session = host_session as LocalHostSession;
 +						if (base_host_session != null) {
-+							if (options.fridmira_enabled && verbose_enabled) {
++							if (verbose_enabled) {
 +								stdout.printf ("FridMira: Executing preload with anti-detection protection...\n");
 +							}
 +							yield base_host_session.preload (io_cancellable);
-+							if (options.fridmira_enabled && verbose_enabled) {
++							if (verbose_enabled) {
 +								stdout.printf ("FridMira: Preload completed successfully\n");
 +							}
 +						}
 +					} else {
-+						if (options.fridmira_enabled && verbose_enabled) {
++						if (verbose_enabled) {
 +							stdout.printf ("FridMira: Preload disabled by configuration\n");
 +						}
 +					}
 +
 +					// Post-preload detailed framework status
 +					// Preload后详细框架状态
-+					if (options.fridmira_enabled && verbose_enabled) {
++					if (verbose_enabled) {
 +						stdout.printf ("FridMira: ==========================================\n");
 +						stdout.printf ("FridMira: Post-Preload Framework Status Report\n");
 +						stdout.printf ("FridMira: ==========================================\n");
@@ -176,16 +171,19 @@ index cc64470..f626d57 100644
 +						stdout.printf ("FridMira: Application ready and fully protected by FridMira\n");
 +						stdout.printf ("FridMira: ==========================================\n");
 +					}
-+
-+					state = STARTED;
-+				} finally {
-+					if (state != STARTED)
-+						state = STOPPED;
-+				}
- 			} finally {
- 				if (state != STARTED)
- 					state = STOPPED;
-@@ -445,7 +574,7 @@ namespace Frida {
++				} else {
++					// Standard mode without FridMira
++					// 不使用FridMira的标准模式
++					if (options.enable_preload) {
++						var base_host_session = host_session as LocalHostSession;
++						if (base_host_session != null) {
++							yield base_host_session.preload (io_cancellable);
++						}
++					}
+ 				}
+ 
+ 				state = STARTED;
+@@ -445,7 +576,7 @@ namespace Frida {
  					transports.unset (transport_id);
  					return false;
  				});
@@ -194,7 +192,7 @@ index cc64470..f626d57 100644
  
  				transports[transport_id] = new Transport (id, expiry_source);
  
-@@ -1142,5 +1271,42 @@ namespace Frida {
+@@ -1142,5 +1273,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
