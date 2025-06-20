@@ -1,4 +1,4 @@
-From 9b3430268442cc1bb612b33a90dd929ecea5e18e Mon Sep 17 00:00:00 2001
+From 5f8924a462ad0718975b1e7df62875db2be894f6 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -10,8 +10,8 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-rpc.vala    | 432 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++++++++
- lib/mira/fridmira.vala        | 405 +++++++++++++++++++++++++++++++
- 7 files changed, 1981 insertions(+)
+ lib/mira/fridmira.vala        | 340 ++++++++++++++++++++++++++
+ 7 files changed, 1916 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -1634,10 +1634,10 @@ index 00000000..71f0a4a9
 +}
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 00000000..0d1ff342
+index 00000000..6b9b46bc
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
-@@ -0,0 +1,405 @@
+@@ -0,0 +1,340 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework Core
 + * FridMira: Frida 反检测框架核心
@@ -1690,20 +1690,12 @@ index 00000000..0d1ff342
 +		 * FridMira Bootstrap Initialization
 +		 * FridMira Bootstrap初始化
 +		 *
-+		 * Lightweight bootstrap initialization for critical obfuscation before
-+		 * core components load. This prevents feature exposure during the
-+		 * detection window period.
++		 * This method provides lightweight early initialization that sets up
++		 * basic environment variables and prepares obfuscated names before
++		 * any system components are loaded.
 +		 *
-+		 * 轻量级的bootstrap初始化，在核心组件加载前进行关键混淆设置。
-+		 * 这可以防止检测窗口期的特征暴露。
-+		 *
-+		 * Timing / 调用时机:
-+		 * - Before Environment.configure() / Environment.configure()之前
-+		 * - Before TemporaryDirectory initialization / TemporaryDirectory初始化之前
-+		 * - Before any preload operations / 任何preload操作之前
-+		 *
-+		 * Goal: Prevent feature exposure during detection window
-+		 * 目标：防止检测窗口期的特征暴露
++		 * 此方法提供轻量级的早期初始化，在任何系统组件加载之前
++		 * 设置基本环境变量并准备混淆名称。
 +		 */
 +		public static void bootstrap_initialization(bool verbose = false) {
 +			if (_bootstrap_initialized) {
@@ -1719,7 +1711,7 @@ index 00000000..0d1ff342
 +
 +			// Prepare obfuscated temporary directory name
 +			// 准备混淆的临时目录名
-+			string obfuscated_temp_name = FridMiraFileSystemObfuscator.generate_temp_directory_name();
++			string obfuscated_temp_name = FridMiraFileSystemObfuscator.generate_temp_dir_name();
 +			GLib.Environment.set_variable("FRIDMIRA_TEMP_DIR_NAME", obfuscated_temp_name, true);
 +
 +			_bootstrap_initialized = true;
@@ -1750,101 +1742,44 @@ index 00000000..0d1ff342
 +		 * @internal This function is for internal FridMira use only and should
 +		 * not be exposed in the public Frida API.
 +		 */
-+		[CCode(cname = "_frida_internal_init_fridmira")]
-+		public static void initialize_fridmira_framework() throws IOError {
++		public static void initialize_fridmira_framework(bool verbose = false) {
 +			if (_framework_initialized) {
 +				return; // Already initialized
 +			}
 +
-+			// Check if FridMira is enabled via environment variable
-+			// 通过环境变量检查FridMira是否启用
-+			string? fridmira_mode = GLib.Environment.get_variable("FRIDMIRA_MODE");
-+			if (fridmira_mode == null || fridmira_mode != "1") {
-+				// FridMira not enabled, skip initialization
-+				// FridMira未启用，跳过初始化
-+				return;
-+			}
-+
-+			// Determine verbose mode from multiple sources
-+			// 从多个来源确定详细模式
-+			bool verbose = determine_verbose_mode();
 +			_verbose_mode = verbose;
 +
 +			if (verbose) {
-+				print_initialization_header();
++				stdout.printf("FridMira: ------------------------------------------\n");
++				stdout.printf("FridMira: Starting modular framework initialization\n");
++
++				// Get and display verbose mode status
++				// 获取并显示详细模式状态
++				string? frida_verbose = GLib.Environment.get_variable("FRIDA_VERBOSE");
++				string? fridmira_verbose = GLib.Environment.get_variable("FRIDMIRA_VERBOSE");
++				stdout.printf("FridMira: Verbose mode: FRIDA_VERBOSE=%s, FRIDMIRA_VERBOSE=%s\n",
++					frida_verbose ?? "null", fridmira_verbose ?? "null");
++				stdout.printf("FridMira: ------------------------------------------\n");
 +			}
 +
-+			try {
-+				// Initialize all FridMira modules
-+				// 初始化所有FridMira模块
-+				initialize_symbol_obfuscation(verbose);
-+				initialize_thread_obfuscation(verbose);
-+				initialize_rpc_protocol_enhancement(verbose);
-+				initialize_file_system_obfuscation(verbose);
-+				initialize_memory_obfuscation(verbose);
-+				initialize_agent_library_management(verbose);
++			// Initialize all modules
++			// 初始化所有模块
++			initialize_symbol_obfuscation(verbose);
++			initialize_thread_obfuscation(verbose);
++			initialize_rpc_protocol_enhancement(verbose);
++			initialize_file_system_obfuscation(verbose);
++			initialize_memory_obfuscation(verbose);
++			initialize_agent_library_management(verbose);
 +
-+				// Mark successful initialization
-+				// 标记成功初始化
-+				GLib.Environment.set_variable("FRIDMIRA_MODE_EFFECTIVE", "1", true);
-+				_framework_initialized = true;
++			_framework_initialized = true;
 +
-+				if (verbose) {
-+					print_initialization_footer();
-+				}
-+
-+			} catch (Error e) {
-+				stderr.printf("FridMira: Framework initialization failed: %s\n", e.message);
-+				GLib.Environment.set_variable("FRIDMIRA_MODE_EFFECTIVE", "0", true);
-+				throw new IOError.FAILED("FridMira initialization failed: %s".printf(e.message));
++			if (verbose) {
++				stdout.printf("FridMira: ------------------------------------------\n");
++				stdout.printf("FridMira: ✅ Framework initialization COMPLETED\n");
++				stdout.printf("FridMira: Anti-detection protection is now ACTIVE\n");
++				stdout.printf("FridMira: All obfuscation modules are operational\n");
++				stdout.printf("FridMira: ------------------------------------------\n");
 +			}
-+		}
-+
-+		/**
-+		 * Determine verbose mode from multiple sources
-+		 * 从多个来源确定详细模式
-+		 */
-+		private static bool determine_verbose_mode() {
-+			// 1. Check FRIDA_VERBOSE environment variable (set by server.vala -v parameter)
-+			// 1. 检查FRIDA_VERBOSE环境变量 (由server.vala的-v参数设置)
-+			string? frida_verbose = GLib.Environment.get_variable("FRIDA_VERBOSE");
-+			if (frida_verbose != null) {
-+				return true;
-+			}
-+
-+			// 2. Check FRIDMIRA_VERBOSE environment variable (FridMira specific)
-+			// 2. 检查FRIDMIRA_VERBOSE环境变量 (FridMira专用)
-+			string? fridmira_verbose = GLib.Environment.get_variable("FRIDMIRA_VERBOSE");
-+			if (fridmira_verbose == "1") {
-+				return true;
-+			}
-+
-+			return false;
-+		}
-+
-+		/**
-+		 * Print initialization header
-+		 * 打印初始化头部
-+		 */
-+		private static void print_initialization_header() {
-+			stdout.printf("FridMira: ------------------------------------------\n");
-+			stdout.printf("FridMira: Starting modular framework initialization\n");
-+			stdout.printf("FridMira: Verbose mode: FRIDA_VERBOSE=%s, FRIDMIRA_VERBOSE=%s\n",
-+			             GLib.Environment.get_variable("FRIDA_VERBOSE") ?? "null",
-+			             GLib.Environment.get_variable("FRIDMIRA_VERBOSE") ?? "null");
-+			stdout.printf("FridMira: ------------------------------------------\n");
-+		}
-+
-+		/**
-+		 * Print initialization footer
-+		 * 打印初始化尾部
-+		 */
-+		private static void print_initialization_footer() {
-+			stdout.printf("FridMira: ------------------------------------------\n");
-+			stdout.printf("FridMira: ✅ Framework initialization COMPLETED\n");
-+			stdout.printf("FridMira: Anti-detection protection is now ACTIVE\n");
-+			stdout.printf("FridMira: All obfuscation modules are operational\n");
-+			stdout.printf("FridMira: ------------------------------------------\n");
 +		}
 +
 +		/**
@@ -1852,17 +1787,17 @@ index 00000000..0d1ff342
 +		 * 初始化符号混淆模块
 +		 */
 +		private static void initialize_symbol_obfuscation(bool verbose) {
-+				if (FridMiraSymbolObfuscator.is_enhanced_mode_enabled()) {
++			if (FridMiraSymbolObfuscator.is_enhanced_mode_enabled()) {
 +				// Symbol obfuscator is stateless and doesn't need explicit init
 +				// 符号混淆器是无状态的，不需要显式初始化
-+					if (verbose) {
++				if (verbose) {
 +					stdout.printf("FridMira: [✓] Symbol Obfuscation Module - ACTIVE\n");
-+						// Demonstrate symbol obfuscation
-+						// 符号混淆示例
-+						string demo_symbol = FridMiraSymbolObfuscator.obfuscate_symbol("frida_rpc_call");
-+					stdout.printf("FridMira:     Demo: 'frida_rpc_call' → '%s'\n", demo_symbol);
-+					}
-+				} else if (verbose) {
++					// Show runtime obfuscation capability
++					// 显示运行时混淆能力
++					string sample_symbol = FridMiraSymbolObfuscator.obfuscate_symbol("frida_rpc_call");
++					stdout.printf("FridMira:     Runtime obfuscation ready: 'frida_*' → '%s' style\n", sample_symbol);
++				}
++			} else if (verbose) {
 +				stdout.printf("FridMira: [✗] Symbol Obfuscation Module - DISABLED\n");
 +			}
 +		}
@@ -1872,17 +1807,17 @@ index 00000000..0d1ff342
 +		 * 初始化线程混淆模块
 +		 */
 +		private static void initialize_thread_obfuscation(bool verbose) {
-+				if (FridMiraThreadObfuscator.is_enhanced_mode_enabled()) {
++			if (FridMiraThreadObfuscator.is_enhanced_mode_enabled()) {
 +				// Thread obfuscator is stateless and doesn't need explicit init
 +				// 线程混淆器是无状态的，不需要显式初始化
-+					if (verbose) {
++				if (verbose) {
 +					stdout.printf("FridMira: [✓] Thread Obfuscation Module - ACTIVE\n");
-+						// Demonstrate thread name obfuscation
-+						// 演示线程名混淆
-+						string demo_thread = FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
-+					stdout.printf("FridMira:     Demo: 'frida-server-main-loop' → '%s'\n", demo_thread);
-+					}
-+				} else if (verbose) {
++					// Show runtime thread name obfuscation capability
++					// 显示运行时线程名混淆能力
++					string sample_thread = FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
++					stdout.printf("FridMira:     Runtime thread names: 'frida-*' → '%s' style\n", sample_thread);
++				}
++			} else if (verbose) {
 +				stdout.printf("FridMira: [✗] Thread Obfuscation Module - DISABLED\n");
 +			}
 +		}
@@ -1892,19 +1827,19 @@ index 00000000..0d1ff342
 +		 * 初始化RPC协议增强模块
 +		 */
 +		private static void initialize_rpc_protocol_enhancement(bool verbose) {
-+				if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
 +				FridMiraRpcProtocolEnhancer.init();
 +				Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter();
-+					if (verbose) {
++				if (verbose) {
 +					stdout.printf("FridMira: [✓] RPC Protocol Enhancement Module - ACTIVE\n");
-+						// Demonstrate protocol obfuscation
-+						// 演示协议混淆
-+						string demo_protocol = FridMiraRpcProtocolEnhancer.get_dynamic_protocol_id();
-+						string demo_call = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					stdout.printf("FridMira:     Protocol ID: '%s'\n", demo_protocol);
-+					stdout.printf("FridMira:     Call Command: '%s'\n", demo_call);
-+					}
-+				} else if (verbose) {
++					// Show active protocol obfuscation
++					// 显示激活的协议混淆
++					string current_protocol = FridMiraRpcProtocolEnhancer.get_dynamic_protocol_id();
++					string current_call = FridMiraRpcProtocolEnhancer.get_call_command(null);
++					stdout.printf("FridMira:     Active Protocol ID: '%s'\n", current_protocol);
++					stdout.printf("FridMira:     Active Call Command: '%s'\n", current_call);
++				}
++			} else if (verbose) {
 +				stdout.printf("FridMira: [✗] RPC Protocol Enhancement Module - DISABLED\n");
 +			}
 +		}
@@ -1917,16 +1852,16 @@ index 00000000..0d1ff342
 +			if (FridMiraFileSystemObfuscator.is_enhanced_mode_enabled()) {
 +				// File system obfuscator is stateless and doesn't need explicit init
 +				// 文件系统混淆器是无状态的，不需要显式初始化
-+					if (verbose) {
++				if (verbose) {
 +					stdout.printf("FridMira: [✓] File System Obfuscation Module - ACTIVE\n");
-+					// Demonstrate file system obfuscation
-+					// 演示文件系统混淆
-+					string demo_lib = FridMiraFileSystemObfuscator.generate_lib_name();
-+					string demo_socket = FridMiraFileSystemObfuscator.generate_realistic_socket_name();
-+					stdout.printf("FridMira:     Demo library: '%s'\n", demo_lib);
-+					stdout.printf("FridMira:     Demo socket: '%s'\n", demo_socket);
-+					}
-+				} else if (verbose) {
++					// Show runtime file name generation
++					// 显示运行时文件名生成
++					string sample_lib = FridMiraFileSystemObfuscator.generate_lib_name();
++					string sample_socket = FridMiraFileSystemObfuscator.generate_realistic_socket_name();
++					stdout.printf("FridMira:     Dynamic library names: '%s' style\n", sample_lib);
++					stdout.printf("FridMira:     Dynamic socket names: '%s' style\n", sample_socket);
++				}
++			} else if (verbose) {
 +				stdout.printf("FridMira: [✗] File System Obfuscation Module - DISABLED\n");
 +			}
 +		}
@@ -1936,17 +1871,17 @@ index 00000000..0d1ff342
 +		 * 初始化内存混淆模块
 +		 */
 +		private static void initialize_memory_obfuscation(bool verbose) {
-+				if (FridMiraMemoryObfuscator.is_enhanced_mode_enabled()) {
++			if (FridMiraMemoryObfuscator.is_enhanced_mode_enabled()) {
 +				// Memory obfuscator is stateless and doesn't need explicit init
 +				// 内存混淆器是无状态的，不需要显式初始化
-+					if (verbose) {
++				if (verbose) {
 +					stdout.printf("FridMira: [✓] Memory Obfuscation Module - ACTIVE\n");
-+						// Demonstrate memory identifier obfuscation
-+						// 演示内存标识符混淆
-+						string demo_memory = FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_gum_heap");
-+					stdout.printf("FridMira:     Demo: 'frida_gum_heap' → '%s'\n", demo_memory);
-+					}
-+				} else if (verbose) {
++					// Show runtime memory identifier obfuscation
++					// 显示运行时内存标识符混淆
++					string sample_memory = FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_gum_heap");
++					stdout.printf("FridMira:     Runtime memory IDs: 'frida_*' → '%s' style\n", sample_memory);
++				}
++			} else if (verbose) {
 +				stdout.printf("FridMira: [✗] Memory Obfuscation Module - DISABLED\n");
 +			}
 +		}
