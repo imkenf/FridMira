@@ -1,7 +1,7 @@
-From 632f981a7c491f08026f4c3204a2e17aee1f88d9 Mon Sep 17 00:00:00 2001
+From 9b3430268442cc1bb612b33a90dd929ecea5e18e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Thu, 19 Jun 2025 09:16:16 +0800
-Subject: [PATCH 001/006] Frida Anti-Detection Framework Core
+Date: Fri, 20 Jun 2025 16:34:04 +0800
+Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
  lib/mira/fridmira-agent.vala  | 264 +++++++++++++++++++++
@@ -22,7 +22,7 @@ Subject: [PATCH 001/006] Frida Anti-Detection Framework Core
 
 diff --git a/lib/mira/fridmira-agent.vala b/lib/mira/fridmira-agent.vala
 new file mode 100644
-index 0000000..7f6f60d
+index 00000000..7f6f60d0
 --- /dev/null
 +++ b/lib/mira/fridmira-agent.vala
 @@ -0,0 +1,264 @@
@@ -292,7 +292,7 @@ index 0000000..7f6f60d
 +}
 diff --git a/lib/mira/fridmira-file.vala b/lib/mira/fridmira-file.vala
 new file mode 100644
-index 0000000..c504bd4
+index 00000000..c504bd4e
 --- /dev/null
 +++ b/lib/mira/fridmira-file.vala
 @@ -0,0 +1,275 @@
@@ -573,7 +573,7 @@ index 0000000..c504bd4
 +}
 diff --git a/lib/mira/fridmira-memory.vala b/lib/mira/fridmira-memory.vala
 new file mode 100644
-index 0000000..f71561d
+index 00000000..f71561db
 --- /dev/null
 +++ b/lib/mira/fridmira-memory.vala
 @@ -0,0 +1,226 @@
@@ -805,7 +805,7 @@ index 0000000..f71561d
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 0000000..596ffda
+index 00000000..596ffdaa
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
 @@ -0,0 +1,432 @@
@@ -1243,7 +1243,7 @@ index 0000000..596ffda
 +}
 diff --git a/lib/mira/fridmira-symbol.vala b/lib/mira/fridmira-symbol.vala
 new file mode 100644
-index 0000000..36a7ed2
+index 00000000..36a7ed29
 --- /dev/null
 +++ b/lib/mira/fridmira-symbol.vala
 @@ -0,0 +1,212 @@
@@ -1461,7 +1461,7 @@ index 0000000..36a7ed2
 +}
 diff --git a/lib/mira/fridmira-thread.vala b/lib/mira/fridmira-thread.vala
 new file mode 100644
-index 0000000..71f0a4a
+index 00000000..71f0a4a9
 --- /dev/null
 +++ b/lib/mira/fridmira-thread.vala
 @@ -0,0 +1,167 @@
@@ -1634,7 +1634,7 @@ index 0000000..71f0a4a
 +}
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 0000000..a42b689
+index 00000000..0d1ff342
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
 @@ -0,0 +1,405 @@
@@ -1858,7 +1858,7 @@ index 0000000..a42b689
 +					if (verbose) {
 +					stdout.printf("FridMira: [✓] Symbol Obfuscation Module - ACTIVE\n");
 +						// Demonstrate symbol obfuscation
-+						// 演示符号混淆
++						// 符号混淆示例
 +						string demo_symbol = FridMiraSymbolObfuscator.obfuscate_symbol("frida_rpc_call");
 +					stdout.printf("FridMira:     Demo: 'frida_rpc_call' → '%s'\n", demo_symbol);
 +					}

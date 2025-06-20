@@ -1,14 +1,14 @@
-From d3c5e7ca7eb1c02862f8732171b92b9dfabaefae Mon Sep 17 00:00:00 2001
+From 352e521dbb65a2517b5ff51925d2fc83c51100a8 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Thu, 19 Jun 2025 09:27:29 +0800
+Date: Fri, 20 Jun 2025 17:02:38 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 436 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 410 insertions(+), 26 deletions(-)
+ server/server.vala | 434 ++++++++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 388 insertions(+), 46 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b3..2e6a5db 100644
+index 67bf4b38..2879d34b 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -225,7 +225,7 @@ index 67bf4b3..2e6a5db 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +335,130 @@ namespace Frida.Server {
+@@ -192,23 +335,117 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
@@ -256,9 +256,8 @@ index 67bf4b3..2e6a5db 100644
 +		if (options.fridmira_enabled) {
 +			if (verbose) {
 +				stdout.printf ("FridMira: ==========================================\n");
-+				stdout.printf ("FridMira: Early Framework Initialization\n");
++				stdout.printf ("FridMira: Framework Bootstrap\n");
 +				stdout.printf ("FridMira: ==========================================\n");
-+				stdout.printf ("FridMira: Setting critical environment variables...\n");
 +			}
  
 -		Posix.signal (Posix.Signal.INT, (sig) => {
@@ -268,46 +267,34 @@ index 67bf4b3..2e6a5db 100644
 -			application.stop ();
 -		});
 +			try {
-+				// Set environment variables FIRST (before any preload)
-+				// 首先设置环境变量（在任何preload之前）
++				// STEP 1: Bootstrap initialization FIRST (lightweight early protection)
++				// 步骤1：首先进行Bootstrap初始化（轻量级早期混淆）
++				Frida.FridMira.bootstrap_initialization (verbose);
++
++				// STEP 2: Set environment variables for individual modules
++				// 步骤2：为各个模块设置环境变量
 +				GLib.Environment.set_variable ("FRIDMIRA_MODE", "1", true);
-+				GLib.Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", options.fridmira_no_symbol ? "disabled" : "enabled", true);
-+				GLib.Environment.set_variable ("FRIDMIRA_THREAD_MODE", options.fridmira_no_thread ? "disabled" : "enabled", true);
-+				GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", options.fridmira_no_rpc ? "disabled" : "enabled", true);
-+				GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", options.fridmira_no_file ? "disabled" : "enabled", true);
-+				GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", options.fridmira_no_gum ? "disabled" : "enabled", true);
++				GLib.Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", options.fridmira_no_symbol ? "0" : "1", true);
++				GLib.Environment.set_variable ("FRIDMIRA_THREAD_MODE", options.fridmira_no_thread ? "0" : "1", true);
++				GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", options.fridmira_no_rpc ? "0" : "1", true);
++				GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", options.fridmira_no_file ? "0" : "1", true);
++				GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", options.fridmira_no_gum ? "0" : "1", true);
 +
-+				// Initialize FridMira framework EARLY (before TemporaryDirectory)
-+				// 提前初始化FridMira框架（在TemporaryDirectory之前）
-+				if (verbose) {
-+					stdout.printf ("FridMira: Initializing core framework components...\n");
-+					stdout.printf ("FridMira: ------------------------------------------\n");
-+					stdout.printf ("FridMira: Module Status Overview:\n");
-+					stdout.printf ("FridMira: [%s] Symbol Obfuscation Module\n", options.fridmira_no_symbol ? "✗ DISABLED" : "✓ ENABLED");
-+					stdout.printf ("FridMira: [%s] Thread Obfuscation Module\n", options.fridmira_no_thread ? "✗ DISABLED" : "✓ ENABLED");
-+					stdout.printf ("FridMira: [%s] RPC Protocol Enhancement Module\n", options.fridmira_no_rpc ? "✗ DISABLED" : "✓ ENABLED");
-+					stdout.printf ("FridMira: [%s] File System Obfuscation Module\n", options.fridmira_no_file ? "✗ DISABLED" : "✓ ENABLED");
-+					stdout.printf ("FridMira: [%s] Memory Obfuscation Module\n", options.fridmira_no_gum ? "✗ DISABLED" : "✓ ENABLED");
-+					stdout.printf ("FridMira: [✗ DISABLED] Agent Library Management Module (default off)\n");
-+					stdout.printf ("FridMira: [⏳ PENDING] Network Protocol Obfuscation Module (future)\n");
-+					stdout.printf ("FridMira: [⏳ PENDING] Process Name Obfuscation Module (future)\n");
-+					stdout.printf ("FridMira: ------------------------------------------\n");
-+				}
-+
++				// STEP 3: Initialize main FridMira framework (full protection)
++				// 步骤3：初始化主FridMira框架（完整加载混淆）
 +				Frida.FridMira.initialize_fridmira_framework ();
 +
 +				if (verbose) {
-+					stdout.printf ("FridMira: ✅ Early initialization completed successfully\n");
-+					stdout.printf ("FridMira: Preload process will now be protected\n");
++					stdout.printf ("FridMira: ✅ Bootstrap completed - preload protection active\n");
 +					stdout.printf ("FridMira: ==========================================\n");
 +				}
 +			} catch (Error e) {
-+				stderr.printf ("FridMira: CRITICAL ERROR during early initialization: %s\n", e.message);
++				stderr.printf ("FridMira: CRITICAL ERROR during bootstrap: %s\n", e.message);
 +				stderr.printf ("FridMira: Disabling framework and continuing with standard mode\n");
 +				// Disable FridMira and continue with standard mode
 +				// 禁用FridMira并继续使用标准模式
 +				options.fridmira_enabled = false;
-+				GLib.Environment.set_variable ("FRIDMIRA_MODE", "disabled", true);
++				GLib.Environment.set_variable ("FRIDMIRA_MODE", "0", true);
 +			}
 +		}
 +
@@ -367,7 +354,7 @@ index 67bf4b3..2e6a5db 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +467,64 @@ namespace Frida.Server {
+@@ -217,9 +454,64 @@ namespace Frida.Server {
  			});
  		}
  
@@ -432,7 +419,7 @@ index 67bf4b3..2e6a5db 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +589,75 @@ namespace Frida.Server {
+@@ -284,22 +576,67 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -443,6 +430,11 @@ index 67bf4b3..2e6a5db 100644
  			try {
  				if (device_id != null && device_id != "local") {
 -					manager = new DeviceManager.with_nonlocal_backends_only ();
+-
+-					var device = yield manager.get_device_by_id (device_id, 0, io_cancellable);
+-					device.lost.connect (on_device_lost);
+-
+-					service = yield new ControlService.with_device (device, endpoint_params, options);
 +					if (verbose) {
 +						stdout.printf ("FridMira: Connecting to remote device: %s\n", device_id);
 +					}
@@ -467,7 +459,8 @@ index 67bf4b3..2e6a5db 100644
 +						stderr.printf ("FridMira: ERROR during remote device setup: %s\n", e.message);
 +						throw e;
 +					}
-+				} else {
+ 				} else {
+-					service = new ControlService (endpoint_params, options);
 +					if (verbose) {
 +						stdout.printf ("FridMira: Starting local control service...\n");
 +					}
@@ -483,21 +476,8 @@ index 67bf4b3..2e6a5db 100644
 +					}
 +				}
 +
-+				if (verbose) {
-+					stdout.printf ("FridMira: Starting service (including preload if enabled)...\n");
-+				}
- 
--					var device = yield manager.get_device_by_id (device_id, 0, io_cancellable);
--					device.lost.connect (on_device_lost);
 +				try {
 +					yield service.start (io_cancellable);
-+					if (verbose) {
-+						stdout.printf ("FridMira: Service started successfully (preload completed if enabled)\n");
-+					}
- 
--					service = yield new ControlService.with_device (device, endpoint_params, options);
--				} else {
--					service = new ControlService (endpoint_params, options);
 +				} catch (GLib.Error e) {
 +					stderr.printf ("FridMira: ERROR during service start: %s\n", e.message);
 +					throw e;
@@ -516,47 +496,45 @@ index 67bf4b3..2e6a5db 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +666,19 @@ namespace Frida.Server {
+@@ -308,39 +645,42 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
+-				ready (true);
+-				return false;
+-			});
+-		}
+-
+-		public void stop () {
+-			Idle.add (() => {
+-				perform_stop.begin ();
+-				return false;
+-			});
+-		}
+ 
+-		private async void perform_stop () {
+-			if (stopping)
++				}
++				stderr.printf ("FridMira: CRITICAL ERROR during application start: %s\n", e.message);
++				printerr ("Unable to start: %s\n", e.message);
++				exit_code = 5;
++				loop.quit ();
++				ready (false);
+ 				return;
+-			stopping = true;
+-
+-			io_cancellable.cancel ();
++			}
+ 
+-			try {
+-				if (service != null) {
+-					yield service.stop ();
+-					service = null;
++			Idle.add (() => {
 +				if (verbose) {
 +					stdout.printf ("FridMira: Application ready and fully protected by FridMira\n");
 +				}
- 				ready (true);
- 				return false;
- 			});
- 		}
- 
- 		public void stop () {
-+			if (verbose) {
-+				stdout.printf ("FridMira: Stopping application...\n");
-+			}
-+
- 			Idle.add (() => {
- 				perform_stop.begin ();
- 				return false;
-@@ -321,26 +686,43 @@ namespace Frida.Server {
- 		}
- 
- 		private async void perform_stop () {
--			if (stopping)
-+			if (stopping) {
- 				return;
-+			}
- 			stopping = true;
- 
- 			io_cancellable.cancel ();
- 
- 			try {
- 				if (service != null) {
-+					if (verbose) {
-+						stdout.printf ("FridMira: Stopping control service...\n");
-+					}
-+					stderr.printf ("DEBUG: about to call service.stop()\n");
- 					yield service.stop ();
-+					stderr.printf ("DEBUG: service.stop() completed\n");
- 					service = null;
++ = null;
  				}
  
  				if (manager != null) {
@@ -581,7 +559,7 @@ index 67bf4b3..2e6a5db 100644
  				loop.quit ();
  				return false;
  			});
-@@ -357,4 +739,6 @@ namespace Frida.Server {
+@@ -357,4 +697,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
