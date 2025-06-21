@@ -1,14 +1,14 @@
-From 99a9298e31156fac127e0544e248904557b11d80 Mon Sep 17 00:00:00 2001
+From 89729204e136940a1c96430ceb9a6e7294e98447 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
-Subject: [PATCH 006/006] FridMira post-preload initialization
+Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 122 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 113 insertions(+), 9 deletions(-)
+ src/control-service.vala | 129 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 120 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..2be1ac46 100644
+index cc64470f..2b07e521 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..2be1ac46 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,72 @@ namespace Frida {
+@@ -117,17 +129,79 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -75,6 +75,13 @@ index cc64470f..2be1ac46 100644
 +							stdout.printf ("FridMira: Preload disabled by configuration\n");
 +						}
 +					}
++
++					// Post-preload initialization of the main framework
++					// Preload后主框架的初始化
++					if (verbose_enabled) {
++						stdout.printf ("FridMira: Initializing main framework after preload...\n");
++					}
++					Frida.FridMira.initialize_fridmira_framework (verbose_enabled);
 +
 +					// Preload后详细框架状态报告
 +					if (verbose_enabled) {
@@ -118,7 +125,7 @@ index cc64470f..2be1ac46 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1209,42 @@ namespace Frida {
+@@ -1142,5 +1216,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
