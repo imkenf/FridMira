@@ -1,17 +1,17 @@
-From 41d58c7bf1f9286616a050ccad38eb48cd52341f Mon Sep 17 00:00:00 2001
+From dc4b3d67c710fcf14adaefa24093bad27f2eed71 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
  lib/mira/fridmira-agent.vala  | 263 ++++++++++
- lib/mira/fridmira-file.vala   | 275 ++++++++++
+ lib/mira/fridmira-file.vala   | 275 +++++++++++
  lib/mira/fridmira-memory.vala | 226 +++++++++
- lib/mira/fridmira-rpc.vala    | 924 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 883 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 ++++++++
- lib/mira/fridmira-thread.vala | 167 ++++++
+ lib/mira/fridmira-thread.vala | 167 +++++++
  lib/mira/fridmira.vala        | 340 +++++++++++++
- 7 files changed, 2407 insertions(+)
+ 7 files changed, 2366 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..0b07f2e7
+index 00000000..b111d663
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,924 @@
+@@ -0,0 +1,883 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -890,142 +890,101 @@ index 00000000..0b07f2e7
 +		}
 +
 +		/**
-+		 * Handles both discovery requests (server-side) and responses (client-side).
-+		 * 处理发现请求（服务器端）和响应（客户端）。
++		 * NEW: Universal RPC Message Handler with Catch-All Hijacking
++		 * 新功能：通用RPC消息处理器，具有全面劫持功能
 +		 *
-+		 * Enhanced with better error handling and protocol validation.
-+		 * 增强了错误处理和协议验证。
++		 * This method implements a universal hijacking strategy:
++		 * 此方法实现通用劫持策略：
 +		 *
-+		 * NEW: Protocol Hijacking Compatibility Feature
-+		 * 新功能：协议劫持兼容特性
++		 * 1. If the message is for explicit discovery (fridmira:discover), handle it directly
++		 * 2. If the message uses the correct dynamic protocol ID, ignore it (return false)
++		 *    to let the main RPC loop process it
++		 * 3. If the message uses ANY other protocol ID (including frida:rpc), hijack it
++		 *    and send back a discovery response
 +		 *
-+		 * When standard frida:rpc messages are detected, automatically convert them
-+		 * to fridmira:discover responses to enable backward compatibility.
-+		 * 当检测到标准frida:rpc消息时，自动转换为fridmira:discover响应以实现向后兼容。
++		 * 1. 如果是明确的发现消息(fridmira:discover)，直接处理
++		 * 2. 如果使用正确的动态协议ID，忽略它(返回false)让主RPC循环处理
++		 * 3. 如果使用任何其他协议ID(包括frida:rpc)，劫持它并发送发现响应
 +		 */
 +		public bool try_handle_message (string json, RpcPeer peer) {
-+			// First check for explicit FridMira discovery messages
-+			// 首先检查明确的FridMira发现消息
-+			if (json.index_of ("\"fridmira:discover\"") != -1) {
-+				return handle_fridmira_discovery_message (json, peer);
-+			}
-+
-+			// NEW: Protocol Hijacking - Check for standard frida:rpc messages
-+			// 新功能：协议劫持 - 检查标准frida:rpc消息
-+			if (json.index_of ("\"frida:rpc\"") != -1) {
-+				return handle_standard_rpc_hijacking (json, peer);
-+			}
-+
-+			return false;
-+		}
-+
-+		/**
-+		 * Handle explicit FridMira discovery messages
-+		 * 处理明确的FridMira发现消息
-+		 */
-+		private bool handle_fridmira_discovery_message (string json, RpcPeer peer) {
-+
 +			var parser = new Json.Parser ();
 +			try {
 +				parser.load_from_data (json);
 +			} catch (GLib.Error e) {
-+				warning ("FridMira: Failed to parse discovery message: %s", e.message);
++				// Not a valid JSON message, let others handle it
++				// 不是有效的JSON消息，让其他处理器处理
 +				return false;
 +			}
 +
 +			var message_node = parser.get_root ();
-+			if (message_node.get_node_type () != Json.NodeType.OBJECT)
++			if (message_node.get_node_type () != Json.NodeType.OBJECT) {
 +				return false;
++			}
 +			var message = message_node.get_object ();
 +
-+			var type = message.get_string_member ("type");
-+			if (type != "send")
++			if (message.get_string_member ("type") != "send") {
 +				return false;
++			}
 +
 +			var payload = message.get_member ("payload");
-+			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
-+				return false;
-+
-+			var discovery_message = payload.get_array ();
-+			if (discovery_message.get_length () < 3)
-+				return false;
-+
-+			string? protocol_type = discovery_message.get_element (0).get_string ();
-+			if (protocol_type != "fridmira:discover")
-+				return false;
-+
-+			string? request_id = discovery_message.get_element (1).get_string ();
-+			string? command = discovery_message.get_element (2).get_string ();
-+
-+			if (request_id == null || command == null) {
-+				warning ("FridMira: Invalid discovery message format");
++			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY) {
 +				return false;
 +			}
-+
-+			// Handle discovery request (acting as server)
-+			if (command == "get_protocol_info") {
-+				return handle_discovery_request (request_id, peer);
-+			}
-+			// Handle discovery response (acting as client)
-+			else if (command == "ok") {
-+				return handle_discovery_response (request_id, discovery_message);
-+			}
-+
-+			return false;
-+		}
-+
-+		/**
-+		 * NEW: Handle Standard RPC Hijacking
-+		 * 新功能：处理标准RPC劫持
-+		 *
-+		 * When standard frida:rpc messages are received, convert them to protocol discovery responses.
-+		 * This enables backward compatibility with standard Frida clients.
-+		 * 当收到标准frida:rpc消息时，将其转换为协议发现响应。
-+		 * 这实现了与标准Frida客户端的向后兼容性。
-+		 */
-+		private bool handle_standard_rpc_hijacking (string json, RpcPeer peer) {
-+			var parser = new Json.Parser ();
-+			try {
-+				parser.load_from_data (json);
-+			} catch (GLib.Error e) {
-+				warning ("FridMira: Failed to parse standard RPC message: %s", e.message);
-+				return false;
-+			}
-+
-+			var message_node = parser.get_root ();
-+			if (message_node.get_node_type () != Json.NodeType.OBJECT)
-+				return false;
-+			var message = message_node.get_object ();
-+
-+			var type = message.get_string_member ("type");
-+			if (type != "send")
-+				return false;
-+
-+			var payload = message.get_member ("payload");
-+			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
-+				return false;
 +
 +			var rpc_message = payload.get_array ();
-+			if (rpc_message.get_length () < 3)
-+				return false;
-+
-+			// Check if this is a standard frida:rpc message
-+			// 检查这是否是标准frida:rpc消息
-+			string? protocol_type = rpc_message.get_element (0).get_string ();
-+			if (protocol_type != "frida:rpc")
-+				return false;
-+
-+			string? request_id = rpc_message.get_element (1).get_string ();
-+			string? command = rpc_message.get_element (2).get_string ();
-+
-+			if (request_id == null || command == null) {
-+				warning ("FridMira: Invalid standard RPC message format");
++			if (rpc_message.get_length () < 2) {
 +				return false;
 +			}
 +
-+			// Hijack the standard RPC call and respond with protocol discovery info
-+			// 劫持标准RPC调用并响应协议发现信息
-+			warning ("FridMira: Hijacking standard RPC call [%s] -> converting to protocol discovery", command);
++			string? received_protocol_id = rpc_message.get_element (0).get_string ();
++			string? request_id = rpc_message.get_element (1).get_string ();
++
++			if (received_protocol_id == null || request_id == null) {
++				return false;
++			}
++
++			// Path 1: Explicit discovery request
++			// 路径1：明确的发现请求
++			if (received_protocol_id == "fridmira:discover") {
++				if (rpc_message.get_length () < 3) {
++					return false;
++				}
++				string? command = rpc_message.get_element (2).get_string ();
++				if (command == null) {
++					return false;
++				}
++
++				if (command == "get_protocol_info") {
++					// Server-side: handle discovery request from client
++					// 服务器端：处理来自客户端的发现请求
++					return send_protocol_discovery_response (request_id, peer, false);
++				} else if (command == "ok") {
++					// Client-side: handle discovery response from server
++					// 客户端：处理来自服务器的发现响应
++					return handle_discovery_response (request_id, rpc_message);
++				}
++				return false;
++			}
++
++			// Path 2: Correct dynamic protocol ID, let the core RPC loop handle it
++			// 路径2：正确的动态协议ID，让核心RPC循环处理
++			string current_protocol_id = get_protocol_id (null);
++			if (received_protocol_id == current_protocol_id) {
++				// This is a legitimate message with correct protocol, don't hijack
++				// 这是使用正确协议的合法消息，不要劫持
++				return false;
++			}
++
++			// Path 3: Any other protocol ID (including frida:rpc), hijack it!
++			// 路径3：任何其他协议ID（包括frida:rpc），劫持它！
++			if (rpc_message.get_length () >= 3) {
++				string? command = rpc_message.get_element (2).get_string ();
++				warning ("FridMira: Hijacking RPC call with incorrect protocol ID '%s' (command: %s). Responding with discovery info.",
++					received_protocol_id, command ?? "unknown");
++			} else {
++				warning ("FridMira: Hijacking RPC call with incorrect protocol ID '%s'. Responding with discovery info.",
++					received_protocol_id);
++			}
 +
 +			return send_protocol_discovery_response (request_id, peer, true);
 +		}
@@ -1096,8 +1055,8 @@ index 00000000..0b07f2e7
 +		}
 +
 +		/**
-+		 * Handle protocol discovery request from client
-+		 * 处理来自客户端的协议发现请求
++		 * Handle protocol discovery request from client (deprecated, now handled directly in try_handle_message)
++		 * 处理来自客户端的协议发现请求（已弃用，现在直接在try_handle_message中处理）
 +		 */
 +		private bool handle_discovery_request (string request_id, RpcPeer peer) {
 +			return send_protocol_discovery_response (request_id, peer, false);
