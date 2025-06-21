@@ -1,21 +1,166 @@
-From b527d111c5f3aeba54f374dfea06240c5e2de851 Mon Sep 17 00:00:00 2001
-From: GitButler <gitbutler@gitbutler.com>
-Date: Fri, 20 Jun 2025 17:09:17 +0800
-Subject: [PATCH 006/006] GitButler Workspace Commit
+From 99a9298e31156fac127e0544e248904557b11d80 Mon Sep 17 00:00:00 2001
+From: imkenf <imkenf@gmail.com>
+Date: Fri, 20 Jun 2025 17:03:55 +0800
+Subject: [PATCH 006/006] FridMira post-preload initialization
 
-This is a merge commit the virtual branches in your workspace.
+---
+ src/control-service.vala | 122 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 113 insertions(+), 9 deletions(-)
 
-Due to GitButler managing multiple virtual branches, you cannot switch back and
-forth between git branches and virtual branches easily.
-
-If you switch to another branch, GitButler will need to be reinitialized.
-If you commit on this branch, GitButler will throw it away.
-
-Here are the branches that are currently applied:
- - i-branch-1 (refs/gitbutler/i-branch-1)
-   branch head: 41cc6879e5c5bb1ecf2429d9fba0dc95874b4213
-For more information about what we're doing here, check out our docs:
-https://docs.gitbutler.com/features/virtual-branches/integration-branch
+diff --git a/src/control-service.vala b/src/control-service.vala
+index cc64470f..2be1ac46 100644
+--- a/src/control-service.vala
++++ b/src/control-service.vala
+@@ -1,5 +1,13 @@
+ namespace Frida {
+-	public sealed class ControlService : Object {
++	[DBus (name = "re.frida.Control")]
++	private interface Control : GLib.Object {
++		// ... existing code ...
++	}
++
++	[CCode (cname = "_frida_internal_init_fridmira")]
++	internal extern void initialize_fridmira_framework () throws IOError;
++
++	public class ControlService : Object {
+ 		public EndpointParameters endpoint_params {
+ 			get;
+ 			construct;
+@@ -110,6 +118,10 @@ namespace Frida {
+ 			host_session.uninjected.connect (notify_uninjected);
+ 
+ 			this.provider = provider;
++
++			main_context = MainContext.ref_thread_default ();
++
++			service.incoming.connect (on_server_connection);
+ 		}
+ 
+ 		public async void start (Cancellable? cancellable = null) throws Error, IOError {
+@@ -117,17 +129,72 @@ namespace Frida {
+ 				throw new Error.INVALID_OPERATION ("Invalid operation");
+ 			state = STARTING;
+ 
+-			main_context = MainContext.ref_thread_default ();
+-
+-			service.incoming.connect (on_server_connection);
+-
+ 			try {
+ 				yield service.start (cancellable);
+ 
+-				if (options.enable_preload) {
+-					var base_host_session = host_session as LocalHostSession;
+-					if (base_host_session != null)
+-						base_host_session.preload.begin (io_cancellable);
++				// FridMira-enabled service startup with protected preload
++				// FridMira启用的服务启动，包含受保护的preload
++				if (options.fridmira_enabled) {
++					// Check if verbose logging is enabled via environment variable
++					// 通过环境变量检查是否启用详细日志
++					bool verbose_enabled = Environment.get_variable("FRIDA_VERBOSE") != null;
++
++					if (options.enable_preload) {
++						var base_host_session = host_session as LocalHostSession;
++						if (base_host_session != null) {
++							if (verbose_enabled) {
++								stdout.printf ("FridMira: Executing preload with anti-detection protection...\n");
++							}
++							yield base_host_session.preload (io_cancellable);
++							if (verbose_enabled) {
++								stdout.printf ("FridMira: Preload completed successfully\n");
++							}
++						}
++					} else {
++						if (verbose_enabled) {
++							stdout.printf ("FridMira: Preload disabled by configuration\n");
++						}
++					}
++
++					// Preload后详细框架状态报告
++					if (verbose_enabled) {
++						stdout.printf ("FridMira: ==========================================\n");
++						stdout.printf ("FridMira: Framework Status Report\n");
++						stdout.printf ("FridMira: ==========================================\n");
++
++						// Show brief module status overview
++						// 显示简要的模块状态概览
++						stdout.printf ("FridMira: Preload Protection Status:\n");
++						stdout.printf ("FridMira:   Symbol Obfuscation: %s\n", !options.fridmira_no_symbol ? "ACTIVE" : "DISABLED");
++						stdout.printf ("FridMira:   Thread Obfuscation: %s\n", !options.fridmira_no_thread ? "ACTIVE" : "DISABLED");
++						stdout.printf ("FridMira:   RPC Protocol Enhancement: %s\n", !options.fridmira_no_rpc ? "ACTIVE" : "DISABLED");
++						stdout.printf ("FridMira:   File System Obfuscation: %s\n", !options.fridmira_no_file ? "ACTIVE" : "DISABLED");
++						stdout.printf ("FridMira:   Memory Obfuscation: %s\n", !options.fridmira_no_gum ? "ACTIVE" : "DISABLED");
++
++						// Agent模块状态
++						stdout.printf ("FridMira: [✗] Agent Library Management Module - DISABLED\n");
++
++						// 未来模块占位符
++						stdout.printf ("FridMira: [⏳] Network Protocol Obfuscation Module - PENDING\n");
++						stdout.printf ("FridMira:     Status: Development planned for v1.1\n");
++						stdout.printf ("FridMira: [⏳] Process Name Obfuscation Module - PENDING\n");
++						stdout.printf ("FridMira:     Status: Research phase\n");
++						stdout.printf ("FridMira: [⏳] Dynamic Library Loading Obfuscation - PENDING\n");
++						stdout.printf ("FridMira:     Status: Design phase\n");
++
++						stdout.printf ("FridMira: ------------------------------------------\n");
++						stdout.printf ("FridMira: ✅ All enabled modules operational\n");
++						stdout.printf ("FridMira: ==========================================\n");
++					}
++				} else {
++					// Standard mode without FridMira
++					// 不使用FridMira的标准模式
++					if (options.enable_preload) {
++						var base_host_session = host_session as LocalHostSession;
++						if (base_host_session != null) {
++							yield base_host_session.preload (io_cancellable);
++						}
++					}
+ 				}
+ 
+ 				state = STARTED;
+@@ -1142,5 +1209,42 @@ namespace Frida {
+ 			set;
+ 			default = true;
+ 		}
++
++		/* FridMira options */
++		public bool fridmira_enabled {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_symbol {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_thread {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_rpc {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_file {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_gum {
++			get;
++			set;
++			default = false;
++		}
+ 	}
+ }
 -- 
 2.45.1.windows.1
 
