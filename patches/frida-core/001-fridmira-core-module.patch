@@ -1,17 +1,17 @@
-From 9c2fb8e7db9fe25d03ef301a87061cd555f85c3b Mon Sep 17 00:00:00 2001
+From 5eeda0e3570e159b22040ece8e17f08a058e3f9a Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 277 ++++++++++++++++++++++
- lib/mira/fridmira-file.vala   | 275 ++++++++++++++++++++++
- lib/mira/fridmira-memory.vala | 226 ++++++++++++++++++
- lib/mira/fridmira-rpc.vala    | 432 ++++++++++++++++++++++++++++++++++
- lib/mira/fridmira-symbol.vala | 212 +++++++++++++++++
- lib/mira/fridmira-thread.vala | 167 +++++++++++++
- lib/mira/fridmira.vala        | 340 ++++++++++++++++++++++++++
- 7 files changed, 1929 insertions(+)
+ lib/mira/fridmira-agent.vala  | 263 +++++++++++
+ lib/mira/fridmira-file.vala   | 275 ++++++++++++
+ lib/mira/fridmira-memory.vala | 226 ++++++++++
+ lib/mira/fridmira-rpc.vala    | 805 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-symbol.vala | 212 +++++++++
+ lib/mira/fridmira-thread.vala | 167 +++++++
+ lib/mira/fridmira.vala        | 340 ++++++++++++++
+ 7 files changed, 2288 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -22,10 +22,10 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 diff --git a/lib/mira/fridmira-agent.vala b/lib/mira/fridmira-agent.vala
 new file mode 100644
-index 00000000..b5f7d397
+index 00000000..a2567bbe
 --- /dev/null
 +++ b/lib/mira/fridmira-agent.vala
-@@ -0,0 +1,277 @@
+@@ -0,0 +1,263 @@
 +/**
 + * FridMira: Agent Library Management Module
 + * FridMira: Agent库管理模块
@@ -153,11 +153,7 @@ index 00000000..b5f7d397
 +				File source = File.new_for_path(original_agent_path);
 +				File dest = File.new_for_path(obfuscated_path);
 +
-+				try {
-+					source.copy(dest, FileCopyFlags.OVERWRITE);
-+				} catch (Error copy_error) {
-+					throw new Error.FAILED("Failed to copy agent library: %s", copy_error.message);
-+				}
++				source.copy(dest, FileCopyFlags.OVERWRITE);
 +
 +				cached_agent_path = obfuscated_path;
 +
@@ -198,12 +194,7 @@ index 00000000..b5f7d397
 +				try {
 +					File temp_dir = File.new_for_path(temp_path);
 +					if (!temp_dir.query_exists()) {
-+						try {
-+							temp_dir.make_directory_with_parents();
-+						} catch (Error dir_error) {
-+							stderr.printf("FridMira: Failed to create temp directory: %s\n", dir_error.message);
-+							throw dir_error;
-+						}
++						temp_dir.make_directory_with_parents();
 +					}
 +					cached_temp_directory = temp_path;
 +					return temp_path;
@@ -248,15 +239,10 @@ index 00000000..b5f7d397
 +				try {
 +					File agent_file = File.new_for_path(cached_agent_path);
 +					if (agent_file.query_exists()) {
-+						try {
-+							agent_file.delete();
-+							if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
-+								stdout.printf("FridMira: Cleaned up obfuscated agent: %s\n",
-+								             Path.get_basename(cached_agent_path));
-+							}
-+						} catch (Error delete_error) {
-+							stderr.printf("FridMira: Failed to delete agent file: %s\n", delete_error.message);
-+							throw delete_error;
++						agent_file.delete();
++						if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++							stdout.printf("FridMira: Cleaned up obfuscated agent: %s\n",
++							             Path.get_basename(cached_agent_path));
 +						}
 +					}
 +				} catch (Error e) {
@@ -818,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..596ffdaa
+index 00000000..9d6d05ef
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,432 @@
+@@ -0,0 +1,805 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -845,11 +831,23 @@ index 00000000..596ffdaa
 +	 *
 +	 * 此类实现RpcProtocolEnhancer接口，充当通用RPC客户端和静态FridMira协议
 +	 * 逻辑之间的桥梁。它还包含自包含的发现机制。
++	 *
++	 * Note: Initialization is handled by FridMira.initialize_rpc_protocol_enhancement()
++	 * in fridmira.vala to avoid duplication and ensure proper initialization order.
++	 * 注意：初始化由fridmira.vala中的FridMira.initialize_rpc_protocol_enhancement()处理，
++	 * 以避免重复并确保正确的初始化顺序。
 +	 */
 +	public class FridMiraRpcEnhancerAdapter : Object, RpcProtocolEnhancer {
 +		private Gee.HashMap<string, PendingResponse> pending_discoveries = new Gee.HashMap<string, PendingResponse> ();
++		private bool protocol_negotiated = false;
++		private string? negotiated_session_id = null;
 +
 +		public string get_protocol_id (string? session_id) {
++			// Verify that the protocol enhancer is properly initialized
++			// 验证协议增强器是否已正确初始化
++			if (!Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++				warning ("FridMira: RPC protocol enhancer accessed before initialization or while disabled");
++			}
 +			return Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (session_id);
 +		}
 +
@@ -875,11 +873,18 @@ index 00000000..596ffdaa
 +
 +		public void forget_session (string session_id) {
 +			Frida.FridMiraRpcProtocolEnhancer.forget_session (session_id);
++			if (negotiated_session_id == session_id) {
++				protocol_negotiated = false;
++				negotiated_session_id = null;
++			}
 +		}
 +
 +		/**
 +		 * Handles both discovery requests (server-side) and responses (client-side).
 +		 * 处理发现请求（服务器端）和响应（客户端）。
++		 *
++		 * Enhanced with better error handling and protocol validation.
++		 * 增强了错误处理和协议验证。
 +		 */
 +		public bool try_handle_message (string json, RpcPeer peer) {
 +			if (json.index_of ("\"fridmira:discover\"") == -1)
@@ -889,8 +894,10 @@ index 00000000..596ffdaa
 +			try {
 +				parser.load_from_data (json);
 +			} catch (GLib.Error e) {
++				warning ("FridMira: Failed to parse discovery message: %s", e.message);
 +				return false;
 +			}
++
 +			var message_node = parser.get_root ();
 +			if (message_node.get_node_type () != Json.NodeType.OBJECT)
 +				return false;
@@ -915,8 +922,29 @@ index 00000000..596ffdaa
 +			string? request_id = discovery_message.get_element (1).get_string ();
 +			string? command = discovery_message.get_element (2).get_string ();
 +
++			if (request_id == null || command == null) {
++				warning ("FridMira: Invalid discovery message format");
++				return false;
++			}
++
 +			// Handle discovery request (acting as server)
 +			if (command == "get_protocol_info") {
++				return handle_discovery_request (request_id, peer);
++			}
++			// Handle discovery response (acting as client)
++			else if (command == "ok") {
++				return handle_discovery_response (request_id, discovery_message);
++			}
++
++			return false;
++		}
++
++		/**
++		 * Handle protocol discovery request from client
++		 * 处理来自客户端的协议发现请求
++		 */
++		private bool handle_discovery_request (string request_id, RpcPeer peer) {
++			try {
 +				var response_payload = new Json.Builder ();
 +				response_payload
 +					.begin_object ()
@@ -926,6 +954,8 @@ index 00000000..596ffdaa
 +					.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_call_command (null))
 +					.set_member_name ("ok_response")
 +					.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null))
++					.set_member_name ("enhanced_mode")
++					.add_boolean_value (Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled ())
 +					.end_object ();
 +
 +				var response_message = new Json.Builder ();
@@ -946,30 +976,70 @@ index 00000000..596ffdaa
 +					.add_value (response_message.get_root ())
 +					.end_object ();
 +
-+				try {
-+					peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
-+				} catch (Error e) {
-+					warning ("FridMira: Failed to send discovery response: %s", e.message);
-+				}
++				peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
++				return true;
++			} catch (Error e) {
++				warning ("FridMira: Failed to send discovery response: %s", e.message);
++				return false;
++			}
++		}
 +
++		/**
++		 * Handle protocol discovery response from server
++		 * 处理来自服务器的协议发现响应
++		 */
++		private bool handle_discovery_response (string request_id, Json.Array discovery_message) {
++			PendingResponse? pending;
++			if (pending_discoveries.unset (request_id, out pending)) {
++				if (discovery_message.get_length () >= 4) {
++					var response_data = discovery_message.get_element (3);
++					if (response_data.get_node_type () == Json.NodeType.OBJECT) {
++						var response_obj = response_data.get_object ();
++						// Mark protocol as negotiated if response contains enhanced_mode flag
++						if (response_obj.has_member ("enhanced_mode")) {
++							protocol_negotiated = response_obj.get_boolean_member ("enhanced_mode");
++						}
++					}
++					pending.complete_with_result (response_data);
++				} else {
++					pending.complete_with_error (new Error.INVALID_ARGUMENT ("Malformed discovery response"));
++				}
 +				return true;
 +			}
-+			// Handle discovery response (acting as client)
-+			else if (command == "ok") {
-+				PendingResponse pending;
-+				if (pending_discoveries.unset (request_id, out pending)) {
-+					if (discovery_message.get_length () >= 4)
-+						pending.complete_with_result (discovery_message.get_element (3));
-+					else
-+						pending.complete_with_error (new Error.INVALID_ARGUMENT ("Malformed discovery response"));
-+				}
-+				return true;
-+			}
-+
 +			return false;
 +		}
 +
++		/**
++		 * Enhanced protocol discovery with timeout and retry logic
++		 * 带超时和重试逻辑的增强协议发现
++		 */
 +		public async Json.Node discover_protocol (RpcPeer peer, Cancellable? cancellable) throws Error, IOError {
++			const int MAX_RETRIES = 3;
++			const int TIMEOUT_MS = 5000;
++
++			for (int retry = 0; retry < MAX_RETRIES; retry++) {
++				try {
++					return yield discover_protocol_internal (peer, cancellable, TIMEOUT_MS);
++				} catch (IOError.CANCELLED e) {
++					throw e; // Don't retry on cancellation
++				} catch (Error e) {
++					if (retry == MAX_RETRIES - 1) {
++						throw e; // Re-throw on final retry
++					}
++					warning ("FridMira: Protocol discovery attempt %d failed: %s", retry + 1, e.message);
++					// Wait before retry
++					yield wait_async (1000);
++				}
++			}
++
++			throw new Error.PROTOCOL_ERROR ("Protocol discovery failed after %d attempts", MAX_RETRIES);
++		}
++
++		/**
++		 * Internal protocol discovery implementation
++		 * 内部协议发现实现
++		 */
++		private async Json.Node discover_protocol_internal (RpcPeer peer, Cancellable? cancellable, int timeout_ms) throws Error, IOError {
 +			string request_id = Uuid.string_random ();
 +
 +			var discovery_request = new Json.Builder ();
@@ -991,10 +1061,11 @@ index 00000000..596ffdaa
 +			string raw_request = Json.to_string (full_request.get_root (), false);
 +
 +			bool waiting = false;
++			uint timeout_source_id = 0;
 +
 +			var pending = new PendingResponse (() => {
 +				if (waiting)
-+					discover_protocol.callback ();
++					discover_protocol_internal.callback ();
 +				return false;
 +			});
 +			pending_discoveries[request_id] = pending;
@@ -1004,9 +1075,18 @@ index 00000000..596ffdaa
 +			} catch (Error e) {
 +				if (pending_discoveries.unset (request_id))
 +					pending.complete_with_error (e);
++				throw e;
 +			}
 +
 +			if (!pending.completed) {
++				// Set up timeout
++				timeout_source_id = Timeout.add (timeout_ms, () => {
++					if (pending_discoveries.unset (request_id))
++						pending.complete_with_error (new IOError.TIMED_OUT ("Protocol discovery timed out"));
++					return false;
++				});
++
++				// Set up cancellation handler
 +				var cancel_source = new CancellableSource (cancellable);
 +				cancel_source.set_callback (() => {
 +					if (pending_discoveries.unset (request_id))
@@ -1019,6 +1099,9 @@ index 00000000..596ffdaa
 +				yield;
 +				waiting = false;
 +
++				if (timeout_source_id != 0) {
++					Source.remove (timeout_source_id);
++				}
 +				cancel_source.destroy ();
 +			}
 +
@@ -1028,6 +1111,18 @@ index 00000000..596ffdaa
 +				throw_api_error (pending.error);
 +
 +			return pending.result;
++		}
++
++		/**
++		 * Async wait helper
++		 * 异步等待辅助函数
++		 */
++		private async void wait_async (int milliseconds) {
++			Timeout.add (milliseconds, () => {
++				wait_async.callback ();
++				return false;
++			});
++			yield;
 +		}
 +
 +		private class PendingResponse {
@@ -1083,34 +1178,61 @@ index 00000000..596ffdaa
 +		private static HashMap<string, string> session_commands;
 +		private static HashMap<string, string> session_responses;
 +		private static bool initialized = false;
++		private static Mutex init_mutex = Mutex();
++		private static bool enhanced_mode_cached = false;
++		private static bool enhanced_mode_checked = false;
 +
 +		/**
 +		 * Initialize the RPC protocol enhancer
 +		 * 初始化RPC协议增强器
 +		 */
 +		public static void init() {
-+			if (initialized) {
-+				return;
-+			}
++			init_mutex.lock();
++			try {
++				if (initialized) {
++					return;
++				}
 +
-+			session_protocols = new HashMap<string, string>();
-+			session_commands = new HashMap<string, string>();
-+			session_responses = new HashMap<string, string>();
-+			initialized = true;
++				session_protocols = new HashMap<string, string>();
++				session_commands = new HashMap<string, string>();
++				session_responses = new HashMap<string, string>();
++				initialized = true;
++			} finally {
++				init_mutex.unlock();
++			}
 +		}
 +
 +		/**
-+		 * Check if enhanced mode is enabled
-+		 * 检查是否启用增强模式
++		 * Ensure initialization before any operation
++		 * 确保在任何操作之前完成初始化
++		 */
++		private static void ensure_initialized() {
++			if (!initialized) {
++				init();
++			}
++		}
++
++		/**
++		 * Check if enhanced mode is enabled with caching
++		 * 使用缓存检查是否启用增强模式
 +		 */
 +		public static bool is_enhanced_mode_enabled() {
++			if (enhanced_mode_checked) {
++				return enhanced_mode_cached;
++			}
++
 +			string? rpc_mode = GLib.Environment.get_variable("FRIDMIRA_RPC_MODE");
 +			if (rpc_mode != null) {
-+				return rpc_mode == "1";
++				enhanced_mode_cached = (rpc_mode == "1");
++				enhanced_mode_checked = true;
++				return enhanced_mode_cached;
 +			}
 +
 +			string? global_mode = GLib.Environment.get_variable("FRIDMIRA_MODE");
-+			return (global_mode == "1");
++			enhanced_mode_cached = (global_mode == "1");
++			enhanced_mode_checked = true;
++
++			return enhanced_mode_cached;
 +		}
 +
 +		/**
@@ -1121,6 +1243,8 @@ index 00000000..596ffdaa
 +			if (!is_enhanced_mode_enabled()) {
 +				return "frida:rpc";
 +			}
++
++			ensure_initialized();
 +
 +			if (session_id == null) {
 +				return generate_obfuscated_protocol();
@@ -1142,6 +1266,8 @@ index 00000000..596ffdaa
 +				return "call";
 +			}
 +
++			ensure_initialized();
++
 +			if (session_id == null) {
 +				return generate_obfuscated_command();
 +			}
@@ -1161,6 +1287,8 @@ index 00000000..596ffdaa
 +			if (!is_enhanced_mode_enabled()) {
 +				return "ok";
 +			}
++
++			ensure_initialized();
 +
 +			if (session_id == null) {
 +				return generate_obfuscated_response();
@@ -1190,7 +1318,26 @@ index 00000000..596ffdaa
 +				return protocol == "frida:rpc";
 +			}
 +
-+			return session_protocols.values.contains(protocol) || protocol.has_prefix("sys:");
++			ensure_initialized();
++
++			// Standard protocol is always valid
++			if (protocol == "frida:rpc") {
++				return true;
++			}
++
++			// Check session-specific protocols
++			foreach (var session_protocol in session_protocols.values) {
++				if (protocol == session_protocol) {
++					return true;
++				}
++			}
++
++			// Check if it matches our obfuscation pattern
++			return protocol.has_prefix("sys:") ||
++			       protocol.has_prefix("android:") ||
++			       protocol.has_prefix("linux:") ||
++			       protocol.has_prefix("proc:") ||
++			       protocol.has_prefix("dev:");
 +		}
 +
 +		/**
@@ -1202,7 +1349,26 @@ index 00000000..596ffdaa
 +				return status == "ok";
 +			}
 +
-+			return session_responses.values.contains(status) || status.has_prefix("ack");
++			ensure_initialized();
++
++			// Standard response is always valid
++			if (status == "ok") {
++				return true;
++			}
++
++			// Check session-specific responses
++			foreach (var session_response in session_responses.values) {
++				if (status == session_response) {
++					return true;
++				}
++			}
++
++			// Check if it matches our obfuscation pattern
++			return status.has_prefix("ack") ||
++			       status == "done" ||
++			       status == "complete" ||
++			       status == "ready" ||
++			       status == "success";
 +		}
 +
 +		/**
@@ -1210,6 +1376,8 @@ index 00000000..596ffdaa
 +		 * 忘记会话数据
 +		 */
 +		public static void forget_session(string session_id) {
++			ensure_initialized();
++
 +			if (session_protocols != null) {
 +				session_protocols.unset(session_id);
 +			}
@@ -1251,6 +1419,197 @@ index 00000000..596ffdaa
 +		private static string generate_obfuscated_response() {
 +			string[] responses = {"ack", "done", "complete", "ready", "success"};
 +			return responses[Random.int_range(0, responses.length)];
++		}
++	}
++}
++
++/**
++ * FridMira RPC Protocol Diagnostic Tool
++ * FridMira RPC协议诊断工具
++ *
++ * This diagnostic tool helps identify and debug RPC protocol issues in FridMira.
++ * 此诊断工具有助于识别和调试FridMira中的RPC协议问题。
++ */
++namespace Frida.FridMiraDiagnostics {
++	public class RpcProtocolDiagnostic {
++
++		/**
++		 * Comprehensive protocol status check
++		 * 全面的协议状态检查
++		 */
++		public static string get_protocol_status() {
++			var status = new StringBuilder();
++
++			status.append("=== FridMira RPC Protocol Diagnostic Report ===\n");
++			status.append("Generated: %s\n\n".printf(new DateTime.now_local().to_string()));
++
++			// Environment variables check
++			status.append("1. Environment Variables:\n");
++			string? rpc_mode = GLib.Environment.get_variable("FRIDMIRA_RPC_MODE");
++			string? global_mode = GLib.Environment.get_variable("FRIDMIRA_MODE");
++
++			status.append("   FRIDMIRA_RPC_MODE: %s\n".printf(rpc_mode ?? "NOT SET"));
++			status.append("   FRIDMIRA_MODE: %s\n".printf(global_mode ?? "NOT SET"));
++			status.append("   Enhanced mode enabled: %s\n\n".printf(
++				FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled() ? "YES" : "NO"));
++
++			// Protocol configuration
++			status.append("2. Protocol Configuration:\n");
++			status.append("   Default Protocol ID: %s\n".printf(
++				FridMiraRpcProtocolEnhancer.get_protocol_id(null)));
++			status.append("   Default Call Command: %s\n".printf(
++				FridMiraRpcProtocolEnhancer.get_call_command(null)));
++			status.append("   Default OK Response: %s\n".printf(
++				FridMiraRpcProtocolEnhancer.get_ok_response(null)));
++			status.append("   Dynamic Protocol ID: %s\n\n".printf(
++				FridMiraRpcProtocolEnhancer.get_dynamic_protocol_id()));
++
++			// Enhancer status
++			status.append("3. RPC Client Integration:\n");
++			if (RpcClient.enhancer != null) {
++				status.append("   Enhancer Status: ACTIVE ✓\n");
++				status.append("   Enhancer Type: %s\n".printf(RpcClient.enhancer.get_type().name()));
++			} else {
++				status.append("   Enhancer Status: NOT CONFIGURED ✗\n");
++				status.append("   Issue: RpcClient.enhancer is null\n");
++			}
++
++			// Protocol validation tests
++			status.append("\n4. Protocol Validation Tests:\n");
++			test_protocol_validation(status);
++
++			// Recommendations
++			status.append("\n5. Recommendations:\n");
++			generate_recommendations(status, rpc_mode, global_mode);
++
++			return status.str;
++		}
++
++		/**
++		 * Test protocol validation logic
++		 * 测试协议验证逻辑
++		 */
++		private static void test_protocol_validation(StringBuilder status) {
++			string[] test_protocols = {
++				"frida:rpc",
++				"sys:rpc",
++				"android:msg",
++				"linux:ipc",
++				"invalid:test"
++			};
++
++			foreach (string protocol in test_protocols) {
++				bool is_valid = FridMiraRpcProtocolEnhancer.is_valid_protocol(protocol);
++				status.append("   Protocol '%s': %s\n".printf(protocol, is_valid ? "VALID ✓" : "INVALID ✗"));
++			}
++
++			string[] test_responses = {
++				"ok",
++				"ack",
++				"done",
++				"complete",
++				"invalid"
++			};
++
++			foreach (string response in test_responses) {
++				bool is_valid = FridMiraRpcProtocolEnhancer.is_valid_ok_response(response);
++				status.append("   Response '%s': %s\n".printf(response, is_valid ? "VALID ✓" : "INVALID ✗"));
++			}
++		}
++
++		/**
++		 * Generate recommendations based on current configuration
++		 * 根据当前配置生成建议
++		 */
++		private static void generate_recommendations(StringBuilder status, string? rpc_mode, string? global_mode) {
++			if (rpc_mode == null && global_mode == null) {
++				status.append("   • Set FRIDMIRA_MODE=1 or FRIDMIRA_RPC_MODE=1 to enable RPC enhancement\n");
++			}
++
++			if (!FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++				status.append("   • RPC enhancement is disabled - protocols will use standard 'frida:rpc'\n");
++			}
++
++			if (RpcClient.enhancer == null) {
++				status.append("   • CRITICAL: RpcClient.enhancer is not set - call Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter()\n");
++			}
++
++			status.append("   • Ensure frida-server is built with matching FridMira patches\n");
++			status.append("   • Use protocol discovery to verify client-server compatibility\n");
++		}
++
++		/**
++		 * Test RPC message parsing
++		 * 测试RPC消息解析
++		 */
++		public static bool test_message_parsing(string test_json) {
++			var adapter = new FridMiraRpcEnhancerAdapter();
++
++			// Mock peer for testing
++			RpcPeer? mock_peer = null; // In real implementation, would need a proper mock
++
++			try {
++				return adapter.try_handle_message(test_json, mock_peer);
++			} catch (Error e) {
++				warning("Message parsing test failed: %s", e.message);
++				return false;
++			}
++		}
++
++		/**
++		 * Generate test RPC messages for debugging
++		 * 生成用于调试的测试RPC消息
++		 */
++		public static string generate_test_discovery_message() {
++			var discovery_request = new Json.Builder ();
++			discovery_request
++				.begin_array ()
++				.add_string_value ("fridmira:discover")
++				.add_string_value ("test-request-id-123")
++				.add_string_value ("get_protocol_info")
++				.end_array ();
++
++			var full_request = new Json.Builder ();
++			full_request
++				.begin_object ()
++				.set_member_name ("type")
++				.add_string_value ("send")
++				.set_member_name ("payload")
++				.add_value (discovery_request.get_root ())
++				.end_object ();
++
++			return Json.to_string (full_request.get_root (), false);
++		}
++
++		/**
++		 * Generate test RPC call message
++		 * 生成测试RPC调用消息
++		 */
++		public static string generate_test_call_message(string? session_id = null) {
++			string protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(session_id);
++			string call_command = FridMiraRpcProtocolEnhancer.get_call_command(session_id);
++
++			var request = new Json.Builder ();
++			request
++				.begin_array ()
++				.add_string_value (protocol_id)
++				.add_string_value ("test-call-id-456")
++				.add_string_value (call_command)
++				.add_string_value ("test_method")
++				.begin_array ()
++				.end_array ()
++				.end_array ();
++
++			var full_request = new Json.Builder ();
++			full_request
++				.begin_object ()
++				.set_member_name ("type")
++				.add_string_value ("send")
++				.set_member_name ("payload")
++				.add_value (request.get_root ())
++				.end_object ();
++
++			return Json.to_string (full_request.get_root (), false);
 +		}
 +	}
 +}
