@@ -1,17 +1,17 @@
-From 753357b870a6b3d39063879bf37509c2ea25dfbe Mon Sep 17 00:00:00 2001
+From 41d58c7bf1f9286616a050ccad38eb48cd52341f Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 263 +++++++++++
- lib/mira/fridmira-file.vala   | 275 ++++++++++++
- lib/mira/fridmira-memory.vala | 226 ++++++++++
- lib/mira/fridmira-rpc.vala    | 822 ++++++++++++++++++++++++++++++++++
- lib/mira/fridmira-symbol.vala | 212 +++++++++
- lib/mira/fridmira-thread.vala | 167 +++++++
- lib/mira/fridmira.vala        | 340 ++++++++++++++
- 7 files changed, 2305 insertions(+)
+ lib/mira/fridmira-agent.vala  | 263 ++++++++++
+ lib/mira/fridmira-file.vala   | 275 ++++++++++
+ lib/mira/fridmira-memory.vala | 226 +++++++++
+ lib/mira/fridmira-rpc.vala    | 924 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-symbol.vala | 212 ++++++++
+ lib/mira/fridmira-thread.vala | 167 ++++++
+ lib/mira/fridmira.vala        | 340 +++++++++++++
+ 7 files changed, 2407 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..d2947ce8
+index 00000000..0b07f2e7
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,822 @@
+@@ -0,0 +1,924 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -895,10 +895,35 @@ index 00000000..d2947ce8
 +		 *
 +		 * Enhanced with better error handling and protocol validation.
 +		 * 增强了错误处理和协议验证。
++		 *
++		 * NEW: Protocol Hijacking Compatibility Feature
++		 * 新功能：协议劫持兼容特性
++		 *
++		 * When standard frida:rpc messages are detected, automatically convert them
++		 * to fridmira:discover responses to enable backward compatibility.
++		 * 当检测到标准frida:rpc消息时，自动转换为fridmira:discover响应以实现向后兼容。
 +		 */
 +		public bool try_handle_message (string json, RpcPeer peer) {
-+			if (json.index_of ("\"fridmira:discover\"") == -1)
-+				return false;
++			// First check for explicit FridMira discovery messages
++			// 首先检查明确的FridMira发现消息
++			if (json.index_of ("\"fridmira:discover\"") != -1) {
++				return handle_fridmira_discovery_message (json, peer);
++			}
++
++			// NEW: Protocol Hijacking - Check for standard frida:rpc messages
++			// 新功能：协议劫持 - 检查标准frida:rpc消息
++			if (json.index_of ("\"frida:rpc\"") != -1) {
++				return handle_standard_rpc_hijacking (json, peer);
++			}
++
++			return false;
++		}
++
++		/**
++		 * Handle explicit FridMira discovery messages
++		 * 处理明确的FridMira发现消息
++		 */
++		private bool handle_fridmira_discovery_message (string json, RpcPeer peer) {
 +
 +			var parser = new Json.Parser ();
 +			try {
@@ -950,10 +975,66 @@ index 00000000..d2947ce8
 +		}
 +
 +		/**
-+		 * Handle protocol discovery request from client
-+		 * 处理来自客户端的协议发现请求
++		 * NEW: Handle Standard RPC Hijacking
++		 * 新功能：处理标准RPC劫持
++		 *
++		 * When standard frida:rpc messages are received, convert them to protocol discovery responses.
++		 * This enables backward compatibility with standard Frida clients.
++		 * 当收到标准frida:rpc消息时，将其转换为协议发现响应。
++		 * 这实现了与标准Frida客户端的向后兼容性。
 +		 */
-+		private bool handle_discovery_request (string request_id, RpcPeer peer) {
++		private bool handle_standard_rpc_hijacking (string json, RpcPeer peer) {
++			var parser = new Json.Parser ();
++			try {
++				parser.load_from_data (json);
++			} catch (GLib.Error e) {
++				warning ("FridMira: Failed to parse standard RPC message: %s", e.message);
++				return false;
++			}
++
++			var message_node = parser.get_root ();
++			if (message_node.get_node_type () != Json.NodeType.OBJECT)
++				return false;
++			var message = message_node.get_object ();
++
++			var type = message.get_string_member ("type");
++			if (type != "send")
++				return false;
++
++			var payload = message.get_member ("payload");
++			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
++				return false;
++
++			var rpc_message = payload.get_array ();
++			if (rpc_message.get_length () < 3)
++				return false;
++
++			// Check if this is a standard frida:rpc message
++			// 检查这是否是标准frida:rpc消息
++			string? protocol_type = rpc_message.get_element (0).get_string ();
++			if (protocol_type != "frida:rpc")
++				return false;
++
++			string? request_id = rpc_message.get_element (1).get_string ();
++			string? command = rpc_message.get_element (2).get_string ();
++
++			if (request_id == null || command == null) {
++				warning ("FridMira: Invalid standard RPC message format");
++				return false;
++			}
++
++			// Hijack the standard RPC call and respond with protocol discovery info
++			// 劫持标准RPC调用并响应协议发现信息
++			warning ("FridMira: Hijacking standard RPC call [%s] -> converting to protocol discovery", command);
++
++			return send_protocol_discovery_response (request_id, peer, true);
++		}
++
++		/**
++		 * Send protocol discovery response (shared by both discovery and hijacking)
++		 * 发送协议发现响应（发现和劫持共用）
++		 */
++		private bool send_protocol_discovery_response (string request_id, RpcPeer peer, bool is_hijacked = false) {
 +			try {
 +				// Check if enhanced mode is enabled
 +				// 检查是否启用了增强模式
@@ -973,6 +1054,14 @@ index 00000000..d2947ce8
 +						Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
 +					.set_member_name ("enhanced_mode")
 +					.add_boolean_value (enhanced_enabled)
++					.set_member_name ("hijacked")
++					.add_boolean_value (is_hijacked)
++					.set_member_name ("compatibility_mode")
++					.add_boolean_value (is_hijacked)
++					.set_member_name ("message")
++					.add_string_value (is_hijacked ?
++						"Standard frida:rpc call hijacked - FridMira protocol available" :
++						"FridMira protocol discovery successful")
 +					.end_object ();
 +
 +				var response_message = new Json.Builder ();
@@ -994,11 +1083,24 @@ index 00000000..d2947ce8
 +					.end_object ();
 +
 +				peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
++
++				if (is_hijacked) {
++					warning ("FridMira: Protocol hijacking response sent to standard client");
++				}
++
 +				return true;
 +			} catch (Error e) {
-+				warning ("FridMira: Failed to send discovery response: %s", e.message);
++				warning ("FridMira: Failed to send protocol discovery response: %s", e.message);
 +				return false;
 +			}
++		}
++
++		/**
++		 * Handle protocol discovery request from client
++		 * 处理来自客户端的协议发现请求
++		 */
++		private bool handle_discovery_request (string request_id, RpcPeer peer) {
++			return send_protocol_discovery_response (request_id, peer, false);
 +		}
 +
 +		/**

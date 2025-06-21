@@ -1,14 +1,14 @@
-From 89729204e136940a1c96430ceb9a6e7294e98447 Mon Sep 17 00:00:00 2001
+From 5e90a259b55c4a905157a83a0feee7eef17bc589 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 129 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 120 insertions(+), 9 deletions(-)
+ src/control-service.vala | 116 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 107 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..2b07e521 100644
+index cc64470f..5063a0b3 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..2b07e521 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,79 @@ namespace Frida {
+@@ -117,17 +129,66 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -76,41 +76,28 @@ index cc64470f..2b07e521 100644
 +						}
 +					}
 +
-+					// Post-preload initialization of the main framework
-+					// Preload后主框架的初始化
++					// Post-preload framework status validation
++					// Preload后框架状态验证
 +					if (verbose_enabled) {
-+						stdout.printf ("FridMira: Initializing main framework after preload...\n");
++						stdout.printf ("FridMira: Validating framework status after preload...\n");
 +					}
-+					Frida.FridMira.initialize_fridmira_framework (verbose_enabled);
++					// Framework already initialized in server.vala before preload
++					// 框架已在server.vala中preload之前初始化完成
 +
-+					// Preload后详细框架状态报告
++					// Post-preload comprehensive status report
++					// Preload后综合状态报告
 +					if (verbose_enabled) {
 +						stdout.printf ("FridMira: ==========================================\n");
-+						stdout.printf ("FridMira: Framework Status Report\n");
++						stdout.printf ("FridMira: Post-Preload Status Report\n");
 +						stdout.printf ("FridMira: ==========================================\n");
 +
-+						// Show brief module status overview
-+						// 显示简要的模块状态概览
-+						stdout.printf ("FridMira: Preload Protection Status:\n");
-+						stdout.printf ("FridMira:   Symbol Obfuscation: %s\n", !options.fridmira_no_symbol ? "ACTIVE" : "DISABLED");
-+						stdout.printf ("FridMira:   Thread Obfuscation: %s\n", !options.fridmira_no_thread ? "ACTIVE" : "DISABLED");
-+						stdout.printf ("FridMira:   RPC Protocol Enhancement: %s\n", !options.fridmira_no_rpc ? "ACTIVE" : "DISABLED");
-+						stdout.printf ("FridMira:   File System Obfuscation: %s\n", !options.fridmira_no_file ? "ACTIVE" : "DISABLED");
-+						stdout.printf ("FridMira:   Memory Obfuscation: %s\n", !options.fridmira_no_gum ? "ACTIVE" : "DISABLED");
++						// Use centralized framework status from FridMira core
++						// 使用FridMira核心的集中化框架状态
++						string framework_status = Frida.FridMira.get_framework_status();
++						stdout.printf ("%s\n", framework_status);
 +
-+						// Agent模块状态
-+						stdout.printf ("FridMira: [✗] Agent Library Management Module - DISABLED\n");
-+
-+						// 未来模块占位符
-+						stdout.printf ("FridMira: [⏳] Network Protocol Obfuscation Module - PENDING\n");
-+						stdout.printf ("FridMira:     Status: Development planned for v1.1\n");
-+						stdout.printf ("FridMira: [⏳] Process Name Obfuscation Module - PENDING\n");
-+						stdout.printf ("FridMira:     Status: Research phase\n");
-+						stdout.printf ("FridMira: [⏳] Dynamic Library Loading Obfuscation - PENDING\n");
-+						stdout.printf ("FridMira:     Status: Design phase\n");
-+
-+						stdout.printf ("FridMira: ------------------------------------------\n");
-+						stdout.printf ("FridMira: ✅ All enabled modules operational\n");
++						stdout.printf ("FridMira: ==========================================\n");
++						stdout.printf ("FridMira: ✅ All protection systems operational\n");
 +						stdout.printf ("FridMira: ==========================================\n");
 +					}
 +				} else {
@@ -125,7 +112,7 @@ index cc64470f..2b07e521 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1216,42 @@ namespace Frida {
+@@ -1142,5 +1203,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
