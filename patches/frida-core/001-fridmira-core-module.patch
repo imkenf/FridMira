@@ -1,17 +1,17 @@
-From 5f8924a462ad0718975b1e7df62875db2be894f6 Mon Sep 17 00:00:00 2001
+From 9c2fb8e7db9fe25d03ef301a87061cd555f85c3b Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 264 +++++++++++++++++++++
+ lib/mira/fridmira-agent.vala  | 277 ++++++++++++++++++++++
  lib/mira/fridmira-file.vala   | 275 ++++++++++++++++++++++
  lib/mira/fridmira-memory.vala | 226 ++++++++++++++++++
  lib/mira/fridmira-rpc.vala    | 432 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++++++++
  lib/mira/fridmira.vala        | 340 ++++++++++++++++++++++++++
- 7 files changed, 1916 insertions(+)
+ 7 files changed, 1929 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -22,10 +22,10 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 diff --git a/lib/mira/fridmira-agent.vala b/lib/mira/fridmira-agent.vala
 new file mode 100644
-index 00000000..7f6f60d0
+index 00000000..b5f7d397
 --- /dev/null
 +++ b/lib/mira/fridmira-agent.vala
-@@ -0,0 +1,264 @@
+@@ -0,0 +1,277 @@
 +/**
 + * FridMira: Agent Library Management Module
 + * FridMira: Agent库管理模块
@@ -153,7 +153,11 @@ index 00000000..7f6f60d0
 +				File source = File.new_for_path(original_agent_path);
 +				File dest = File.new_for_path(obfuscated_path);
 +
-+				source.copy(dest, FileCopyFlags.OVERWRITE);
++				try {
++					source.copy(dest, FileCopyFlags.OVERWRITE);
++				} catch (Error copy_error) {
++					throw new Error.FAILED("Failed to copy agent library: %s", copy_error.message);
++				}
 +
 +				cached_agent_path = obfuscated_path;
 +
@@ -194,7 +198,12 @@ index 00000000..7f6f60d0
 +				try {
 +					File temp_dir = File.new_for_path(temp_path);
 +					if (!temp_dir.query_exists()) {
-+						temp_dir.make_directory_with_parents();
++						try {
++							temp_dir.make_directory_with_parents();
++						} catch (Error dir_error) {
++							stderr.printf("FridMira: Failed to create temp directory: %s\n", dir_error.message);
++							throw dir_error;
++						}
 +					}
 +					cached_temp_directory = temp_path;
 +					return temp_path;
@@ -239,11 +248,15 @@ index 00000000..7f6f60d0
 +				try {
 +					File agent_file = File.new_for_path(cached_agent_path);
 +					if (agent_file.query_exists()) {
-+						agent_file.delete();
-+
-+						if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
-+							stdout.printf("FridMira: Cleaned up obfuscated agent: %s\n",
-+							             Path.get_basename(cached_agent_path));
++						try {
++							agent_file.delete();
++							if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++								stdout.printf("FridMira: Cleaned up obfuscated agent: %s\n",
++								             Path.get_basename(cached_agent_path));
++							}
++						} catch (Error delete_error) {
++							stderr.printf("FridMira: Failed to delete agent file: %s\n", delete_error.message);
++							throw delete_error;
 +						}
 +					}
 +				} catch (Error e) {
@@ -1634,7 +1647,7 @@ index 00000000..71f0a4a9
 +}
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 00000000..6b9b46bc
+index 00000000..06e55947
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
 @@ -0,0 +1,340 @@
@@ -1711,7 +1724,7 @@ index 00000000..6b9b46bc
 +
 +			// Prepare obfuscated temporary directory name
 +			// 准备混淆的临时目录名
-+			string obfuscated_temp_name = FridMiraFileSystemObfuscator.generate_temp_dir_name();
++			string obfuscated_temp_name = FridMiraFileSystemObfuscator.generate_temp_directory_name();
 +			GLib.Environment.set_variable("FRIDMIRA_TEMP_DIR_NAME", obfuscated_temp_name, true);
 +
 +			_bootstrap_initialized = true;
