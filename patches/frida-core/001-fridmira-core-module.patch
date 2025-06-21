@@ -1,17 +1,17 @@
-From dc4b3d67c710fcf14adaefa24093bad27f2eed71 Mon Sep 17 00:00:00 2001
+From fab7033f0036201a6a7ae9b9112adff220638ee7 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
  lib/mira/fridmira-agent.vala  | 263 ++++++++++
- lib/mira/fridmira-file.vala   | 275 +++++++++++
+ lib/mira/fridmira-file.vala   | 275 ++++++++++
  lib/mira/fridmira-memory.vala | 226 +++++++++
- lib/mira/fridmira-rpc.vala    | 883 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 909 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 ++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++
  lib/mira/fridmira.vala        | 340 +++++++++++++
- 7 files changed, 2366 insertions(+)
+ 7 files changed, 2392 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..b111d663
+index 00000000..ce5fdd05
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,883 @@
+@@ -0,0 +1,909 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -999,55 +999,81 @@ index 00000000..b111d663
 +				// 检查是否启用了增强模式
 +				bool enhanced_enabled = Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled ();
 +
-+				var response_payload = new Json.Builder ();
-+				response_payload
-+					.begin_object ()
-+					.set_member_name ("protocol_id")
-+					.add_string_value (enhanced_enabled ?
-+						Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc")
-+					.set_member_name ("call_command")
-+					.add_string_value (enhanced_enabled ?
-+						Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call")
-+					.set_member_name ("ok_response")
-+					.add_string_value (enhanced_enabled ?
-+						Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
-+					.set_member_name ("enhanced_mode")
-+					.add_boolean_value (enhanced_enabled)
-+					.set_member_name ("hijacked")
-+					.add_boolean_value (is_hijacked)
-+					.set_member_name ("compatibility_mode")
-+					.add_boolean_value (is_hijacked)
-+					.set_member_name ("message")
-+					.add_string_value (is_hijacked ?
-+						"Standard frida:rpc call hijacked - FridMira protocol available" :
-+						"FridMira protocol discovery successful")
-+					.end_object ();
-+
-+				var response_message = new Json.Builder ();
-+				response_message
-+					.begin_array ()
-+					.add_string_value ("fridmira:discover")
-+					.add_string_value (request_id)
-+					.add_string_value ("ok")
-+					.add_value (response_payload.get_root ())
-+					.end_array ();
-+
-+				var full_response = new Json.Builder ();
-+				full_response
-+					.begin_object ()
-+					.set_member_name ("type")
-+					.add_string_value ("send")
-+					.set_member_name ("payload")
-+					.add_value (response_message.get_root ())
-+					.end_object ();
-+
-+				peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
-+
 +				if (is_hijacked) {
-+					warning ("FridMira: Protocol hijacking response sent to standard client");
-+				}
++					// For hijacked standard RPC calls, send a standard error response that includes protocol info
++					// 对于被劫持的标准RPC调用，发送包含协议信息的标准错误响应
++					var protocol_info = "FridMira-Server-Active|protocol_id=%s|call_command=%s|ok_response=%s|enhanced_mode=%s".printf(
++						enhanced_enabled ? Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc",
++						enhanced_enabled ? Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call",
++						enhanced_enabled ? Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok",
++						enhanced_enabled ? "true" : "false"
++					);
 +
-+				return true;
++					var error_response = new Json.Builder ();
++					error_response
++						.begin_array ()
++						.add_string_value ("frida:rpc")  // Use standard protocol for compatibility
++						.add_string_value (request_id)
++						.add_string_value ("error")
++						.add_string_value (protocol_info)
++						.end_array ();
++
++					var full_response = new Json.Builder ();
++					full_response
++						.begin_object ()
++						.set_member_name ("type")
++						.add_string_value ("send")
++						.set_member_name ("payload")
++						.add_value (error_response.get_root ())
++						.end_object ();
++
++					peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
++					warning ("FridMira: Protocol hijacking response sent as standard error with protocol info");
++					return true;
++				} else {
++					// For explicit discovery requests, use the fridmira:discover protocol
++					// 对于明确的发现请求，使用fridmira:discover协议
++					var response_payload = new Json.Builder ();
++					response_payload
++						.begin_object ()
++						.set_member_name ("protocol_id")
++						.add_string_value (enhanced_enabled ?
++							Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc")
++						.set_member_name ("call_command")
++						.add_string_value (enhanced_enabled ?
++							Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call")
++						.set_member_name ("ok_response")
++						.add_string_value (enhanced_enabled ?
++							Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
++						.set_member_name ("enhanced_mode")
++						.add_boolean_value (enhanced_enabled)
++						.set_member_name ("hijacked")
++						.add_boolean_value (false)
++						.set_member_name ("message")
++						.add_string_value ("FridMira protocol discovery successful")
++						.end_object ();
++
++					var response_message = new Json.Builder ();
++					response_message
++						.begin_array ()
++						.add_string_value ("fridmira:discover")
++						.add_string_value (request_id)
++						.add_string_value ("ok")
++						.add_value (response_payload.get_root ())
++						.end_array ();
++
++					var full_response = new Json.Builder ();
++					full_response
++						.begin_object ()
++						.set_member_name ("type")
++						.add_string_value ("send")
++						.set_member_name ("payload")
++						.add_value (response_message.get_root ())
++						.end_object ();
++
++					peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
++					return true;
++				}
 +			} catch (Error e) {
 +				warning ("FridMira: Failed to send protocol discovery response: %s", e.message);
 +				return false;
