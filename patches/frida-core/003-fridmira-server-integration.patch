@@ -1,14 +1,14 @@
-From 821e1b8a3599412d0cf4cf0c8f2a7f0e6311d39a Mon Sep 17 00:00:00 2001
+From 42f5d311abc1a2029b86762999036326e01bbe91 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:02:38 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 416 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 389 insertions(+), 27 deletions(-)
+ server/server.vala | 424 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 397 insertions(+), 27 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b38..8902b97a 100644
+index 67bf4b38..2555ce5f 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -225,7 +225,7 @@ index 67bf4b38..8902b97a 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +335,117 @@ namespace Frida.Server {
+@@ -192,23 +335,125 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
@@ -274,6 +274,14 @@ index 67bf4b38..8902b97a 100644
 +				// STEP 2: Set environment variables for individual modules
 +				// 步骤2：为各个模块设置环境变量
 +				GLib.Environment.set_variable ("FRIDMIRA_MODE", "1", true);
++
++				// Set verbose mode if requested by -v parameter
++				// 如果通过-v参数请求，设置详细模式
++				if (verbose) {
++					GLib.Environment.set_variable ("FRIDMIRA_VERBOSE", "1", true);
++					GLib.Environment.set_variable ("FRIDA_VERBOSE", "1", true);
++				}
++
 +				GLib.Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", options.fridmira_no_symbol ? "0" : "1", true);
 +				GLib.Environment.set_variable ("FRIDMIRA_THREAD_MODE", options.fridmira_no_thread ? "0" : "1", true);
 +				GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", options.fridmira_no_rpc ? "0" : "1", true);
@@ -282,7 +290,7 @@ index 67bf4b38..8902b97a 100644
 +
 +				// STEP 3: Initialize main FridMira framework (full protection)
 +				// 步骤3：初始化主FridMira框架（完整加载混淆）
-+				Frida.FridMira.initialize_fridmira_framework ();
++				Frida.FridMira.initialize_fridmira_framework (verbose);
 +
 +				if (verbose) {
 +					stdout.printf ("FridMira: ✅ Bootstrap completed - preload protection active\n");
@@ -354,7 +362,7 @@ index 67bf4b38..8902b97a 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +454,64 @@ namespace Frida.Server {
+@@ -217,9 +462,64 @@ namespace Frida.Server {
  			});
  		}
  
@@ -419,7 +427,7 @@ index 67bf4b38..8902b97a 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +576,67 @@ namespace Frida.Server {
+@@ -284,22 +584,67 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -496,7 +504,7 @@ index 67bf4b38..8902b97a 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +645,19 @@ namespace Frida.Server {
+@@ -308,12 +653,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -516,7 +524,7 @@ index 67bf4b38..8902b97a 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,32 +665,48 @@ namespace Frida.Server {
+@@ -321,32 +673,48 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -566,7 +574,7 @@ index 67bf4b38..8902b97a 100644
  			stop ();
  		}
  	}
-@@ -357,4 +717,6 @@ namespace Frida.Server {
+@@ -357,4 +725,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}

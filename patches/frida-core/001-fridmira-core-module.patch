@@ -1,4 +1,4 @@
-From c46afd216d428198dce8e45c6190eea134c2ee05 Mon Sep 17 00:00:00 2001
+From 4ca9e3d924f7f341927ca313e49da53baaa2a03e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -7,11 +7,11 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-agent.vala  | 263 +++++++++++
  lib/mira/fridmira-file.vala   | 275 ++++++++++++
  lib/mira/fridmira-memory.vala | 226 ++++++++++
- lib/mira/fridmira-rpc.vala    | 805 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 815 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++
  lib/mira/fridmira.vala        | 340 ++++++++++++++
- 7 files changed, 2288 insertions(+)
+ 7 files changed, 2298 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..22deedb3
+index 00000000..d7bb0b74
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,805 @@
+@@ -0,0 +1,815 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -843,19 +843,29 @@ index 00000000..22deedb3
 +		private string? negotiated_session_id = null;
 +
 +		public string get_protocol_id (string? session_id) {
-+			// Verify that the protocol enhancer is properly initialized
-+			// 验证协议增强器是否已正确初始化
++			// Return standard protocol if enhanced mode is disabled
++			// 如果增强模式被禁用，返回标准协议
 +			if (!Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
-+				warning ("FridMira: RPC protocol enhancer accessed before initialization or while disabled");
++				return "frida:rpc";
 +			}
 +			return Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (session_id);
 +		}
 +
 +		public string get_call_command (string? session_id) {
++			// Return standard command if enhanced mode is disabled
++			// 如果增强模式被禁用，返回标准命令
++			if (!Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++				return "call";
++			}
 +			return Frida.FridMiraRpcProtocolEnhancer.get_call_command (session_id);
 +		}
 +
 +		public string get_ok_response (string? session_id) {
++			// Return standard response if enhanced mode is disabled
++			// 如果增强模式被禁用，返回标准响应
++			if (!Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++				return "ok";
++			}
 +			return Frida.FridMiraRpcProtocolEnhancer.get_ok_response (session_id);
 +		}
 +
