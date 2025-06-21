@@ -1,17 +1,17 @@
-From 5eeda0e3570e159b22040ece8e17f08a058e3f9a Mon Sep 17 00:00:00 2001
+From 8d19c3d83252286461c85147a18194588db9532b Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 263 +++++++++++
+ lib/mira/fridmira-agent.vala  | 267 +++++++++++
  lib/mira/fridmira-file.vala   | 275 ++++++++++++
  lib/mira/fridmira-memory.vala | 226 ++++++++++
  lib/mira/fridmira-rpc.vala    | 805 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++
  lib/mira/fridmira.vala        | 340 ++++++++++++++
- 7 files changed, 2288 insertions(+)
+ 7 files changed, 2292 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -22,10 +22,10 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 diff --git a/lib/mira/fridmira-agent.vala b/lib/mira/fridmira-agent.vala
 new file mode 100644
-index 00000000..a2567bbe
+index 00000000..a6c5d980
 --- /dev/null
 +++ b/lib/mira/fridmira-agent.vala
-@@ -0,0 +1,263 @@
+@@ -0,0 +1,267 @@
 +/**
 + * FridMira: Agent Library Management Module
 + * FridMira: Agent库管理模块
@@ -239,10 +239,14 @@ index 00000000..a2567bbe
 +				try {
 +					File agent_file = File.new_for_path(cached_agent_path);
 +					if (agent_file.query_exists()) {
-+						agent_file.delete();
-+						if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
-+							stdout.printf("FridMira: Cleaned up obfuscated agent: %s\n",
-+							             Path.get_basename(cached_agent_path));
++						try {
++							agent_file.delete();
++							if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++								stdout.printf("FridMira: Cleaned up obfuscated agent: %s\n",
++								             Path.get_basename(cached_agent_path));
++							}
++						} catch (Error delete_error) {
++							stderr.printf("FridMira: Failed to delete agent file: %s\n", delete_error.message);
 +						}
 +					}
 +				} catch (Error e) {
