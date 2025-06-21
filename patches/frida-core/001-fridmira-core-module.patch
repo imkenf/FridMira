@@ -1,4 +1,4 @@
-From 4ca9e3d924f7f341927ca313e49da53baaa2a03e Mon Sep 17 00:00:00 2001
+From 753357b870a6b3d39063879bf37509c2ea25dfbe Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -7,11 +7,11 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-agent.vala  | 263 +++++++++++
  lib/mira/fridmira-file.vala   | 275 ++++++++++++
  lib/mira/fridmira-memory.vala | 226 ++++++++++
- lib/mira/fridmira-rpc.vala    | 815 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 822 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++
  lib/mira/fridmira.vala        | 340 ++++++++++++++
- 7 files changed, 2298 insertions(+)
+ 7 files changed, 2305 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..d7bb0b74
+index 00000000..d2947ce8
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,815 @@
+@@ -0,0 +1,822 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -955,17 +955,24 @@ index 00000000..d7bb0b74
 +		 */
 +		private bool handle_discovery_request (string request_id, RpcPeer peer) {
 +			try {
++				// Check if enhanced mode is enabled
++				// 检查是否启用了增强模式
++				bool enhanced_enabled = Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled ();
++
 +				var response_payload = new Json.Builder ();
 +				response_payload
 +					.begin_object ()
 +					.set_member_name ("protocol_id")
-+					.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null))
++					.add_string_value (enhanced_enabled ?
++						Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc")
 +					.set_member_name ("call_command")
-+					.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_call_command (null))
++					.add_string_value (enhanced_enabled ?
++						Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call")
 +					.set_member_name ("ok_response")
-+					.add_string_value (Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null))
++					.add_string_value (enhanced_enabled ?
++						Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
 +					.set_member_name ("enhanced_mode")
-+					.add_boolean_value (Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled ())
++					.add_boolean_value (enhanced_enabled)
 +					.end_object ();
 +
 +				var response_message = new Json.Builder ();
@@ -2016,7 +2023,7 @@ index 00000000..71f0a4a9
 +}
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 00000000..06e55947
+index 00000000..ce85eed8
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
 @@ -0,0 +1,340 @@
@@ -2118,7 +2125,7 @@ index 00000000..06e55947
 +		 * after preload completion to implement the "post-preload initialization"
 +		 * strategy.
 +		 *
-+		 * 此函数设计为在preload完成后从control-service.vala调用，
++		 * 此函数设计为在Preload完成后从control-service.vala调用，
 +		 * 以实现"预加载后初始化"策略。
 +		 *
 +		 * @internal This function is for internal FridMira use only and should

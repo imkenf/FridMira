@@ -1,17 +1,17 @@
-From 2d32c21563aeff4e560eea55ec707bd4c12c016c Mon Sep 17 00:00:00 2001
+From 3e82ba0aa6a9ee9df654d50eb45ba1a0f01205b0 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 284 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 278 insertions(+), 6 deletions(-)
+ lib/base/rpc.vala | 303 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 297 insertions(+), 6 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index c4654527..c339c437 100644
+index c4654527..b7f5f552 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
-@@ -1,25 +1,220 @@
+@@ -1,25 +1,238 @@
 +/*
 + * FRIDMIRA ENHANCED RPC MODULE / FRIDMIRA增强RPC模块
 + *
@@ -186,20 +186,38 @@ index c4654527..c339c437 100644
 +		 * @throws IOError IO operation errors / IO操作错误
 +		 */
  		public async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable) throws Error, IOError {
-+			// Try enhanced protocol first, then fallback to standard if needed
-+			// 首先尝试增强协议，如果需要则回退到标准协议
++			// Protocol Discovery First - Use discovery mechanism to determine correct protocol
++			// 协议发现优先 - 使用发现机制确定正确的协议
 +			if (enhancer != null) {
 +				try {
-+					return yield call_with_protocol (method, args, data, cancellable, true);
-+				} catch (Error e) {
-+					// Enhanced protocol failed, try standard protocol as fallback
-+					// 增强协议失败，尝试标准协议作为回退
-+					warning ("FridMira: Enhanced protocol failed (%s), falling back to standard protocol", e.message);
++					// First attempt: Use protocol discovery to determine server capabilities
++					// 第一次尝试：使用协议发现确定服务器能力
++					var discovery_result = yield enhancer.discover_protocol (peer, cancellable);
++
++					// Parse discovery result to determine if enhanced protocol is supported
++					// 解析发现结果确定是否支持增强协议
++					bool use_enhanced = false;
++					if (discovery_result.get_node_type () == Json.NodeType.OBJECT) {
++						var obj = discovery_result.get_object ();
++						if (obj.has_member ("protocol_id")) {
++							string protocol_id = obj.get_string_member ("protocol_id");
++							use_enhanced = (protocol_id != "frida:rpc");
++						}
++					}
++
++					// Use discovered protocol
++					// 使用发现的协议
++					return yield call_with_protocol (method, args, data, cancellable, use_enhanced);
++
++				} catch (Error discovery_error) {
++					// Discovery failed, fall back to standard protocol
++					// 发现失败，回退到标准协议
++					warning ("FridMira: Protocol discovery failed (%s), using standard protocol", discovery_error.message);
 +					return yield call_with_protocol (method, args, data, cancellable, false);
 +				}
 +			} else {
-+				// No enhancer available, use standard protocol
-+				// 没有增强器可用，使用标准协议
++				// No enhancer available, use standard protocol directly
++				// 没有增强器可用，直接使用标准协议
 +				return yield call_with_protocol (method, args, data, cancellable, false);
 +			}
 +		}
@@ -234,7 +252,7 @@ index c4654527..c339c437 100644
  				.add_string_value (method)
  				.begin_array ();
  			foreach (var arg in args)
-@@ -33,7 +228,7 @@ namespace Frida {
+@@ -33,7 +246,7 @@ namespace Frida {
  
  			var pending = new PendingResponse (() => {
  				if (waiting)
@@ -243,7 +261,7 @@ index c4654527..c339c437 100644
  				return false;
  			});
  			pending_responses[request_id] = pending;
-@@ -43,9 +238,20 @@ namespace Frida {
+@@ -43,9 +256,21 @@ namespace Frida {
  			} catch (Error e) {
  				if (pending_responses.unset (request_id))
  					pending.complete_with_error (e);
@@ -251,9 +269,10 @@ index c4654527..c339c437 100644
  			}
  
  			if (!pending.completed) {
-+				// Set up timeout for protocol detection
-+				// 为协议检测设置超时
-+				uint timeout_id = Timeout.add (5000, () => {
++				// Set up timeout for protocol detection with longer timeout for internal operations
++				// 为协议检测设置超时，内部操作使用更长的超时时间
++				uint timeout_ms = use_enhanced ? 10000 : 15000; // Enhanced: 10s, Standard: 15s
++				uint timeout_id = Timeout.add (timeout_ms, () => {
 +					if (pending_responses.unset (request_id)) {
 +						var timeout_error = new IOError.TIMED_OUT ("RPC call timed out - protocol may be incompatible");
 +						pending.complete_with_error (timeout_error);
@@ -264,7 +283,7 @@ index c4654527..c339c437 100644
  				var cancel_source = new CancellableSource (cancellable);
  				cancel_source.set_callback (() => {
  					if (pending_responses.unset (request_id))
-@@ -58,6 +264,7 @@ namespace Frida {
+@@ -58,6 +283,7 @@ namespace Frida {
  				yield;
  				waiting = false;
  
@@ -272,7 +291,7 @@ index c4654527..c339c437 100644
  				cancel_source.destroy ();
  			}
  
-@@ -69,8 +276,41 @@ namespace Frida {
+@@ -69,8 +295,41 @@ namespace Frida {
  			return pending.result;
  		}
  
@@ -315,7 +334,7 @@ index c4654527..c339c437 100644
  				return false;
  
  			var parser = new Json.Parser ();
-@@ -90,6 +330,14 @@ namespace Frida {
+@@ -90,6 +349,14 @@ namespace Frida {
  			return handled;
  		}
  
@@ -330,7 +349,7 @@ index c4654527..c339c437 100644
  		private bool try_handle_rpc_message (Json.Object message) {
  			var payload = message.get_member ("payload");
  			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
-@@ -98,8 +346,24 @@ namespace Frida {
+@@ -98,8 +365,24 @@ namespace Frida {
  			if (rpc_message.get_length () < 4)
  				return false;
  
@@ -356,7 +375,7 @@ index c4654527..c339c437 100644
  				return false;
  
  			var request_id_value = rpc_message.get_element (1);
-@@ -111,8 +375,16 @@ namespace Frida {
+@@ -111,8 +394,16 @@ namespace Frida {
  			if (!pending_responses.unset (request_id, out response))
  				return false;
  
