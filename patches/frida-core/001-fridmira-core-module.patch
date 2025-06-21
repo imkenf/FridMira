@@ -1,4 +1,4 @@
-From c6f88cb5df9d9599898b99e3e48815152b2b3dc1 Mon Sep 17 00:00:00 2001
+From c46afd216d428198dce8e45c6190eea134c2ee05 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -804,7 +804,7 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..9d6d05ef
+index 00000000..22deedb3
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
 @@ -0,0 +1,805 @@
@@ -1032,7 +1032,7 @@ index 00000000..9d6d05ef
 +				}
 +			}
 +
-+			throw new Error.PROTOCOL_ERROR ("Protocol discovery failed after %d attempts", MAX_RETRIES);
++			throw new Error.PROTOCOL ("Protocol discovery failed after %d attempts", MAX_RETRIES);
 +		}
 +
 +		/**
