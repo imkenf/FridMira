@@ -1,4 +1,4 @@
-From 940bd6dab4ab1064c7dcd12e1a891c73aff41767 Mon Sep 17 00:00:00 2001
+From b7e477b1775ec379bbc1d0a72d6277221102e9a2 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -7,11 +7,11 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-agent.vala  |  263 ++++++++
  lib/mira/fridmira-file.vala   |  275 +++++++++
  lib/mira/fridmira-memory.vala |  226 +++++++
- lib/mira/fridmira-rpc.vala    | 1068 +++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 1070 +++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala |  212 +++++++
- lib/mira/fridmira-thread.vala |  167 ++++++
+ lib/mira/fridmira-thread.vala |  167 +++++
  lib/mira/fridmira.vala        |  340 +++++++++++
- 7 files changed, 2551 insertions(+)
+ 7 files changed, 2553 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..7deff218
+index 00000000..f8ab60d3
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,1068 @@
+@@ -0,0 +1,1070 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -1585,7 +1585,7 @@ index 00000000..7deff218
 +		private static uint32 generate_deterministic_seed() {
 +			// Use process ID as base for deterministic generation
 +			// 使用进程ID作为确定性生成的基础
-+			uint32 pid = (uint32) GLib.Process.get_id();
++			uint32 pid = (uint32) Posix.getpid();
 +
 +			// Add a fixed magic number to avoid predictable seeds
 +			// 添加固定魔数以避免可预测的种子
@@ -1718,8 +1718,10 @@ index 00000000..7deff218
 +			// Show deterministic seed information
 +			// 显示确定性种子信息
 +			if (FridMiraRpcProtocolEnhancer.is_deterministic_seed_initialized()) {
-+				status.append("   Deterministic Seed: 0x%08X (PID: %d)\n".printf(
-+					FridMiraRpcProtocolEnhancer.get_deterministic_seed(), (int) GLib.Process.get_id()));
++				uint32 seed = FridMiraRpcProtocolEnhancer.get_deterministic_seed();
++				// Extract PID from seed (seed = pid ^ 0x46524944)
++				uint32 extracted_pid = seed ^ 0x46524944;
++				status.append("   Deterministic Seed: 0x%08X (Derived PID: %u)\n".printf(seed, extracted_pid));
 +				status.append("   Seed Generation: ACTIVE (ensures consistent protocols)\n");
 +			} else {
 +				status.append("   Deterministic Seed: NOT INITIALIZED\n");
