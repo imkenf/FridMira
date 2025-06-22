@@ -1,4 +1,4 @@
-From dd66f4e2e08adb6312eb03da0531c526fa2f2443 Mon Sep 17 00:00:00 2001
+From aa2d407ea6737dd18f7a63ab478a0e33d577845c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -7,11 +7,11 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-agent.vala  |  263 ++++++++
  lib/mira/fridmira-file.vala   |  275 +++++++++
  lib/mira/fridmira-memory.vala |  226 +++++++
- lib/mira/fridmira-rpc.vala    | 1070 +++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 1074 +++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala |  212 +++++++
  lib/mira/fridmira-thread.vala |  167 +++++
  lib/mira/fridmira.vala        |  340 +++++++++++
- 7 files changed, 2553 insertions(+)
+ 7 files changed, 2557 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..021c2c05
+index 00000000..36bdc782
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,1070 @@
+@@ -0,0 +1,1074 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -1114,12 +1114,16 @@ index 00000000..021c2c05
 +		}
 +
 +		/**
-+		 * Enhanced protocol discovery with timeout and retry logic
-+		 * 带超时和重试逻辑的增强协议发现
++		 * Enhanced protocol discovery with optimized timeout
++		 * 带优化超时的增强协议发现
++		 *
++		 * Note: D-Bus layer provides immediate protocol discovery via error responses,
++		 * so we only need minimal timeout for edge cases.
++		 * 注意：D-Bus层通过错误响应提供立即的协议发现，所以我们只需要最小超时处理边缘情况。
 +		 */
 +		public async Json.Node discover_protocol (RpcPeer peer, Cancellable? cancellable) throws Error, IOError {
-+			const int MAX_RETRIES = 3;
-+			const int TIMEOUT_MS = 5000;
++			const int MAX_RETRIES = 1;  // Reduced from 3: D-Bus responds immediately
++			const int TIMEOUT_MS = 500;  // Reduced from 5000ms: D-Bus is fast
 +
 +			for (int retry = 0; retry < MAX_RETRIES; retry++) {
 +				try {
@@ -1131,8 +1135,8 @@ index 00000000..021c2c05
 +						throw e; // Re-throw on final retry
 +					}
 +					warning ("FridMira: Protocol discovery attempt %d failed: %s", retry + 1, e.message);
-+					// Wait before retry
-+					yield wait_async (1000);
++					// No retry delay needed - D-Bus responses are immediate
++					// 不需要重试延迟 - D-Bus响应是立即的
 +				}
 +			}
 +
