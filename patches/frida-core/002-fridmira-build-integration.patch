@@ -1,17 +1,17 @@
-From edae2a89f3f838ec5ec126587993121f96f1e195 Mon Sep 17 00:00:00 2001
+From 4966134bbda8831d2dff965753c089d3ee7794e6 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Thu, 19 Jun 2025 09:26:05 +0800
-Subject: [PATCH 002/005] Add FridMira framework to library build system
+Date: Fri, 20 Jun 2025 16:42:39 +0800
+Subject: [PATCH 002/006] Add FridMira framework to library build system
 
 ---
  lib/meson.build      |  1 +
- lib/mira/meson.build | 21 +++++++++++++++++++++
+ lib/mira/meson.build | 26 ++++++++++++++++++++++++++
  src/meson.build      |  4 ++--
- 3 files changed, 24 insertions(+), 2 deletions(-)
+ 3 files changed, 29 insertions(+), 2 deletions(-)
  create mode 100644 lib/mira/meson.build
 
 diff --git a/lib/meson.build b/lib/meson.build
-index 6c6e05b..c39d37f 100644
+index 6c6e05b6..c39d37f4 100644
 --- a/lib/meson.build
 +++ b/lib/meson.build
 @@ -2,6 +2,7 @@ if host_os == 'android'
@@ -24,10 +24,10 @@ index 6c6e05b..c39d37f 100644
  subdir('payload')
 diff --git a/lib/mira/meson.build b/lib/mira/meson.build
 new file mode 100644
-index 0000000..8270a91
+index 00000000..6502aaaf
 --- /dev/null
 +++ b/lib/mira/meson.build
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,26 @@
 +mira_sources = [
 +  'fridmira.vala',
 +  'fridmira-rpc.vala',
@@ -38,8 +38,13 @@ index 0000000..8270a91
 +  'fridmira-memory.vala',
 +]
 +
++extra_vala_args = []
++if host_os_family != 'windows'
++  extra_vala_args += ['--pkg=posix']
++endif
++
 +mira = static_library('frida-mira', mira_sources,
-+  vala_args: base_vala_args,
++  vala_args: [base_vala_args, extra_vala_args],
 +  c_args: frida_component_cflags,
 +  dependencies: [glib_dep, gobject_dep, gio_dep, gee_dep, json_glib_dep, gum_dep, base_dep],
 +  install: false,
@@ -50,7 +55,7 @@ index 0000000..8270a91
 +  include_directories: include_directories('.'),
 +)
 diff --git a/src/meson.build b/src/meson.build
-index 34a212a..f24d27b 100644
+index 34a212a9..f24d27b6 100644
 --- a/src/meson.build
 +++ b/src/meson.build
 @@ -586,8 +586,8 @@ subdir('compiler')

@@ -1,4 +1,4 @@
-From fe6bfdb8b922eee9e3495ca5b6c864f5a146432e Mon Sep 17 00:00:00 2001
+From dd66f4e2e08adb6312eb03da0531c526fa2f2443 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -804,7 +804,7 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..1c539915
+index 00000000..021c2c05
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
 @@ -0,0 +1,1070 @@
@@ -1585,7 +1585,7 @@ index 00000000..1c539915
 +		private static uint32 generate_deterministic_seed() {
 +			// Use process ID as base for deterministic generation
 +			// 使用进程ID作为确定性生成的基础
-+			uint32 pid = (uint32) GLib.Posix.getpid();
++			uint32 pid = (uint32) Posix.getpid();
 +
 +			// Add a fixed magic number to avoid predictable seeds
 +			// 添加固定魔数以避免可预测的种子
