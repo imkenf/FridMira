@@ -1,4 +1,4 @@
-From fab7033f0036201a6a7ae9b9112adff220638ee7 Mon Sep 17 00:00:00 2001
+From 71c670c538ac0bd550d543948e4b28f555172c2e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -7,11 +7,11 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-agent.vala  | 263 ++++++++++
  lib/mira/fridmira-file.vala   | 275 ++++++++++
  lib/mira/fridmira-memory.vala | 226 +++++++++
- lib/mira/fridmira-rpc.vala    | 909 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 931 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 ++++++++
- lib/mira/fridmira-thread.vala | 167 +++++++
+ lib/mira/fridmira-thread.vala | 167 ++++++
  lib/mira/fridmira.vala        | 340 +++++++++++++
- 7 files changed, 2392 insertions(+)
+ 7 files changed, 2414 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..ce5fdd05
+index 00000000..68fc457c
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,909 @@
+@@ -0,0 +1,931 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -1286,6 +1286,12 @@ index 00000000..ce5fdd05
 +		private static bool enhanced_mode_cached = false;
 +		private static bool enhanced_mode_checked = false;
 +
++		// Fixed protocol cache for consistent server behavior
++		// 固定协议缓存，确保服务器行为一致性
++		private static string? _fixed_protocol_id = null;
++		private static string? _fixed_call_command = null;
++		private static string? _fixed_ok_response = null;
++
 +		/**
 +		 * Initialize the RPC protocol enhancer
 +		 * 初始化RPC协议增强器
@@ -1300,6 +1306,13 @@ index 00000000..ce5fdd05
 +				session_protocols = new HashMap<string, string>();
 +				session_commands = new HashMap<string, string>();
 +				session_responses = new HashMap<string, string>();
++
++				// Initialize fixed protocol cache for server consistency
++				// 初始化固定协议缓存以确保服务器一致性
++				_fixed_protocol_id = generate_obfuscated_protocol();
++				_fixed_call_command = generate_obfuscated_command();
++				_fixed_ok_response = generate_obfuscated_response();
++
 +				initialized = true;
 +			} finally {
 +				init_mutex.unlock();
@@ -1351,7 +1364,9 @@ index 00000000..ce5fdd05
 +			ensure_initialized();
 +
 +			if (session_id == null) {
-+				return generate_obfuscated_protocol();
++				// Return fixed protocol ID for server consistency
++				// 返回固定协议ID以确保服务器一致性
++				return _fixed_protocol_id;
 +			}
 +
 +			if (!session_protocols.has_key(session_id)) {
@@ -1373,7 +1388,9 @@ index 00000000..ce5fdd05
 +			ensure_initialized();
 +
 +			if (session_id == null) {
-+				return generate_obfuscated_command();
++				// Return fixed call command for server consistency
++				// 返回固定调用命令以确保服务器一致性
++				return _fixed_call_command;
 +			}
 +
 +			if (!session_commands.has_key(session_id)) {
@@ -1395,7 +1412,9 @@ index 00000000..ce5fdd05
 +			ensure_initialized();
 +
 +			if (session_id == null) {
-+				return generate_obfuscated_response();
++				// Return fixed OK response for server consistency
++				// 返回固定OK响应以确保服务器一致性
++				return _fixed_ok_response;
 +			}
 +
 +			if (!session_responses.has_key(session_id)) {
@@ -1410,7 +1429,10 @@ index 00000000..ce5fdd05
 +		 * 获取动态协议ID
 +		 */
 +		public static string get_dynamic_protocol_id() {
-+			return generate_obfuscated_protocol();
++			ensure_initialized();
++			// Return the same fixed protocol ID for consistency
++			// 返回相同的固定协议ID以确保一致性
++			return _fixed_protocol_id;
 +		}
 +
 +		/**
