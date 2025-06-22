@@ -1,4 +1,4 @@
-From b7e477b1775ec379bbc1d0a72d6277221102e9a2 Mon Sep 17 00:00:00 2001
+From fe6bfdb8b922eee9e3495ca5b6c864f5a146432e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -804,7 +804,7 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..f8ab60d3
+index 00000000..1c539915
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
 @@ -0,0 +1,1070 @@
@@ -951,10 +951,10 @@ index 00000000..f8ab60d3
 +				}
 +				string? command = rpc_message.get_element (2).get_string ();
 +				if (command == null) {
-+					return false;
-+				}
++				return false;
++			}
 +
-+				if (command == "get_protocol_info") {
++			if (command == "get_protocol_info") {
 +					// Server-side: handle discovery request from client
 +					// 服务器端：处理来自客户端的发现请求
 +					return send_protocol_discovery_response (request_id, peer, false);
@@ -972,8 +972,8 @@ index 00000000..f8ab60d3
 +			if (received_protocol_id == current_protocol_id) {
 +				// This is a legitimate message with correct protocol, don't hijack
 +				// 这是使用正确协议的合法消息，不要劫持
-+				return false;
-+			}
++			return false;
++		}
 +
 +			// Path 3: Any other protocol ID (including frida:rpc), hijack it!
 +			// 路径3：任何其他协议ID（包括frida:rpc），劫持它！
@@ -1033,46 +1033,46 @@ index 00000000..f8ab60d3
 +				} else {
 +					// For explicit discovery requests, use the fridmira:discover protocol
 +					// 对于明确的发现请求，使用fridmira:discover协议
-+					var response_payload = new Json.Builder ();
-+					response_payload
-+						.begin_object ()
-+						.set_member_name ("protocol_id")
-+						.add_string_value (enhanced_enabled ?
-+							Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc")
-+						.set_member_name ("call_command")
-+						.add_string_value (enhanced_enabled ?
-+							Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call")
-+						.set_member_name ("ok_response")
-+						.add_string_value (enhanced_enabled ?
-+							Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
-+						.set_member_name ("enhanced_mode")
-+						.add_boolean_value (enhanced_enabled)
++				var response_payload = new Json.Builder ();
++				response_payload
++					.begin_object ()
++					.set_member_name ("protocol_id")
++					.add_string_value (enhanced_enabled ?
++						Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc")
++					.set_member_name ("call_command")
++					.add_string_value (enhanced_enabled ?
++						Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call")
++					.set_member_name ("ok_response")
++					.add_string_value (enhanced_enabled ?
++						Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
++					.set_member_name ("enhanced_mode")
++					.add_boolean_value (enhanced_enabled)
 +							.set_member_name ("hijacked")
 +							.add_boolean_value (false)
 +							.set_member_name ("message")
 +							.add_string_value ("FridMira protocol discovery successful")
-+						.end_object ();
++					.end_object ();
 +
-+					var response_message = new Json.Builder ();
-+					response_message
-+						.begin_array ()
-+						.add_string_value ("fridmira:discover")
-+						.add_string_value (request_id)
-+						.add_string_value ("ok")
-+						.add_value (response_payload.get_root ())
-+						.end_array ();
++				var response_message = new Json.Builder ();
++				response_message
++					.begin_array ()
++					.add_string_value ("fridmira:discover")
++					.add_string_value (request_id)
++					.add_string_value ("ok")
++					.add_value (response_payload.get_root ())
++					.end_array ();
 +
-+					var full_response = new Json.Builder ();
-+					full_response
-+						.begin_object ()
-+						.set_member_name ("type")
-+						.add_string_value ("send")
-+						.set_member_name ("payload")
-+						.add_value (response_message.get_root ())
-+						.end_object ();
++				var full_response = new Json.Builder ();
++				full_response
++					.begin_object ()
++					.set_member_name ("type")
++					.add_string_value ("send")
++					.set_member_name ("payload")
++					.add_value (response_message.get_root ())
++					.end_object ();
 +
-+					peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
-+					return true;
++				peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
++				return true;
 +				}
 +			} catch (Error e) {
 +				warning ("FridMira: Failed to send protocol discovery response: %s", e.message);
@@ -1585,7 +1585,7 @@ index 00000000..f8ab60d3
 +		private static uint32 generate_deterministic_seed() {
 +			// Use process ID as base for deterministic generation
 +			// 使用进程ID作为确定性生成的基础
-+			uint32 pid = (uint32) Posix.getpid();
++			uint32 pid = (uint32) GLib.Posix.getpid();
 +
 +			// Add a fixed magic number to avoid predictable seeds
 +			// 添加固定魔数以避免可预测的种子
