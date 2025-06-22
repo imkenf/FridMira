@@ -1,14 +1,14 @@
-From 7d3af74d5a81bea54e6d82be57f7511657910de6 Mon Sep 17 00:00:00 2001
+From 957dad7681cc9aa2d9827a1557c38ab052215e71 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:02:38 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 426 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 399 insertions(+), 27 deletions(-)
+ server/server.vala | 451 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 424 insertions(+), 27 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b38..146b3867 100644
+index 67bf4b38..4755ca93 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -225,7 +225,7 @@ index 67bf4b38..146b3867 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +335,127 @@ namespace Frida.Server {
+@@ -192,23 +335,152 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
@@ -293,6 +293,31 @@ index 67bf4b38..146b3867 100644
 +				// CRITICAL: Must be done BEFORE preload to ensure all anti-detection mechanisms are active
 +				// 关键：必须在preload之前完成，确保所有反检测机制都处于活跃状态
 +                Frida.FridMira.initialize_fridmira_framework (verbose);
++
++				// STEP 4: Pre-initialize RPC Protocol Enhancer to avoid first-call delays
++				// 步骤4：预初始化RPC协议增强器以避免首次调用延迟
++				if (!options.fridmira_no_rpc) {
++					if (verbose) {
++						stdout.printf ("FridMira: Pre-initializing RPC Protocol Enhancer...\n");
++					}
++
++					// Force initialization of RPC enhancer by calling key methods
++					// 通过调用关键方法强制初始化RPC增强器
++					Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
++					if (Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++						// Initialize protocol cache
++						string test_protocol = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id(null);
++						string test_command = Frida.FridMiraRpcProtocolEnhancer.get_call_command(null);
++						string test_response = Frida.FridMiraRpcProtocolEnhancer.get_ok_response(null);
++
++						if (verbose) {
++							stdout.printf ("FridMira: RPC Enhancer pre-initialized successfully\n");
++							stdout.printf ("FridMira:   Protocol ID: %s\n", test_protocol);
++							stdout.printf ("FridMira:   Call Command: %s\n", test_command);
++							stdout.printf ("FridMira:   OK Response: %s\n", test_response);
++						}
++					}
++				}
 +
 +				if (verbose) {
 +					stdout.printf ("FridMira: ✅ Bootstrap completed - preload protection active\n");
@@ -364,7 +389,7 @@ index 67bf4b38..146b3867 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +464,64 @@ namespace Frida.Server {
+@@ -217,9 +489,64 @@ namespace Frida.Server {
  			});
  		}
  
@@ -429,7 +454,7 @@ index 67bf4b38..146b3867 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +586,67 @@ namespace Frida.Server {
+@@ -284,22 +611,67 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -506,7 +531,7 @@ index 67bf4b38..146b3867 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +655,19 @@ namespace Frida.Server {
+@@ -308,12 +680,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -526,7 +551,7 @@ index 67bf4b38..146b3867 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,32 +675,48 @@ namespace Frida.Server {
+@@ -321,32 +700,48 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -576,7 +601,7 @@ index 67bf4b38..146b3867 100644
  			stop ();
  		}
  	}
-@@ -357,4 +727,6 @@ namespace Frida.Server {
+@@ -357,4 +752,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
