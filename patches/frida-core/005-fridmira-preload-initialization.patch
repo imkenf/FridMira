@@ -1,4 +1,4 @@
-From f0dc501bfab7eab2ff2ea16982e53dcb1b1b1e1f Mon Sep 17 00:00:00 2001
+From b23e728b7964ea493d984a401b5768bf550643da Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
@@ -8,7 +8,7 @@ Subject: [PATCH 005/006] FridMira post-preload initialization
  1 file changed, 180 insertions(+), 10 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..86221cab 100644
+index cc64470f..e43bd1a1 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -165,9 +165,9 @@ index cc64470f..86221cab 100644
  					Cancellable? cancellable) throws GLib.Error {
 +				// FridMira: Check if this is a protocol discovery request
 +				// FridMira: 检查这是否是协议发现请求
-+				if (should_return_protocol_discovery_error()) {
-+					throw_fridmira_protocol_discovery_error();
-+				}
++				//if (should_return_protocol_discovery_error()) {
++					//throw_fridmira_protocol_discovery_error();
++				//}
  				return yield parent.attach (pid, options, this, cancellable);
  			}
  
