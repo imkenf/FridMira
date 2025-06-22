@@ -1,17 +1,17 @@
-From 71c670c538ac0bd550d543948e4b28f555172c2e Mon Sep 17 00:00:00 2001
+From a4b44be35461f7082080aaac0a250151cd872ac1 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 263 ++++++++++
- lib/mira/fridmira-file.vala   | 275 ++++++++++
- lib/mira/fridmira-memory.vala | 226 +++++++++
- lib/mira/fridmira-rpc.vala    | 931 ++++++++++++++++++++++++++++++++++
- lib/mira/fridmira-symbol.vala | 212 ++++++++
- lib/mira/fridmira-thread.vala | 167 ++++++
- lib/mira/fridmira.vala        | 340 +++++++++++++
- 7 files changed, 2414 insertions(+)
+ lib/mira/fridmira-agent.vala  |  263 ++++++++
+ lib/mira/fridmira-file.vala   |  275 +++++++++
+ lib/mira/fridmira-memory.vala |  226 +++++++
+ lib/mira/fridmira-rpc.vala    | 1068 +++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-symbol.vala |  212 +++++++
+ lib/mira/fridmira-thread.vala |  167 ++++++
+ lib/mira/fridmira.vala        |  340 +++++++++++
+ 7 files changed, 2551 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..68fc457c
+index 00000000..67e4d673
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,931 @@
+@@ -0,0 +1,1068 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -951,10 +951,10 @@ index 00000000..68fc457c
 +				}
 +				string? command = rpc_message.get_element (2).get_string ();
 +				if (command == null) {
-+					return false;
-+				}
++				return false;
++			}
 +
-+				if (command == "get_protocol_info") {
++			if (command == "get_protocol_info") {
 +					// Server-side: handle discovery request from client
 +					// 服务器端：处理来自客户端的发现请求
 +					return send_protocol_discovery_response (request_id, peer, false);
@@ -972,8 +972,8 @@ index 00000000..68fc457c
 +			if (received_protocol_id == current_protocol_id) {
 +				// This is a legitimate message with correct protocol, don't hijack
 +				// 这是使用正确协议的合法消息，不要劫持
-+				return false;
-+			}
++			return false;
++		}
 +
 +			// Path 3: Any other protocol ID (including frida:rpc), hijack it!
 +			// 路径3：任何其他协议ID（包括frida:rpc），劫持它！
@@ -1033,46 +1033,46 @@ index 00000000..68fc457c
 +				} else {
 +					// For explicit discovery requests, use the fridmira:discover protocol
 +					// 对于明确的发现请求，使用fridmira:discover协议
-+					var response_payload = new Json.Builder ();
-+					response_payload
-+						.begin_object ()
-+						.set_member_name ("protocol_id")
-+						.add_string_value (enhanced_enabled ?
-+							Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc")
-+						.set_member_name ("call_command")
-+						.add_string_value (enhanced_enabled ?
-+							Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call")
-+						.set_member_name ("ok_response")
-+						.add_string_value (enhanced_enabled ?
-+							Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
-+						.set_member_name ("enhanced_mode")
-+						.add_boolean_value (enhanced_enabled)
++				var response_payload = new Json.Builder ();
++				response_payload
++					.begin_object ()
++					.set_member_name ("protocol_id")
++					.add_string_value (enhanced_enabled ?
++						Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc")
++					.set_member_name ("call_command")
++					.add_string_value (enhanced_enabled ?
++						Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call")
++					.set_member_name ("ok_response")
++					.add_string_value (enhanced_enabled ?
++						Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
++					.set_member_name ("enhanced_mode")
++					.add_boolean_value (enhanced_enabled)
 +						.set_member_name ("hijacked")
 +						.add_boolean_value (false)
 +						.set_member_name ("message")
 +						.add_string_value ("FridMira protocol discovery successful")
-+						.end_object ();
++					.end_object ();
 +
-+					var response_message = new Json.Builder ();
-+					response_message
-+						.begin_array ()
-+						.add_string_value ("fridmira:discover")
-+						.add_string_value (request_id)
-+						.add_string_value ("ok")
-+						.add_value (response_payload.get_root ())
-+						.end_array ();
++				var response_message = new Json.Builder ();
++				response_message
++					.begin_array ()
++					.add_string_value ("fridmira:discover")
++					.add_string_value (request_id)
++					.add_string_value ("ok")
++					.add_value (response_payload.get_root ())
++					.end_array ();
 +
-+					var full_response = new Json.Builder ();
-+					full_response
-+						.begin_object ()
-+						.set_member_name ("type")
-+						.add_string_value ("send")
-+						.set_member_name ("payload")
-+						.add_value (response_message.get_root ())
-+						.end_object ();
++				var full_response = new Json.Builder ();
++				full_response
++					.begin_object ()
++					.set_member_name ("type")
++					.add_string_value ("send")
++					.set_member_name ("payload")
++					.add_value (response_message.get_root ())
++					.end_object ();
 +
-+					peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
-+					return true;
++				peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
++				return true;
 +				}
 +			} catch (Error e) {
 +				warning ("FridMira: Failed to send protocol discovery response: %s", e.message);
@@ -1291,6 +1291,7 @@ index 00000000..68fc457c
 +		private static string? _fixed_protocol_id = null;
 +		private static string? _fixed_call_command = null;
 +		private static string? _fixed_ok_response = null;
++		private static uint32 _deterministic_seed = 0;
 +
 +		/**
 +		 * Initialize the RPC protocol enhancer
@@ -1307,11 +1308,15 @@ index 00000000..68fc457c
 +				session_commands = new HashMap<string, string>();
 +				session_responses = new HashMap<string, string>();
 +
-+				// Initialize fixed protocol cache for server consistency
-+				// 初始化固定协议缓存以确保服务器一致性
-+				_fixed_protocol_id = generate_obfuscated_protocol();
-+				_fixed_call_command = generate_obfuscated_command();
-+				_fixed_ok_response = generate_obfuscated_response();
++				// Generate deterministic seed based on process ID and start time
++				// 基于进程ID和启动时间生成确定性种子
++				_deterministic_seed = generate_deterministic_seed();
++
++				// Initialize fixed protocol cache for server consistency using deterministic seed
++				// 使用确定性种子初始化固定协议缓存以确保服务器一致性
++				_fixed_protocol_id = generate_obfuscated_protocol_deterministic(_deterministic_seed);
++				_fixed_call_command = generate_obfuscated_command_deterministic(_deterministic_seed + 1);
++				_fixed_ok_response = generate_obfuscated_response_deterministic(_deterministic_seed + 2);
 +
 +				initialized = true;
 +			} finally {
@@ -1370,7 +1375,10 @@ index 00000000..68fc457c
 +			}
 +
 +			if (!session_protocols.has_key(session_id)) {
-+				session_protocols[session_id] = generate_obfuscated_protocol();
++				// Generate deterministic protocol for session
++				// 为会话生成确定性协议
++				uint32 session_seed = generate_session_seed(session_id);
++				session_protocols[session_id] = generate_obfuscated_protocol_deterministic(session_seed);
 +			}
 +
 +			return session_protocols[session_id];
@@ -1394,7 +1402,10 @@ index 00000000..68fc457c
 +			}
 +
 +			if (!session_commands.has_key(session_id)) {
-+				session_commands[session_id] = generate_obfuscated_command();
++				// Generate deterministic command for session
++				// 为会话生成确定性命令
++				uint32 session_seed = generate_session_seed(session_id);
++				session_commands[session_id] = generate_obfuscated_command_deterministic(session_seed + 1);
 +			}
 +
 +			return session_commands[session_id];
@@ -1418,7 +1429,10 @@ index 00000000..68fc457c
 +			}
 +
 +			if (!session_responses.has_key(session_id)) {
-+				session_responses[session_id] = generate_obfuscated_response();
++				// Generate deterministic response for session
++				// 为会话生成确定性响应
++				uint32 session_seed = generate_session_seed(session_id);
++				session_responses[session_id] = generate_obfuscated_response_deterministic(session_seed + 2);
 +			}
 +
 +			return session_responses[session_id];
@@ -1433,6 +1447,23 @@ index 00000000..68fc457c
 +			// Return the same fixed protocol ID for consistency
 +			// 返回相同的固定协议ID以确保一致性
 +			return _fixed_protocol_id;
++		}
++
++		/**
++		 * Get deterministic seed for diagnostic purposes
++		 * 获取确定性种子用于诊断目的
++		 */
++		public static uint32 get_deterministic_seed() {
++			ensure_initialized();
++			return _deterministic_seed;
++		}
++
++		/**
++		 * Check if deterministic seed is initialized
++		 * 检查确定性种子是否已初始化
++		 */
++		public static bool is_deterministic_seed_initialized() {
++			return _deterministic_seed != 0;
 +		}
 +
 +		/**
@@ -1546,6 +1577,100 @@ index 00000000..68fc457c
 +			string[] responses = {"ack", "done", "complete", "ready", "success"};
 +			return responses[Random.int_range(0, responses.length)];
 +		}
++
++		/**
++		 * Generate deterministic seed for consistent protocol generation
++		 * 生成确定性种子以确保协议生成的一致性
++		 */
++		private static uint32 generate_deterministic_seed() {
++			// Use process ID as base for deterministic generation
++			// 使用进程ID作为确定性生成的基础
++			uint32 pid = (uint32) Posix.getpid();
++
++			// Add a fixed magic number to avoid predictable seeds
++			// 添加固定魔数以避免可预测的种子
++			uint32 magic = 0x46524944;  // "FRID" in hex
++
++			// Use XOR to combine them
++			// 使用XOR组合它们
++			uint32 seed = pid ^ magic;
++
++			// Ensure seed is not zero (would disable deterministic behavior)
++			// 确保种子不为零（否则会禁用确定性行为）
++			if (seed == 0) {
++				seed = 0x4D495241;  // "MIRA" in hex as fallback
++			}
++
++			// Additional safety: ensure seed is in valid range
++			// 额外安全：确保种子在有效范围内
++			if (seed == 0) {
++				warning("FridMira: Failed to generate valid deterministic seed, using fallback");
++				seed = 0x46524944;  // Final fallback
++			}
++
++			return seed;
++		}
++
++		/**
++		 * Generate deterministic seed for session-specific protocols
++		 * 为会话特定协议生成确定性种子
++		 */
++		private static uint32 generate_session_seed(string session_id) {
++			// Ensure initialization before using seed
++			// 确保在使用种子前完成初始化
++			ensure_initialized();
++
++			// Simple hash function for session ID
++			// 会话ID的简单哈希函数
++			uint32 hash = 0;
++			uint8[] session_bytes = session_id.data;
++
++			for (int i = 0; i < session_bytes.length; i++) {
++				hash = (hash * 31) + session_bytes[i];
++			}
++
++			// Combine with base seed for consistency
++			// 与基础种子组合以确保一致性
++			return hash ^ _deterministic_seed;
++		}
++
++		/**
++		 * Generate obfuscated protocol name using deterministic seed
++		 * 使用确定性种子生成混淆的协议名
++		 */
++		private static string generate_obfuscated_protocol_deterministic(uint32 seed) {
++			string[] prefixes = {"sys", "android", "linux", "proc", "dev"};
++			string[] suffixes = {"rpc", "ipc", "msg", "comm", "ctl"};
++
++			// Use seed to deterministically select prefix and suffix
++			// 使用种子确定性地选择前缀和后缀
++			string prefix = prefixes[seed % prefixes.length];
++			string suffix = suffixes[(seed >> 8) % suffixes.length];
++
++			return "%s:%s".printf(prefix, suffix);
++		}
++
++		/**
++		 * Generate obfuscated command using deterministic seed
++		 * 使用确定性种子生成混淆的命令
++		 */
++		private static string generate_obfuscated_command_deterministic(uint32 seed) {
++			string[] commands = {"exec", "run", "invoke", "proc", "handle"};
++			// Use seed to deterministically select command
++			// 使用种子确定性地选择命令
++			return commands[seed % commands.length];
++		}
++
++		/**
++		 * Generate obfuscated response using deterministic seed
++		 * 使用确定性种子生成混淆的响应
++		 */
++		private static string generate_obfuscated_response_deterministic(uint32 seed) {
++			string[] responses = {"ack", "done", "complete", "ready", "success"};
++			// Use seed to deterministically select response
++			// 使用种子确定性地选择响应
++			return responses[seed % responses.length];
++		}
 +	}
 +}
 +
@@ -1587,8 +1712,20 @@ index 00000000..68fc457c
 +				FridMiraRpcProtocolEnhancer.get_call_command(null)));
 +			status.append("   Default OK Response: %s\n".printf(
 +				FridMiraRpcProtocolEnhancer.get_ok_response(null)));
-+			status.append("   Dynamic Protocol ID: %s\n\n".printf(
++			status.append("   Dynamic Protocol ID: %s\n".printf(
 +				FridMiraRpcProtocolEnhancer.get_dynamic_protocol_id()));
++
++			// Show deterministic seed information
++			// 显示确定性种子信息
++			if (FridMiraRpcProtocolEnhancer.is_deterministic_seed_initialized()) {
++				status.append("   Deterministic Seed: 0x%08X (PID: %d)\n".printf(
++					FridMiraRpcProtocolEnhancer.get_deterministic_seed(), (int) Posix.getpid()));
++				status.append("   Seed Generation: ACTIVE (ensures consistent protocols)\n");
++			} else {
++				status.append("   Deterministic Seed: NOT INITIALIZED\n");
++				status.append("   Seed Generation: INACTIVE (protocols may vary)\n");
++			}
++			status.append("\n");
 +
 +			// Enhancer status
 +			status.append("3. RPC Client Integration:\n");

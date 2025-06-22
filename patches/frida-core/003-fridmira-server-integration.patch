@@ -1,4 +1,4 @@
-From de022a993e95f2335a44905b4debbedec139318e Mon Sep 17 00:00:00 2001
+From 7d3af74d5a81bea54e6d82be57f7511657910de6 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:02:38 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
@@ -8,7 +8,7 @@ Subject: [PATCH 003/006] Integrate FridMira server functionality
  1 file changed, 399 insertions(+), 27 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b38..ca1d7416 100644
+index 67bf4b38..146b3867 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,16 @@ namespace Frida.Server {
@@ -292,7 +292,7 @@ index 67bf4b38..ca1d7416 100644
 +				// 步骤3：初始化主FridMira框架（完整保护）
 +				// CRITICAL: Must be done BEFORE preload to ensure all anti-detection mechanisms are active
 +				// 关键：必须在preload之前完成，确保所有反检测机制都处于活跃状态
-+				Frida.FridMira.initialize_fridmira_framework (verbose);
++                Frida.FridMira.initialize_fridmira_framework (verbose);
 +
 +				if (verbose) {
 +					stdout.printf ("FridMira: ✅ Bootstrap completed - preload protection active\n");
