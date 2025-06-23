@@ -1,14 +1,14 @@
-From f5179bb896edc0838b5ca535a32dda62b839bb49 Mon Sep 17 00:00:00 2001
+From 4bd98144769154403c9057817592532184f6667a Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 204 +++++++++++++++++++++++++++++++++++++--
- 1 file changed, 194 insertions(+), 10 deletions(-)
+ src/control-service.vala | 209 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 199 insertions(+), 10 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..bef8c2e1 100644
+index cc64470f..a91f7422 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -112,7 +112,7 @@ index cc64470f..bef8c2e1 100644
  				}
  
  				state = STARTED;
-@@ -878,7 +939,43 @@ namespace Frida {
+@@ -878,7 +939,48 @@ namespace Frida {
  			}
  
  			public async HashTable<string, Variant> query_system_parameters (Cancellable? cancellable) throws GLib.Error {
@@ -126,12 +126,12 @@ index cc64470f..bef8c2e1 100644
 +					// Construct minimal system parameter return value to avoid HostSession exponential backoff
 +					var params = new HashTable<string, Variant> (null, null);
 +
-+					// 添加服务器基本信息，可根据实际情况调整
-+					// Add basic server information, can be adjusted according to actual situation
-+					params["os"] = new Variant.string ("android");
-+					params["arch"] = new Variant.string ("arm64");
++					// 添加基本系统信息
++					// Add basic system information
++					params["platform"] = new Variant.string (Gum.Process.get_current_platform ().to_string ());
++					params["arch"] = new Variant.string (Gum.Process.get_current_arch ().to_string ());
++					params["name"] = new Variant.string ("FridMira Server");
 +					params["version"] = new Variant.string ("16.7.19");
-+					params["platform"] = new Variant.string ("linux");
 +
 +					// 添加 FridMira 协议信息到系统参数中
 +					// Add FridMira protocol information to system parameters
@@ -153,11 +153,16 @@ index cc64470f..bef8c2e1 100644
 +				// Use original implementation when obfuscation is disabled
 +				var params = yield parent.host_session.query_system_parameters (cancellable);
 +
++				// 即使在标准模式下也添加FridMira状态信息
++				// Add FridMira status information even in standard mode
++				params["_fridmira_enhanced_mode"] = new Variant.boolean (false);
++				params["_fridmira_version"] = new Variant.string ("16.7.19");
++
 +				return params;
  			}
  
  			public async HostApplicationInfo get_frontmost_application (HashTable<string, Variant> options,
-@@ -888,11 +985,15 @@ namespace Frida {
+@@ -888,11 +990,15 @@ namespace Frida {
  
  			public async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
  					Cancellable? cancellable) throws GLib.Error {
@@ -173,7 +178,7 @@ index cc64470f..bef8c2e1 100644
  				return yield parent.host_session.enumerate_processes (options, cancellable);
  			}
  
-@@ -930,6 +1031,11 @@ namespace Frida {
+@@ -930,6 +1036,11 @@ namespace Frida {
  
  			public async AgentSessionId attach (uint pid, HashTable<string, Variant> options,
  					Cancellable? cancellable) throws GLib.Error {
@@ -185,7 +190,7 @@ index cc64470f..bef8c2e1 100644
  				return yield parent.attach (pid, options, this, cancellable);
  			}
  
-@@ -959,6 +1065,45 @@ namespace Frida {
+@@ -959,6 +1070,45 @@ namespace Frida {
  					out string token) throws Error {
  				parent.open_tcp_transport (id, cancellable, out port, out token);
  			}
@@ -231,7 +236,7 @@ index cc64470f..bef8c2e1 100644
  		}
  
  		private class PendingSpawn {
-@@ -1142,5 +1287,44 @@ namespace Frida {
+@@ -1142,5 +1292,44 @@ namespace Frida {
  			set;
  			default = true;
  		}

@@ -1,4 +1,4 @@
-From c61d6b1842e950202761e67c4e5bb5a3e287e130 Mon Sep 17 00:00:00 2001
+From 3e137b4f3d033bec0ba263981b5a5f4eb1986ddc Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -7,11 +7,11 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-agent.vala  |  263 ++++++++
  lib/mira/fridmira-file.vala   |  275 +++++++++
  lib/mira/fridmira-memory.vala |  226 +++++++
- lib/mira/fridmira-rpc.vala    | 1074 +++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 1095 +++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala |  212 +++++++
  lib/mira/fridmira-thread.vala |  167 +++++
- lib/mira/fridmira.vala        |  340 +++++++++++
- 7 files changed, 2557 insertions(+)
+ lib/mira/fridmira.vala        |  340 ++++++++++
+ 7 files changed, 2578 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..8f9a703c
+index 00000000..a106341b
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,1074 @@
+@@ -0,0 +1,1095 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -975,18 +975,39 @@ index 00000000..8f9a703c
 +			return false;
 +		}
 +
-+			// Path 3: Any other protocol ID (including frida:rpc), hijack it!
-+			// 路径3：任何其他协议ID（包括frida:rpc），劫持它！
-+			if (rpc_message.get_length () >= 3) {
-+				string? command = rpc_message.get_element (2).get_string ();
-+				warning ("FridMira: Hijacking RPC call with incorrect protocol ID '%s' (command: %s). Responding with discovery info.",
-+					received_protocol_id, command ?? "unknown");
-+			} else {
-+				warning ("FridMira: Hijacking RPC call with incorrect protocol ID '%s'. Responding with discovery info.",
-+					received_protocol_id);
++			// Path 3: Standard frida:rpc protocol - only hijack if enhanced mode is enabled
++			// 路径3：标准frida:rpc协议 - 只有在增强模式启用时才劫持
++			if (received_protocol_id == "frida:rpc") {
++				// Only hijack standard protocol if enhanced mode is enabled
++				// 只有在增强模式启用时才劫持标准协议
++				if (!Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++					// Enhanced mode disabled, let standard protocol through
++					// 增强模式禁用，让标准协议通过
++					return false;
++				}
++
++				// Enhanced mode enabled, hijack frida:rpc calls with protocol info
++				// 增强模式启用，劫持frida:rpc调用并返回协议信息
++				if (rpc_message.get_length () >= 3) {
++					string? command = rpc_message.get_element (2).get_string ();
++					warning ("FridMira: Hijacking standard RPC call (command: %s). Responding with discovery info.",
++						command ?? "unknown");
++				} else {
++					warning ("FridMira: Hijacking standard RPC call. Responding with discovery info.");
++				}
++
++				return send_protocol_discovery_response (request_id, peer, true);
 +			}
 +
-+			return send_protocol_discovery_response (request_id, peer, true);
++			// Path 4: Other protocol IDs - let them through (don't hijack everything)
++			// 路径4：其他协议ID - 让它们通过（不要劫持所有内容）
++			// Only log for debugging, don't hijack unknown protocols
++			// 只记录用于调试，不劫持未知协议
++			if (Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++				warning ("FridMira: Unknown protocol ID '%s', letting it through", received_protocol_id);
++			}
++
++			return false; // Let other handlers process unknown protocols
 +		}
 +
 +		/**
@@ -1014,7 +1035,7 @@ index 00000000..8f9a703c
 +						.begin_array ()
 +						.add_string_value ("frida:rpc")  // Use standard protocol for compatibility
 +						.add_string_value (request_id)
-+						.add_string_value ("ok")
++						.add_string_value ("error") // FIXED: Use "error" instead of "ok" for hijacked responses
 +						.add_string_value (protocol_info)
 +						.end_array ();
 +
@@ -1033,46 +1054,46 @@ index 00000000..8f9a703c
 +				} else {
 +					// For explicit discovery requests, use the fridmira:discover protocol
 +					// 对于明确的发现请求，使用fridmira:discover协议
-+				var response_payload = new Json.Builder ();
-+				response_payload
-+					.begin_object ()
-+					.set_member_name ("protocol_id")
-+					.add_string_value (enhanced_enabled ?
-+						Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc")
-+					.set_member_name ("call_command")
-+					.add_string_value (enhanced_enabled ?
-+						Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call")
-+					.set_member_name ("ok_response")
-+					.add_string_value (enhanced_enabled ?
-+						Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
-+					.set_member_name ("enhanced_mode")
-+					.add_boolean_value (enhanced_enabled)
-+							.set_member_name ("hijacked")
-+							.add_boolean_value (false)
-+							.set_member_name ("message")
-+							.add_string_value ("FridMira protocol discovery successful")
-+					.end_object ();
++					var response_payload = new Json.Builder ();
++					response_payload
++						.begin_object ()
++						.set_member_name ("protocol_id")
++						.add_string_value (enhanced_enabled ?
++							Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null) : "frida:rpc")
++						.set_member_name ("call_command")
++						.add_string_value (enhanced_enabled ?
++							Frida.FridMiraRpcProtocolEnhancer.get_call_command (null) : "call")
++						.set_member_name ("ok_response")
++						.add_string_value (enhanced_enabled ?
++							Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null) : "ok")
++						.set_member_name ("enhanced_mode")
++						.add_boolean_value (enhanced_enabled)
++						.set_member_name ("hijacked")
++						.add_boolean_value (false)
++						.set_member_name ("message")
++						.add_string_value ("FridMira protocol discovery successful")
++						.end_object ();
 +
-+				var response_message = new Json.Builder ();
-+				response_message
-+					.begin_array ()
-+					.add_string_value ("fridmira:discover")
-+					.add_string_value (request_id)
-+					.add_string_value ("ok")
-+					.add_value (response_payload.get_root ())
-+					.end_array ();
++					var response_message = new Json.Builder ();
++					response_message
++						.begin_array ()
++						.add_string_value ("fridmira:discover")
++						.add_string_value (request_id)
++						.add_string_value ("ok")
++						.add_value (response_payload.get_root ())
++						.end_array ();
 +
-+				var full_response = new Json.Builder ();
-+				full_response
-+					.begin_object ()
-+					.set_member_name ("type")
-+					.add_string_value ("send")
-+					.set_member_name ("payload")
-+					.add_value (response_message.get_root ())
-+					.end_object ();
++					var full_response = new Json.Builder ();
++					full_response
++						.begin_object ()
++						.set_member_name ("type")
++						.add_string_value ("send")
++						.set_member_name ("payload")
++						.add_value (response_message.get_root ())
++						.end_object ();
 +
-+				peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
-+				return true;
++					peer.post_rpc_message.begin (Json.to_string (full_response.get_root (), false), null, null);
++					return true;
 +				}
 +			} catch (Error e) {
 +				warning ("FridMira: Failed to send protocol discovery response: %s", e.message);
@@ -1122,8 +1143,8 @@ index 00000000..8f9a703c
 +		 * 注意：D-Bus层通过错误响应提供立即的协议发现，所以我们只需要最小超时处理边缘情况。
 +		 */
 +		public async Json.Node discover_protocol (RpcPeer peer, Cancellable? cancellable) throws Error, IOError {
-+			const int MAX_RETRIES = 1;  // Reduced from 3: D-Bus responds immediately
-+			const int TIMEOUT_MS = 500;  // Reduced from 5000ms: D-Bus is fast
++			const int MAX_RETRIES = 2;  // Reduced from 3: D-Bus responds immediately
++			const int TIMEOUT_MS = 1000;  // Reduced from 5000ms: D-Bus is fast
 +
 +			for (int retry = 0; retry < MAX_RETRIES; retry++) {
 +				try {
@@ -1135,8 +1156,8 @@ index 00000000..8f9a703c
 +						throw e; // Re-throw on final retry
 +					}
 +					warning ("FridMira: Protocol discovery attempt %d failed: %s", retry + 1, e.message);
-+					// No retry delay needed - D-Bus responses are immediate
-+					// 不需要重试延迟 - D-Bus响应是立即的
++					// Small retry delay for stability
++					yield wait_async (100);
 +				}
 +			}
 +
