@@ -1,11 +1,12 @@
-From 581e713cfee6b2ada811aebae2833d96de31a2c9 Mon Sep 17 00:00:00 2001
+From 7523d649b871a87d87879e623dcbccdecc3858bb Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
  src/control-service.vala | 206 +++++++++++++++++++++++++++++++++++++--
- 1 file changed, 197 insertions(+), 9 deletions(-)
+ src/portal-service.vala  |  25 ++++-
+ 2 files changed, 218 insertions(+), 13 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
 index cc64470f..12bb4093 100644
@@ -278,6 +279,63 @@ index cc64470f..12bb4093 100644
 +
  	}
  }
+diff --git a/src/portal-service.vala b/src/portal-service.vala
+index 0d24d559..f366c9b5 100644
+--- a/src/portal-service.vala
++++ b/src/portal-service.vala
+@@ -1054,7 +1054,7 @@ namespace Frida {
+ 					return;
+ 
+ 				BusService bus = controller.bus;
+-				if (bus.status != ATTACHED)
++				if (bus.status != BusStatus.ATTACHED)
+ 					return;
+ 
+ 				bool has_data = data != null;
+@@ -1313,6 +1313,23 @@ namespace Frida {
+ 			public async ServiceSessionId open_service (string address, Cancellable? cancellable) throws Error, IOError {
+ 				throw new Error.NOT_SUPPORTED ("Services are not supported by this backend");
+ 			}
++
++			public async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
++					Cancellable? cancellable) throws Error, IOError {
++				// PortalService ControlChannel protocol negotiation
++				// PortalService ControlChannel协议协商
++				var result = new HashTable<string, Variant> (null, null);
++
++				// Portal mode uses standard protocol by default
++				// Portal模式默认使用标准协议
++				result["enabled"] = new Variant.boolean (false);
++				result["mode"] = new Variant.string ("standard");
++				result["version"] = new Variant.string ("16.7.19");
++				result["protocol_version"] = new Variant.string ("1.0");
++				result["note"] = new Variant.string ("Portal mode uses standard RPC protocol");
++
++				return result;
++			}
+ 		}
+ 
+ 		private class BusService : Object, BusSession {
+@@ -1331,16 +1348,16 @@ namespace Frida {
+ 					return _status;
+ 				}
+ 			}
+-			private BusStatus _status = DETACHED;
++			private BusStatus _status = BusStatus.DETACHED;
+ 
+ 			public BusService (PortalService parent, uint connection_id) {
+ 				Object (parent: parent, connection_id: connection_id);
+ 			}
+ 
+ 			public async void attach (Cancellable? cancellable) throws Error, IOError {
+-				if (_status == ATTACHED)
++				if (_status == BusStatus.ATTACHED)
+ 					return;
+-				_status = ATTACHED;
++				_status = BusStatus.ATTACHED;
+ 				parent.handle_bus_attach (connection_id);
+ 			}
+ 
 -- 
 2.45.1.windows.1
 

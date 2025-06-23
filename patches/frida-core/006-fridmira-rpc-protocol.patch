@@ -1,13 +1,14 @@
-From 257a1513def5368b2e52a3026e512598c4e20c27 Mon Sep 17 00:00:00 2001
+From 25170adf6f3bf84020e8b01209da4f1c968b19ee Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala      | 331 ++++++++++++++++++++++++++++++++++++++++-
- lib/base/session.vala  |   7 +
- lib/gadget/gadget.vala |  37 ++++-
- 3 files changed, 367 insertions(+), 8 deletions(-)
+ lib/base/rpc.vala             | 331 +++++++++++++++++++++++++++++++++-
+ lib/base/session.vala         |   7 +
+ lib/gadget/gadget.vala        |  37 +++-
+ src/host-session-service.vala |  41 +++++
+ 4 files changed, 408 insertions(+), 8 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
 index c4654527..2192bfc5 100644
@@ -492,6 +493,58 @@ index ba492096..1b402d2f 100644
  			private void validate_pid (uint pid) throws Error {
  				if (pid != this_process.pid)
  					throw new Error.NOT_SUPPORTED ("Unable to act on other processes when embedded");
+diff --git a/src/host-session-service.vala b/src/host-session-service.vala
+index b7a0c167..d5e808d0 100644
+--- a/src/host-session-service.vala
++++ b/src/host-session-service.vala
+@@ -401,6 +401,47 @@ namespace Frida {
+ 			return compute_system_parameters ();
+ 		}
+ 
++		public virtual async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
++				Cancellable? cancellable) throws Error, IOError {
++			// Default implementation for LocalHostSession - delegate to FridMira framework
++			// LocalHostSession的默认实现 - 委托给FridMira框架
++			var result = new HashTable<string, Variant> (null, null);
++
++			// Check if FridMira framework is enabled
++			// 检查FridMira框架是否启用
++			bool fridmira_enabled = Frida.FridMira.is_globally_enabled();
++			bool fridmira_rpc_enabled = fridmira_enabled &&
++				Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
++
++			result["enabled"] = new Variant.boolean (fridmira_rpc_enabled);
++			result["version"] = new Variant.string ("16.7.19");
++
++			if (fridmira_rpc_enabled) {
++				result["mode"] = new Variant.string ("fridmira");
++				try {
++					// Get current dynamic protocol information
++					// 获取当前动态协议信息
++					result["protocol_id"] = new Variant.string (
++						Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null));
++					result["call_command"] = new Variant.string (
++						Frida.FridMiraRpcProtocolEnhancer.get_call_command (null));
++					result["ok_response"] = new Variant.string (
++						Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null));
++					result["protocol_version"] = new Variant.string ("1.0");
++				} catch (GLib.Error e) {
++					// Fall back to standard mode if protocol info unavailable
++					// 如果协议信息不可用则回退到标准模式
++					result["enabled"] = new Variant.boolean (false);
++					result["mode"] = new Variant.string ("standard");
++					result["error"] = new Variant.string ("FridMira protocol unavailable: " + e.message);
++				}
++			} else {
++				result["mode"] = new Variant.string ("standard");
++			}
++
++			return result;
++		}
++
+ 		public abstract async HostApplicationInfo get_frontmost_application (HashTable<string, Variant> options,
+ 			Cancellable? cancellable) throws Error, IOError;
+ 
 -- 
 2.45.1.windows.1
 
