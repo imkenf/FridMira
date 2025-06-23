@@ -1,12 +1,13 @@
-From 09a0888cc739c65a4ebf4f3390fda8d60bf8e25e Mon Sep 17 00:00:00 2001
+From fe12fac4498a65c5d2497fc7909504832a1b387d Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala     | 331 +++++++++++++++++++++++++++++++++++++++++-
- lib/base/session.vala |   7 +
- 2 files changed, 334 insertions(+), 4 deletions(-)
+ lib/base/rpc.vala      | 331 ++++++++++++++++++++++++++++++++++++++++-
+ lib/base/session.vala  |   7 +
+ lib/gadget/gadget.vala |  58 +++++++-
+ 3 files changed, 388 insertions(+), 8 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
 index c4654527..2192bfc5 100644
@@ -428,6 +429,90 @@ index 7e0d8944..9472c6f7 100644
  	}
  
  	public sealed class UnauthorizedPortalSession : Object, PortalSession {
+diff --git a/lib/gadget/gadget.vala b/lib/gadget/gadget.vala
+index ba492096..7d401575 100644
+--- a/lib/gadget/gadget.vala
++++ b/lib/gadget/gadget.vala
+@@ -1543,10 +1543,15 @@ namespace Frida.Gadget {
+ 			connection.on_closed.connect (on_connection_closed);
+ 
+ 			Peer peer;
+-			if (auth_service != null)
++			if (auth_service != null) {
+ 				peer = new AuthenticationChannel (this, connection);
+-			else
+-				peer = setup_control_channel (connection);
++			} else {
++				try {
++					peer = setup_control_channel (connection);
++				} catch (IOError e) {
++					throw e;
++				}
++			}
+ 			peers[connection] = peer;
+ 
+ 			connection.start_message_processing ();
+@@ -1564,7 +1569,11 @@ namespace Frida.Gadget {
+ 			peers.unset (connection);
+ 			yield channel.close (io_cancellable);
+ 
+-			peers[connection] = setup_control_channel (connection);
++			try {
++				peers[connection] = setup_control_channel (connection);
++			} catch (IOError e) {
++				throw e;
++			}
+ 		}
+ 
+ 		private void kick_authentication_channel (AuthenticationChannel channel) {
+@@ -1935,6 +1944,47 @@ namespace Frida.Gadget {
+ 				throw new Error.NOT_SUPPORTED ("Unable to open services when embedded");
+ 			}
+ 
++			public async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
++					Cancellable? cancellable) throws Error, IOError {
++				// FridMira protocol negotiation for gadget mode
++				// Gadget模式的FridMira协议协商
++				var result = new HashTable<string, Variant> (null, null);
++
++				// Check if FridMira framework is enabled
++				// 检查FridMira框架是否启用
++				bool fridmira_enabled = Frida.FridMira.is_globally_enabled();
++				bool fridmira_rpc_enabled = fridmira_enabled &&
++					Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
++
++				result["enabled"] = new Variant.boolean (fridmira_rpc_enabled);
++				result["version"] = new Variant.string ("16.7.19");
++
++				if (fridmira_rpc_enabled) {
++					result["mode"] = new Variant.string ("fridmira");
++					try {
++						// Get current dynamic protocol information
++						// 获取当前动态协议信息
++						result["protocol_id"] = new Variant.string (
++							Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null));
++						result["call_command"] = new Variant.string (
++							Frida.FridMiraRpcProtocolEnhancer.get_call_command (null));
++						result["ok_response"] = new Variant.string (
++							Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null));
++						result["protocol_version"] = new Variant.string ("1.0");
++					} catch (GLib.Error e) {
++						// Fall back to standard mode if protocol info unavailable
++						// 如果协议信息不可用则回退到标准模式
++						result["enabled"] = new Variant.boolean (false);
++						result["mode"] = new Variant.string ("standard");
++						result["error"] = new Variant.string ("FridMira protocol unavailable: " + e.message);
++					}
++				} else {
++					result["mode"] = new Variant.string ("standard");
++				}
++
++				return result;
++			}
++
+ 			private void validate_pid (uint pid) throws Error {
+ 				if (pid != this_process.pid)
+ 					throw new Error.NOT_SUPPORTED ("Unable to act on other processes when embedded");
 -- 
 2.45.1.windows.1
 
