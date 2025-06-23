@@ -1,14 +1,14 @@
-From 4bd98144769154403c9057817592532184f6667a Mon Sep 17 00:00:00 2001
+From e27737a41c088e1a3ce94067292f26d462fbff82 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 209 +++++++++++++++++++++++++++++++++++++--
- 1 file changed, 199 insertions(+), 10 deletions(-)
+ src/control-service.vala | 243 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 233 insertions(+), 10 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..a91f7422 100644
+index cc64470f..67dbb513 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -112,7 +112,7 @@ index cc64470f..a91f7422 100644
  				}
  
  				state = STARTED;
-@@ -878,7 +939,48 @@ namespace Frida {
+@@ -878,7 +939,82 @@ namespace Frida {
  			}
  
  			public async HashTable<string, Variant> query_system_parameters (Cancellable? cancellable) throws GLib.Error {
@@ -126,10 +126,41 @@ index cc64470f..a91f7422 100644
 +					// Construct minimal system parameter return value to avoid HostSession exponential backoff
 +					var params = new HashTable<string, Variant> (null, null);
 +
-+					// 添加基本系统信息
-+					// Add basic system information
-+					params["platform"] = new Variant.string (Gum.Process.get_current_platform ().to_string ());
-+					params["arch"] = new Variant.string (Gum.Process.get_current_arch ().to_string ());
++					// 添加基本系统信息 - 动态获取平台和架构
++					// Add basic system information - dynamically get platform and arch
++					string platform_name = "unknown";
++					string arch_name = "unknown";
++
++					// 尝试从编译时定义获取平台信息
++					// Try to get platform info from compile-time defines
++#if LINUX
++					platform_name = "linux";
++#elif DARWIN
++					platform_name = "darwin";
++#elif WINDOWS
++					platform_name = "windows";
++#elif QNX
++					platform_name = "qnx";
++#elif FREEBSD
++					platform_name = "freebsd";
++#endif
++
++					// 尝试从编译时定义获取架构信息
++					// Try to get architecture info from compile-time defines
++#if X86_64
++					arch_name = "x64";
++#elif ARM64
++					arch_name = "arm64";
++#elif X86
++					arch_name = "ia32";
++#elif ARM
++					arch_name = "arm";
++#elif MIPS
++					arch_name = "mips";
++#endif
++
++					params["platform"] = new Variant.string (platform_name);
++					params["arch"] = new Variant.string (arch_name);
 +					params["name"] = new Variant.string ("FridMira Server");
 +					params["version"] = new Variant.string ("16.7.19");
 +
@@ -145,6 +176,8 @@ index cc64470f..a91f7422 100644
 +						new Variant.boolean (true);
 +					params["_fridmira_version"] =
 +						new Variant.string ("16.7.19");
++					params["_fridmira_server_active"] =
++						new Variant.boolean (true);
 +
 +					return params;   // 直接返回，避免指数退避，0-1ms 内完成
 +				}
@@ -157,12 +190,13 @@ index cc64470f..a91f7422 100644
 +				// Add FridMira status information even in standard mode
 +				params["_fridmira_enhanced_mode"] = new Variant.boolean (false);
 +				params["_fridmira_version"] = new Variant.string ("16.7.19");
++				params["_fridmira_server_active"] = new Variant.boolean (false);
 +
 +				return params;
  			}
  
  			public async HostApplicationInfo get_frontmost_application (HashTable<string, Variant> options,
-@@ -888,11 +990,15 @@ namespace Frida {
+@@ -888,11 +1024,15 @@ namespace Frida {
  
  			public async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
  					Cancellable? cancellable) throws GLib.Error {
@@ -178,7 +212,7 @@ index cc64470f..a91f7422 100644
  				return yield parent.host_session.enumerate_processes (options, cancellable);
  			}
  
-@@ -930,6 +1036,11 @@ namespace Frida {
+@@ -930,6 +1070,11 @@ namespace Frida {
  
  			public async AgentSessionId attach (uint pid, HashTable<string, Variant> options,
  					Cancellable? cancellable) throws GLib.Error {
@@ -190,7 +224,7 @@ index cc64470f..a91f7422 100644
  				return yield parent.attach (pid, options, this, cancellable);
  			}
  
-@@ -959,6 +1070,45 @@ namespace Frida {
+@@ -959,6 +1104,45 @@ namespace Frida {
  					out string token) throws Error {
  				parent.open_tcp_transport (id, cancellable, out port, out token);
  			}
@@ -236,7 +270,7 @@ index cc64470f..a91f7422 100644
  		}
  
  		private class PendingSpawn {
-@@ -1142,5 +1292,44 @@ namespace Frida {
+@@ -1142,5 +1326,44 @@ namespace Frida {
  			set;
  			default = true;
  		}
