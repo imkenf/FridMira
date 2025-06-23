@@ -1,12 +1,12 @@
-From 707b3927d3016c34e6d5136633b239200ce84c65 Mon Sep 17 00:00:00 2001
+From 09a0888cc739c65a4ebf4f3390fda8d60bf8e25e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
  lib/base/rpc.vala     | 331 +++++++++++++++++++++++++++++++++++++++++-
- lib/base/session.vala |   2 +
- 2 files changed, 329 insertions(+), 4 deletions(-)
+ lib/base/session.vala |   7 +
+ 2 files changed, 334 insertions(+), 4 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
 index c4654527..2192bfc5 100644
@@ -404,7 +404,7 @@ index c4654527..2192bfc5 100644
  			else
  				response.complete_with_error (new Error.NOT_SUPPORTED (rpc_message.get_string_element (3)));
 diff --git a/lib/base/session.vala b/lib/base/session.vala
-index 7e0d8944..15e05933 100644
+index 7e0d8944..9472c6f7 100644
 --- a/lib/base/session.vala
 +++ b/lib/base/session.vala
 @@ -4,6 +4,8 @@ namespace Frida {
@@ -416,6 +416,18 @@ index 7e0d8944..15e05933 100644
  		public abstract async HostApplicationInfo get_frontmost_application (HashTable<string, Variant> options,
  			Cancellable? cancellable) throws GLib.Error;
  		public abstract async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
+@@ -906,6 +908,11 @@ namespace Frida {
+ 		public async ServiceSessionId open_service (string address, Cancellable? cancellable) throws Error, IOError {
+ 			throw_not_authorized ();
+ 		}
++
++		public async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
++				Cancellable? cancellable) throws Error, IOError {
++			throw_not_authorized ();
++		}
+ 	}
+ 
+ 	public sealed class UnauthorizedPortalSession : Object, PortalSession {
 -- 
 2.45.1.windows.1
 
