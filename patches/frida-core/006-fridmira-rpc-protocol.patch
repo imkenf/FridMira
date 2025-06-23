@@ -1,11 +1,12 @@
-From 7c83183d67f888f7f40f9b7748a06d65460020e9 Mon Sep 17 00:00:00 2001
+From 707b3927d3016c34e6d5136633b239200ce84c65 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 331 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 327 insertions(+), 4 deletions(-)
+ lib/base/rpc.vala     | 331 +++++++++++++++++++++++++++++++++++++++++-
+ lib/base/session.vala |   2 +
+ 2 files changed, 329 insertions(+), 4 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
 index c4654527..2192bfc5 100644
@@ -402,6 +403,19 @@ index c4654527..2192bfc5 100644
  				response.complete_with_result (rpc_message.get_element (3));
  			else
  				response.complete_with_error (new Error.NOT_SUPPORTED (rpc_message.get_string_element (3)));
+diff --git a/lib/base/session.vala b/lib/base/session.vala
+index 7e0d8944..15e05933 100644
+--- a/lib/base/session.vala
++++ b/lib/base/session.vala
+@@ -4,6 +4,8 @@ namespace Frida {
+ 		public abstract async void ping (uint interval_seconds, Cancellable? cancellable) throws GLib.Error;
+ 
+ 		public abstract async HashTable<string, Variant> query_system_parameters (Cancellable? cancellable) throws GLib.Error;
++		public abstract async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
++			Cancellable? cancellable) throws GLib.Error;
+ 		public abstract async HostApplicationInfo get_frontmost_application (HashTable<string, Variant> options,
+ 			Cancellable? cancellable) throws GLib.Error;
+ 		public abstract async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
 -- 
 2.45.1.windows.1
 

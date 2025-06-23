@@ -1,14 +1,14 @@
-From e27737a41c088e1a3ce94067292f26d462fbff82 Mon Sep 17 00:00:00 2001
+From 581e713cfee6b2ada811aebae2833d96de31a2c9 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 243 +++++++++++++++++++++++++++++++++++++--
- 1 file changed, 233 insertions(+), 10 deletions(-)
+ src/control-service.vala | 206 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 197 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..67dbb513 100644
+index cc64470f..12bb4093 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -112,91 +112,16 @@ index cc64470f..67dbb513 100644
  				}
  
  				state = STARTED;
-@@ -878,7 +939,82 @@ namespace Frida {
+@@ -878,6 +939,8 @@ namespace Frida {
  			}
  
  			public async HashTable<string, Variant> query_system_parameters (Cancellable? cancellable) throws GLib.Error {
--				return yield parent.host_session.query_system_parameters (cancellable);
-+				// 当 FridMira 混淆模式启用时，直接构造返回值避免 HostSession 指数退避
-+				// When FridMira obfuscation mode is enabled, construct return value directly to avoid HostSession exponential backoff
-+				if (Frida.FridMira.is_globally_enabled() &&
-+				    Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
-+
-+					// 构造最小系统参数返回值，避免 HostSession 指数退避
-+					// Construct minimal system parameter return value to avoid HostSession exponential backoff
-+					var params = new HashTable<string, Variant> (null, null);
-+
-+					// 添加基本系统信息 - 动态获取平台和架构
-+					// Add basic system information - dynamically get platform and arch
-+					string platform_name = "unknown";
-+					string arch_name = "unknown";
-+
-+					// 尝试从编译时定义获取平台信息
-+					// Try to get platform info from compile-time defines
-+#if LINUX
-+					platform_name = "linux";
-+#elif DARWIN
-+					platform_name = "darwin";
-+#elif WINDOWS
-+					platform_name = "windows";
-+#elif QNX
-+					platform_name = "qnx";
-+#elif FREEBSD
-+					platform_name = "freebsd";
-+#endif
-+
-+					// 尝试从编译时定义获取架构信息
-+					// Try to get architecture info from compile-time defines
-+#if X86_64
-+					arch_name = "x64";
-+#elif ARM64
-+					arch_name = "arm64";
-+#elif X86
-+					arch_name = "ia32";
-+#elif ARM
-+					arch_name = "arm";
-+#elif MIPS
-+					arch_name = "mips";
-+#endif
-+
-+					params["platform"] = new Variant.string (platform_name);
-+					params["arch"] = new Variant.string (arch_name);
-+					params["name"] = new Variant.string ("FridMira Server");
-+					params["version"] = new Variant.string ("16.7.19");
-+
-+					// 添加 FridMira 协议信息到系统参数中
-+					// Add FridMira protocol information to system parameters
-+					params["_fridmira_protocol_id"] =
-+						new Variant.string (Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null));
-+					params["_fridmira_call_command"] =
-+						new Variant.string (Frida.FridMiraRpcProtocolEnhancer.get_call_command (null));
-+					params["_fridmira_ok_response"] =
-+						new Variant.string (Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null));
-+					params["_fridmira_enhanced_mode"] =
-+						new Variant.boolean (true);
-+					params["_fridmira_version"] =
-+						new Variant.string ("16.7.19");
-+					params["_fridmira_server_active"] =
-+						new Variant.boolean (true);
-+
-+					return params;   // 直接返回，避免指数退避，0-1ms 内完成
-+				}
-+
-+				// 混淆关闭时走原始实现
-+				// Use original implementation when obfuscation is disabled
-+				var params = yield parent.host_session.query_system_parameters (cancellable);
-+
-+				// 即使在标准模式下也添加FridMira状态信息
-+				// Add FridMira status information even in standard mode
-+				params["_fridmira_enhanced_mode"] = new Variant.boolean (false);
-+				params["_fridmira_version"] = new Variant.string ("16.7.19");
-+				params["_fridmira_server_active"] = new Variant.boolean (false);
-+
-+				return params;
++				// Clean implementation - delegate to actual host session without any protocol discovery logic
++				// 干净的实现 - 委托给实际的主机会话，不包含任何协议发现逻辑
+ 				return yield parent.host_session.query_system_parameters (cancellable);
  			}
  
- 			public async HostApplicationInfo get_frontmost_application (HashTable<string, Variant> options,
-@@ -888,11 +1024,15 @@ namespace Frida {
+@@ -888,11 +951,15 @@ namespace Frida {
  
  			public async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
  					Cancellable? cancellable) throws GLib.Error {
@@ -212,65 +137,103 @@ index cc64470f..67dbb513 100644
  				return yield parent.host_session.enumerate_processes (options, cancellable);
  			}
  
-@@ -930,6 +1070,11 @@ namespace Frida {
+@@ -930,6 +997,8 @@ namespace Frida {
  
  			public async AgentSessionId attach (uint pid, HashTable<string, Variant> options,
  					Cancellable? cancellable) throws GLib.Error {
-+				// FridMira: Check if this is a protocol discovery request
-+				// FridMira: 检查这是否是协议发现请求
-+				//if (should_return_protocol_discovery_error()) {
-+					//throw_fridmira_protocol_discovery_error();
-+				//}
++				// Clean implementation - delegate to parent attach without any protocol discovery logic
++				// 干净的实现 - 委托给父级attach方法，不包含任何协议发现逻辑
  				return yield parent.attach (pid, options, this, cancellable);
  			}
  
-@@ -959,6 +1104,45 @@ namespace Frida {
+@@ -959,6 +1028,86 @@ namespace Frida {
  					out string token) throws Error {
  				parent.open_tcp_transport (id, cancellable, out port, out token);
  			}
 +
 +			/**
-+			 * FridMira: Check if we should return protocol discovery error
-+			 * FridMira: 检查是否应该返回协议发现错误
++			 * FridMira Protocol Negotiation Interface
++			 * FridMira协议协商接口
++			 *
++			 * This is the dedicated method for clients to negotiate the RPC protocol with the server.
++			 * 这是客户端与服务器协商RPC协议的专用方法。
++			 *
++			 * @param client_params Client parameters for negotiation (version, supported algorithms, etc.)
++			 *                      客户端协商参数（版本、支持的算法等）
++			 * @param cancellable   Cancellation token
++			 * @return Protocol negotiation result containing server protocol information
++			 *         包含服务器协议信息的协商结果
 +			 */
-+			private bool should_return_protocol_discovery_error() {
-+				// Check if FridMira is enabled and RPC enhancement is active
-+				// 检查FridMira是否启用且RPC增强处于活跃状态
-+				if (!Frida.FridMira.is_globally_enabled()) {
-+					return false;
++			public async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
++					Cancellable? cancellable) throws GLib.Error {
++				var result = new HashTable<string, Variant> (null, null);
++
++				// Check if FridMira framework is globally enabled
++				// 检查FridMira框架是否全局启用
++				bool fridmira_enabled = Frida.FridMira.is_globally_enabled();
++
++				// Check if FridMira RPC is enabled
++				// 检查FridMira RPC是否启用
++				bool fridmira_rpc_enabled = fridmira_enabled && Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
++
++				if (!fridmira_rpc_enabled) {
++					// FridMira RPC is not enabled - return standard protocol
++					// FridMira RPC未启用 - 返回标准协议
++					result["enabled"] = new Variant.boolean (false);
++					result["mode"] = new Variant.string ("standard");
++					result["version"] = new Variant.string ("16.7.19");
++					result["message"] = new Variant.string ("FridMira RPC is disabled");
++
++					return result;
 +				}
 +
-+				// Check if RPC protocol enhancement is enabled
-+				// 检查RPC协议增强是否启用
-+				return Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
++				// FridMira RPC is enabled - provide protocol information
++				// FridMira RPC已启用 - 提供协议信息
++				try {
++					result["enabled"] = new Variant.boolean (true);
++					result["mode"] = new Variant.string ("fridmira");
++					result["version"] = new Variant.string ("16.7.19");
++
++					// Get current dynamic protocol information
++					// 获取当前动态协议信息
++					result["protocol_id"] = new Variant.string (
++						Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null));
++					result["call_command"] = new Variant.string (
++						Frida.FridMiraRpcProtocolEnhancer.get_call_command (null));
++					result["ok_response"] = new Variant.string (
++						Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null));
++
++					// Additional metadata for future extensibility
++					// 用于未来扩展性的附加元数据
++					result["protocol_version"] = new Variant.string ("1.0");
++					result["negotiation_timestamp"] = new Variant.int64 (GLib.get_real_time ());
++
++					// Echo back client information for validation if provided
++					// 如果提供了客户端信息，回显以供验证
++					Variant? client_version = client_params.lookup ("client_version");
++					if (client_version != null) {
++						result["client_version_echo"] = client_version;
++					}
++
++					result["message"] = new Variant.string ("Protocol negotiation successful");
++
++				} catch (GLib.Error e) {
++					// If there's an error getting protocol information, fall back to disabled mode
++					// 如果获取协议信息时出错，回退到禁用模式
++					result["enabled"] = new Variant.boolean (false);
++					result["mode"] = new Variant.string ("error");
++					result["version"] = new Variant.string ("16.7.19");
++					result["message"] = new Variant.string ("Failed to retrieve protocol information: %s".printf(e.message));
++				}
++
++				return result;
 +			}
 +
-+			/**
-+			 * FridMira: Throw protocol discovery error with embedded protocol information
-+			 * FridMira: 抛出包含协议信息的协议发现错误
-+			 */
-+			private void throw_fridmira_protocol_discovery_error() throws GLib.Error {
-+				// Generate protocol information
-+				// 生成协议信息
-+				string protocol_id = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id(null);
-+				string call_command = Frida.FridMiraRpcProtocolEnhancer.get_call_command(null);
-+				string ok_response = Frida.FridMiraRpcProtocolEnhancer.get_ok_response(null);
-+				bool enhanced_mode = Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
 +
-+				// Create error message with protocol information
-+				// 创建包含协议信息的错误消息
-+				string error_message = "FridMira-Server-Active|protocol_id=%s|call_command=%s|ok_response=%s|enhanced_mode=%s".printf(
-+					protocol_id, call_command, ok_response, enhanced_mode ? "true" : "false"
-+				);
-+
-+				// Throw as a NOT_SUPPORTED error (this will be visible to the client)
-+				// 作为NOT_SUPPORTED错误抛出（这将对客户端可见）
-+				throw new Error.NOT_SUPPORTED (error_message);
-+			}
  		}
  
  		private class PendingSpawn {
-@@ -1142,5 +1326,44 @@ namespace Frida {
+@@ -1142,5 +1291,44 @@ namespace Frida {
  			set;
  			default = true;
  		}
