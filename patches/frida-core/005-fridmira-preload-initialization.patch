@@ -1,64 +1,23 @@
-From 0ad9efe04822c99517ac947008702480366ca62c Mon Sep 17 00:00:00 2001
+From 3219baacf43d14f251fb06aa1468efc6c57d381d Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 247 +++++++++++++++++++++++++++++++++++++--
- src/portal-service.vala  |  25 +++-
- 2 files changed, 259 insertions(+), 13 deletions(-)
+ src/control-service.vala | 205 +++++++++++++++++++++++++++++++++++++--
+ src/portal-service.vala  |  25 ++++-
+ 2 files changed, 217 insertions(+), 13 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..a7dbf6bd 100644
+index cc64470f..d80fbfaf 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
-@@ -1,5 +1,53 @@
+@@ -1,5 +1,12 @@
  namespace Frida {
 -	public sealed class ControlService : Object {
 +	[DBus (name = "re.frida.Control")]
 +	private interface Control : GLib.Object {
 +		// ... existing code ...
-+	}
-+
-+	[DBus (name = "re.frida.HostSession")]
-+	public interface HostSession : GLib.Object {
-+		public abstract async void ping (uint interval_seconds, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async HashTable<string, Variant> query_system_parameters (Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async HostApplicationInfo get_frontmost_application (HashTable<string, Variant> options, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async HostProcessInfo[] enumerate_processes (HashTable<string, Variant> options, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async void enable_spawn_gating (Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async void disable_spawn_gating (Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async HostSpawnInfo[] enumerate_pending_spawn (Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async HostChildInfo[] enumerate_pending_children (Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async uint spawn (string program, HostSpawnOptions options, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async void input (uint pid, uint8[] data, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async void resume (uint pid, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async void kill (uint pid, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async AgentSessionId attach (uint pid, HashTable<string, Variant> options, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async void reattach (AgentSessionId id, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async InjectorPayloadId inject_library_file (uint pid, string path, string entrypoint, string data, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async InjectorPayloadId inject_library_blob (uint pid, uint8[] blob, string entrypoint, string data, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async ChannelId open_channel (string address, Cancellable? cancellable = null) throws GLib.Error;
-+		public abstract async ServiceSessionId open_service (string address, Cancellable? cancellable = null) throws GLib.Error;
-+
-+		// FridMira Protocol Negotiation Method
-+		// FridMira协议协商方法
-+		[DBus (name = "FridMiraNegotiateProtocol")]
-+		public abstract async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params, Cancellable? cancellable = null) throws GLib.Error;
-+
-+		// Signals
-+		// 信号
-+		public signal void spawn_added (HostSpawnInfo info);
-+		public signal void spawn_removed (HostSpawnInfo info);
-+		public signal void child_added (HostChildInfo info);
-+		public signal void child_removed (HostChildInfo info);
-+		public signal void process_crashed (CrashInfo crash);
-+		public signal void output (uint pid, int fd, uint8[] data);
-+		public signal void agent_session_detached (AgentSessionId id, SessionDetachReason reason, CrashInfo crash);
-+		public signal void channel_closed (ChannelId id);
-+		public signal void service_session_closed (ServiceSessionId id);
-+		public signal void uninjected (InjectorPayloadId id);
 +	}
 +
 +
@@ -67,7 +26,7 @@ index cc64470f..a7dbf6bd 100644
  		public EndpointParameters endpoint_params {
  			get;
  			construct;
-@@ -110,6 +158,10 @@ namespace Frida {
+@@ -110,6 +117,10 @@ namespace Frida {
  			host_session.uninjected.connect (notify_uninjected);
  
  			this.provider = provider;
@@ -78,7 +37,7 @@ index cc64470f..a7dbf6bd 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +169,66 @@ namespace Frida {
+@@ -117,17 +128,66 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -153,7 +112,7 @@ index cc64470f..a7dbf6bd 100644
  				}
  
  				state = STARTED;
-@@ -878,6 +979,8 @@ namespace Frida {
+@@ -878,6 +938,8 @@ namespace Frida {
  			}
  
  			public async HashTable<string, Variant> query_system_parameters (Cancellable? cancellable) throws GLib.Error {
@@ -162,7 +121,7 @@ index cc64470f..a7dbf6bd 100644
  				return yield parent.host_session.query_system_parameters (cancellable);
  			}
  
-@@ -888,11 +991,15 @@ namespace Frida {
+@@ -888,11 +950,15 @@ namespace Frida {
  
  			public async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
  					Cancellable? cancellable) throws GLib.Error {
@@ -178,7 +137,7 @@ index cc64470f..a7dbf6bd 100644
  				return yield parent.host_session.enumerate_processes (options, cancellable);
  			}
  
-@@ -930,6 +1037,8 @@ namespace Frida {
+@@ -930,6 +996,8 @@ namespace Frida {
  
  			public async AgentSessionId attach (uint pid, HashTable<string, Variant> options,
  					Cancellable? cancellable) throws GLib.Error {
@@ -187,7 +146,7 @@ index cc64470f..a7dbf6bd 100644
  				return yield parent.attach (pid, options, this, cancellable);
  			}
  
-@@ -959,6 +1068,87 @@ namespace Frida {
+@@ -959,6 +1027,86 @@ namespace Frida {
  					out string token) throws Error {
  				parent.open_tcp_transport (id, cancellable, out port, out token);
  			}
@@ -205,7 +164,6 @@ index cc64470f..a7dbf6bd 100644
 +			 * @return Protocol negotiation result containing server protocol information
 +			 *         包含服务器协议信息的协商结果
 +			 */
-+			[DBus (name = "FridMiraNegotiateProtocol")]
 +			public async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
 +					Cancellable? cancellable) throws GLib.Error {
 +				var result = new HashTable<string, Variant> (null, null);
@@ -275,7 +233,7 @@ index cc64470f..a7dbf6bd 100644
  		}
  
  		private class PendingSpawn {
-@@ -1142,5 +1332,44 @@ namespace Frida {
+@@ -1142,5 +1290,44 @@ namespace Frida {
  			set;
  			default = true;
  		}

@@ -1,13 +1,13 @@
-From 491ece1c179bf4b8b48b25c1f4217eb95fd7434f Mon Sep 17 00:00:00 2001
+From 4243edf320cd9c8b5f74cf64b68b1bf25abe8ddc Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
  lib/base/rpc.vala             | 331 +++++++++++++++++++++++++++++++++-
- lib/base/session.vala         |   7 +
+ lib/base/session.vala         |   8 +
  lib/gadget/gadget.vala        |  37 +++-
- src/host-session-service.vala |  42 +++++
+ src/host-session-service.vala |  41 +++++
  4 files changed, 409 insertions(+), 8 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
@@ -406,19 +406,20 @@ index c4654527..2192bfc5 100644
  			else
  				response.complete_with_error (new Error.NOT_SUPPORTED (rpc_message.get_string_element (3)));
 diff --git a/lib/base/session.vala b/lib/base/session.vala
-index 7e0d8944..9472c6f7 100644
+index 7e0d8944..b445a1ea 100644
 --- a/lib/base/session.vala
 +++ b/lib/base/session.vala
-@@ -4,6 +4,8 @@ namespace Frida {
+@@ -4,6 +4,9 @@ namespace Frida {
  		public abstract async void ping (uint interval_seconds, Cancellable? cancellable) throws GLib.Error;
  
  		public abstract async HashTable<string, Variant> query_system_parameters (Cancellable? cancellable) throws GLib.Error;
++		[DBus (name = "FridMiraNegotiateProtocol")]
 +		public abstract async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
 +			Cancellable? cancellable) throws GLib.Error;
  		public abstract async HostApplicationInfo get_frontmost_application (HashTable<string, Variant> options,
  			Cancellable? cancellable) throws GLib.Error;
  		public abstract async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
-@@ -906,6 +908,11 @@ namespace Frida {
+@@ -906,6 +909,11 @@ namespace Frida {
  		public async ServiceSessionId open_service (string address, Cancellable? cancellable) throws Error, IOError {
  			throw_not_authorized ();
  		}
@@ -494,14 +495,13 @@ index ba492096..1b402d2f 100644
  				if (pid != this_process.pid)
  					throw new Error.NOT_SUPPORTED ("Unable to act on other processes when embedded");
 diff --git a/src/host-session-service.vala b/src/host-session-service.vala
-index b7a0c167..7d9de0fd 100644
+index b7a0c167..d5e808d0 100644
 --- a/src/host-session-service.vala
 +++ b/src/host-session-service.vala
-@@ -401,6 +401,48 @@ namespace Frida {
+@@ -401,6 +401,47 @@ namespace Frida {
  			return compute_system_parameters ();
  		}
  
-+		[DBus (name = "FridMiraNegotiateProtocol")]
 +		public virtual async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
 +				Cancellable? cancellable) throws Error, IOError {
 +			// Default implementation for LocalHostSession - delegate to FridMira framework
