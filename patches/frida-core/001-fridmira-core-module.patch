@@ -1,4 +1,4 @@
-From 72e8397ced8d7b09019f63cc72c92d664e00d1c2 Mon Sep 17 00:00:00 2001
+From 4bbae2aa5d0d7a628ebcf1c2f5f018ed71101c55 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -804,7 +804,7 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..e0f0b135
+index 00000000..e1d15a30
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
 @@ -0,0 +1,852 @@
@@ -1230,7 +1230,7 @@ index 00000000..e0f0b135
 +				parser.load_from_data(json_data);
 +				var root = parser.get_root();
 +
-+				if (!root.get_node_type().equals(Json.NodeType.OBJECT)) {
++				if (root.get_node_type() != Json.NodeType.OBJECT) {
 +					return false;
 +				}
 +
