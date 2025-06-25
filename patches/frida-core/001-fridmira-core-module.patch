@@ -1,4 +1,4 @@
-From 4a84e8c6ed3319bfbf451b9836c16c4b6c987c37 Mon Sep 17 00:00:00 2001
+From 9afecd3703970bb5f74cf80ba7b1b539efaa90af Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -804,7 +804,7 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..8a902330
+index 00000000..ec1d919b
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
 @@ -0,0 +1,839 @@
@@ -1460,7 +1460,7 @@ index 00000000..8a902330
 +		 * Export protocol configuration to JSON for programmatic use
 +		 * 将协议配置导出为JSON以供程序使用
 +		 */
-+		public static string export_protocol_config_json() {
++		public static string export_protocol_config_json() throws Error {
 +			bool fridmira_enabled = FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
 +
 +			string protocol_id;
@@ -1471,11 +1471,11 @@ index 00000000..8a902330
 +				// Load configuration from running server's config file
 +				// 从运行中服务器的配置文件加载配置
 +				if (FridMiraRpcProtocolEnhancer.load_protocol_config_from_file()) {
-+					protocol_id = FridMiraRpcProtocolEnhancer._fixed_protocol_id;
-+					call_command = FridMiraRpcProtocolEnhancer._fixed_call_command;
-+					ok_response = FridMiraRpcProtocolEnhancer._fixed_ok_response;
++					protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
++					call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
++					ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
 +				} else {
-+					throw new Error.NOT_SUPPORTED("No FridMira server configuration found. Please ensure server is running.");
++					throw new IOError.NOT_FOUND("No FridMira server configuration found. Please ensure server is running.");
 +				}
 +			} else {
 +				protocol_id = "frida:rpc";
