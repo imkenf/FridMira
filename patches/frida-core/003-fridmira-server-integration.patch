@@ -1,17 +1,17 @@
-From de43e7ea88db0a8ea0c604c6f59ec381048ce539 Mon Sep 17 00:00:00 2001
+From a07ad7a3d0a7fb859595788deb8b6c6185570800 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:02:38 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 479 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 452 insertions(+), 27 deletions(-)
+ server/server.vala | 513 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 486 insertions(+), 27 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b38..0a3dcc7d 100644
+index 67bf4b38..6f431ba8 100644
 --- a/server/server.vala
 +++ b/server/server.vala
-@@ -18,6 +18,16 @@ namespace Frida.Server {
+@@ -18,6 +18,23 @@ namespace Frida.Server {
  	private static bool report_crashes = true;
  	private static bool verbose = false;
  
@@ -25,13 +25,66 @@ index 67bf4b38..0a3dcc7d 100644
 +	private static bool fridmira_no_gum = false;
 +	private static bool fridmira_no_preload = false;
 +
++	// FridMira diagnostic options
++	// FridMira诊断选项
++	private static bool fridmira_show_config = false;
++	private static bool fridmira_show_status = false;
++	private static bool fridmira_export_json = false;
++	private static bool fridmira_show_examples = false;
++
  	private enum PolicySoftenerFlavor {
  		SYSTEM,
  		INTERNAL;
-@@ -29,6 +39,67 @@ namespace Frida.Server {
+@@ -29,6 +46,113 @@ namespace Frida.Server {
  
  	private delegate void ReadyHandler (bool success);
  
++	/**
++	 * Setup FridMira environment for diagnostic operations only
++	 * 仅为诊断操作设置FridMira环境
++	 *
++	 * CRITICAL: This must use the EXACT SAME configuration as the actual server
++	 * to ensure diagnostic information matches what clients will encounter.
++	 * 关键：这必须使用与实际服务器完全相同的配置，以确保诊断信息
++	 * 与客户端遇到的情况匹配。
++	 */
++	private static void setup_fridmira_environment_for_diagnostics() {
++		// Use the same FridMira mode logic as the actual server startup
++		// 使用与实际服务器启动相同的FridMira模式逻辑
++		bool effective_fridmira_enabled = fridmira_enabled;
++
++		// Check environment variables if not explicitly enabled via CLI
++		// 如果没有通过CLI显式启用，检查环境变量
++		if (!effective_fridmira_enabled) {
++			string? global_mode = GLib.Environment.get_variable("FRIDMIRA_MODE");
++			effective_fridmira_enabled = (global_mode == "1");
++		}
++
++		if (effective_fridmira_enabled) {
++			// Set FridMira environment variables using the same logic as server startup
++			// 使用与服务器启动相同的逻辑设置FridMira环境变量
++			GLib.Environment.set_variable ("FRIDMIRA_MODE", "1", true);
++			GLib.Environment.set_variable ("FRIDMIRA_SYMBOL_MODE", fridmira_no_symbol ? "0" : "1", true);
++			GLib.Environment.set_variable ("FRIDMIRA_THREAD_MODE", fridmira_no_thread ? "0" : "1", true);
++			GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", fridmira_no_rpc ? "0" : "1", true);
++			GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", fridmira_no_file ? "0" : "1", true);
++			GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", fridmira_no_gum ? "0" : "1", true);
++
++			// Initialize FridMira framework for diagnostic access
++			// 初始化FridMira框架以供诊断访问
++			try {
++				Frida.FridMira.bootstrap_initialization (false);
++				Frida.FridMira.initialize_fridmira_framework (false);
++			} catch (Error e) {
++				stderr.printf ("Warning: FridMira initialization failed for diagnostics: %s\n", e.message);
++			}
++		} else {
++			// Ensure FridMira is disabled for diagnostics if not enabled
++			// 如果未启用，确保诊断中禁用FridMira
++			GLib.Environment.set_variable ("FRIDMIRA_MODE", "0", true);
++		}
++	}
++
 +	/**
 +	 * Process FridMira environment variables with hierarchical priority
 +	 * 处理FridMira环境变量，采用分层优先级机制
@@ -96,7 +149,7 @@ index 67bf4b38..0a3dcc7d 100644
  	const OptionEntry[] option_entries = {
  		{ "version", 0, 0, OptionArg.NONE, ref output_version, "Output version information and exit", null },
  		{ "device", 0, 0, OptionArg.STRING, ref device_id, "Serve device with the given ID", "ID" },
-@@ -48,6 +119,23 @@ namespace Frida.Server {
+@@ -48,6 +172,31 @@ namespace Frida.Server {
  		{ "ignore-crashes", 'C', OptionFlags.REVERSE, OptionArg.NONE, ref report_crashes,
  			"Disable native crash reporter integration", null },
  		{ "verbose", 'v', 0, OptionArg.NONE, ref verbose, "Be verbose", null },
@@ -117,10 +170,18 @@ index 67bf4b38..0a3dcc7d 100644
 +			"Disable GUM memory obfuscation (requires --fridmira)", null },
 +		{ "no-preload", 0, 0, OptionArg.NONE, ref fridmira_no_preload,
 +			"Disable preload optimization with FridMira (for debugging)", null },
++		{ "show-config", 0, 0, OptionArg.NONE, ref fridmira_show_config,
++			"Show FridMira client protocol configuration and exit", null },
++		{ "show-status", 0, 0, OptionArg.NONE, ref fridmira_show_status,
++			"Show FridMira server status report and exit", null },
++		{ "export-json", 0, 0, OptionArg.NONE, ref fridmira_export_json,
++			"Export FridMira protocol configuration as JSON and exit", null },
++		{ "show-examples", 0, 0, OptionArg.NONE, ref fridmira_show_examples,
++			"Show FridMira usage examples and exit", null },
  		{ null }
  	};
  
-@@ -60,6 +148,10 @@ namespace Frida.Server {
+@@ -60,6 +209,10 @@ namespace Frida.Server {
  		}
  #endif
  
@@ -131,7 +192,7 @@ index 67bf4b38..0a3dcc7d 100644
  		try {
  			var ctx = new OptionContext ();
  			ctx.set_help_enabled (true);
-@@ -71,6 +163,20 @@ namespace Frida.Server {
+@@ -71,13 +224,64 @@ namespace Frida.Server {
  			return 1;
  		}
  
@@ -152,8 +213,36 @@ index 67bf4b38..0a3dcc7d 100644
  		if (output_version) {
  			stdout.printf ("%s\n", version_string ());
  			return 0;
-@@ -78,6 +184,15 @@ namespace Frida.Server {
+ 		}
  
++		// Handle diagnostic options (independent of FridMira mode)
++		// 处理诊断选项（独立于FridMira模式）
++		if (fridmira_show_examples) {
++			stdout.printf ("%s\n", Frida.FridMiraDiagnostics.RpcProtocolDiagnostic.get_usage_examples());
++			return 0;
++		}
++
++		if (fridmira_show_config || fridmira_show_status || fridmira_export_json) {
++			// Initialize with current configuration (works with or without --fridmira)
++			// 使用当前配置初始化（无论是否使用--fridmira都能工作）
++			setup_fridmira_environment_for_diagnostics();
++
++			if (fridmira_show_config) {
++				stdout.printf ("%s\n", Frida.FridMiraDiagnostics.RpcProtocolDiagnostic.get_client_protocol_config());
++				return 0;
++			}
++
++			if (fridmira_show_status) {
++				stdout.printf ("%s\n", Frida.FridMiraDiagnostics.RpcProtocolDiagnostic.get_server_status());
++				return 0;
++			}
++
++			if (fridmira_export_json) {
++				stdout.printf ("%s\n", Frida.FridMiraDiagnostics.RpcProtocolDiagnostic.export_protocol_config_json());
++				return 0;
++			}
++		}
++
  		Environment.set_verbose_logging_enabled (verbose);
  
 +		// FIXED: 同时设置FRIDA_VERBOSE环境变量，确保FridMira能够检测到verbose模式
@@ -168,7 +257,7 @@ index 67bf4b38..0a3dcc7d 100644
  		EndpointParameters endpoint_params;
  		try {
  			endpoint_params = new EndpointParameters (listen_address, 0, parse_certificate (certpath), origin,
-@@ -89,9 +204,17 @@ namespace Frida.Server {
+@@ -89,9 +293,17 @@ namespace Frida.Server {
  		}
  
  		var options = new ControlServiceOptions ();
@@ -187,7 +276,7 @@ index 67bf4b38..0a3dcc7d 100644
  #if (IOS || TVOS) && !HAVE_EMBEDDED_ASSETS
  		string? program_path = null;
  		Gum.Process.enumerate_modules (m => {
-@@ -179,12 +302,32 @@ namespace Frida.Server {
+@@ -179,12 +391,32 @@ namespace Frida.Server {
  		Environment.configure ();
  
  #if DARWIN
@@ -225,7 +314,7 @@ index 67bf4b38..0a3dcc7d 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +335,180 @@ namespace Frida.Server {
+@@ -192,23 +424,125 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
@@ -289,63 +378,8 @@ index 67bf4b38..0a3dcc7d 100644
 +				GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", options.fridmira_no_gum ? "0" : "1", true);
 +
 +				// STEP 3: Initialize main FridMira framework (full protection)
-+				// 步骤3：初始化主FridMira框架（完整保护）
-+				// CRITICAL: Must be done BEFORE preload to ensure all anti-detection mechanisms are active
-+				// 关键：必须在preload之前完成，确保所有反检测机制都处于活跃状态
-+                Frida.FridMira.initialize_fridmira_framework (verbose);
-+
-+				// STEP 4: Pre-initialize RPC Protocol Enhancer to avoid first-call delays
-+				// 步骤4：预初始化RPC协议增强器以避免首次调用延迟
-+				if (!options.fridmira_no_rpc) {
-+					if (verbose) {
-+						stdout.printf ("FridMira: Pre-initializing RPC Protocol Enhancer...\n");
-+					}
-+
-+					// Force initialization of RPC enhancer by calling key methods
-+					// 通过调用关键方法强制初始化RPC增强器
-+					Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
-+					if (Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
-+						// Initialize protocol cache
-+						string test_protocol = Frida.FridMiraRpcProtocolEnhancer.get_protocol_id(null);
-+						string test_command = Frida.FridMiraRpcProtocolEnhancer.get_call_command(null);
-+						string test_response = Frida.FridMiraRpcProtocolEnhancer.get_ok_response(null);
-+
-+						if (verbose) {
-+							stdout.printf ("FridMira: RPC Enhancer pre-initialized successfully\n");
-+							stdout.printf ("FridMira:   Protocol ID: %s\n", test_protocol);
-+							stdout.printf ("FridMira:   Call Command: %s\n", test_command);
-+							stdout.printf ("FridMira:   OK Response: %s\n", test_response);
-+						}
-+
-+						// CRITICAL: Initialize and connect the RPC enhancer adapter
-+						// 关键：初始化并连接RPC增强器适配器
-+						if (verbose) {
-+							stdout.printf ("FridMira: Connecting RPC enhancer adapter...\n");
-+						}
-+
-+						try {
-+							// Create and register the RPC enhancer adapter
-+							// 创建并注册RPC增强器适配器
-+							var enhancer_adapter = new Frida.FridMiraRpcEnhancerAdapter();
-+							Frida.RpcClient.enhancer = enhancer_adapter;
-+
-+							if (verbose) {
-+								stdout.printf ("FridMira: ✅ RPC enhancer adapter connected successfully\n");
-+							}
-+						} catch (Error e) {
-+							stderr.printf ("FridMira: ERROR connecting RPC enhancer adapter: %s\n", e.message);
-+							stderr.printf ("FridMira: RPC enhancement will be disabled\n");
-+						}
-+					} else {
-+						if (verbose) {
-+							stdout.printf ("FridMira: RPC enhancement is disabled by configuration\n");
-+						}
-+					}
-+				} else {
-+					if (verbose) {
-+						stdout.printf ("FridMira: RPC enhancement disabled by --no-rpc flag\n");
-+					}
-+				}
++				// 步骤3：初始化主FridMira框架（完整加载混淆）
++				Frida.FridMira.initialize_fridmira_framework (verbose);
 +
 +				if (verbose) {
 +					stdout.printf ("FridMira: ✅ Bootstrap completed - preload protection active\n");
@@ -417,7 +451,7 @@ index 67bf4b38..0a3dcc7d 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +517,64 @@ namespace Frida.Server {
+@@ -217,9 +551,64 @@ namespace Frida.Server {
  			});
  		}
  
@@ -482,7 +516,7 @@ index 67bf4b38..0a3dcc7d 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +639,67 @@ namespace Frida.Server {
+@@ -284,22 +673,67 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -559,7 +593,7 @@ index 67bf4b38..0a3dcc7d 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +708,19 @@ namespace Frida.Server {
+@@ -308,12 +742,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -579,7 +613,7 @@ index 67bf4b38..0a3dcc7d 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,32 +728,48 @@ namespace Frida.Server {
+@@ -321,32 +762,48 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -629,7 +663,7 @@ index 67bf4b38..0a3dcc7d 100644
  			stop ();
  		}
  	}
-@@ -357,4 +780,6 @@ namespace Frida.Server {
+@@ -357,4 +814,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}

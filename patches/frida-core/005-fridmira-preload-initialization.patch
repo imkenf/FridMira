@@ -1,18 +1,17 @@
-From 3219baacf43d14f251fb06aa1468efc6c57d381d Mon Sep 17 00:00:00 2001
+From e28d42da9f333507997668976ede7dbc831093da Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 205 +++++++++++++++++++++++++++++++++++++--
- src/portal-service.vala  |  25 ++++-
- 2 files changed, 217 insertions(+), 13 deletions(-)
+ src/control-service.vala | 122 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 113 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..d80fbfaf 100644
+index cc64470f..2be1ac46 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
-@@ -1,5 +1,12 @@
+@@ -1,5 +1,13 @@
  namespace Frida {
 -	public sealed class ControlService : Object {
 +	[DBus (name = "re.frida.Control")]
@@ -20,13 +19,14 @@ index cc64470f..d80fbfaf 100644
 +		// ... existing code ...
 +	}
 +
-+
++	[CCode (cname = "_frida_internal_init_fridmira")]
++	internal extern void initialize_fridmira_framework () throws IOError;
 +
 +	public class ControlService : Object {
  		public EndpointParameters endpoint_params {
  			get;
  			construct;
-@@ -110,6 +117,10 @@ namespace Frida {
+@@ -110,6 +118,10 @@ namespace Frida {
  			host_session.uninjected.connect (notify_uninjected);
  
  			this.provider = provider;
@@ -37,7 +37,7 @@ index cc64470f..d80fbfaf 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +128,66 @@ namespace Frida {
+@@ -117,17 +129,72 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -76,28 +76,34 @@ index cc64470f..d80fbfaf 100644
 +						}
 +					}
 +
-+					// Post-preload framework status validation
-+					// Preload后框架状态验证
-+					if (verbose_enabled) {
-+						stdout.printf ("FridMira: Validating framework status after preload...\n");
-+					}
-+					// Framework already initialized in server.vala before preload
-+					// 框架已在server.vala中preload之前初始化完成
-+
-+					// Post-preload comprehensive status report
-+					// Preload后综合状态报告
++					// Preload后详细框架状态报告
 +					if (verbose_enabled) {
 +						stdout.printf ("FridMira: ==========================================\n");
-+						stdout.printf ("FridMira: Post-Preload Status Report\n");
++						stdout.printf ("FridMira: Framework Status Report\n");
 +						stdout.printf ("FridMira: ==========================================\n");
 +
-+						// Use centralized framework status from FridMira core
-+						// 使用FridMira核心的集中化框架状态
-+						string framework_status = Frida.FridMira.get_framework_status();
-+						stdout.printf ("%s\n", framework_status);
++						// Show brief module status overview
++						// 显示简要的模块状态概览
++						stdout.printf ("FridMira: Preload Protection Status:\n");
++						stdout.printf ("FridMira:   Symbol Obfuscation: %s\n", !options.fridmira_no_symbol ? "ACTIVE" : "DISABLED");
++						stdout.printf ("FridMira:   Thread Obfuscation: %s\n", !options.fridmira_no_thread ? "ACTIVE" : "DISABLED");
++						stdout.printf ("FridMira:   RPC Protocol Enhancement: %s\n", !options.fridmira_no_rpc ? "ACTIVE" : "DISABLED");
++						stdout.printf ("FridMira:   File System Obfuscation: %s\n", !options.fridmira_no_file ? "ACTIVE" : "DISABLED");
++						stdout.printf ("FridMira:   Memory Obfuscation: %s\n", !options.fridmira_no_gum ? "ACTIVE" : "DISABLED");
 +
-+						stdout.printf ("FridMira: ==========================================\n");
-+						stdout.printf ("FridMira: ✅ All protection systems operational\n");
++						// Agent模块状态
++						stdout.printf ("FridMira: [✗] Agent Library Management Module - DISABLED\n");
++
++						// 未来模块占位符
++						stdout.printf ("FridMira: [⏳] Network Protocol Obfuscation Module - PENDING\n");
++						stdout.printf ("FridMira:     Status: Development planned for v1.1\n");
++						stdout.printf ("FridMira: [⏳] Process Name Obfuscation Module - PENDING\n");
++						stdout.printf ("FridMira:     Status: Research phase\n");
++						stdout.printf ("FridMira: [⏳] Dynamic Library Loading Obfuscation - PENDING\n");
++						stdout.printf ("FridMira:     Status: Design phase\n");
++
++						stdout.printf ("FridMira: ------------------------------------------\n");
++						stdout.printf ("FridMira: ✅ All enabled modules operational\n");
 +						stdout.printf ("FridMira: ==========================================\n");
 +					}
 +				} else {
@@ -112,128 +118,7 @@ index cc64470f..d80fbfaf 100644
  				}
  
  				state = STARTED;
-@@ -878,6 +938,8 @@ namespace Frida {
- 			}
- 
- 			public async HashTable<string, Variant> query_system_parameters (Cancellable? cancellable) throws GLib.Error {
-+				// Clean implementation - delegate to actual host session without any protocol discovery logic
-+				// 干净的实现 - 委托给实际的主机会话，不包含任何协议发现逻辑
- 				return yield parent.host_session.query_system_parameters (cancellable);
- 			}
- 
-@@ -888,11 +950,15 @@ namespace Frida {
- 
- 			public async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
- 					Cancellable? cancellable) throws GLib.Error {
-+				// 删除协议发现错误抛出逻辑，让标准控制面正常工作
-+				// Remove protocol discovery error logic to let standard control plane work normally
- 				return yield parent.host_session.enumerate_applications (options, cancellable);
- 			}
- 
- 			public async HostProcessInfo[] enumerate_processes (HashTable<string, Variant> options,
- 					Cancellable? cancellable) throws GLib.Error {
-+				// 删除协议发现错误抛出逻辑，让标准控制面正常工作
-+				// Remove protocol discovery error logic to let standard control plane work normally
- 				return yield parent.host_session.enumerate_processes (options, cancellable);
- 			}
- 
-@@ -930,6 +996,8 @@ namespace Frida {
- 
- 			public async AgentSessionId attach (uint pid, HashTable<string, Variant> options,
- 					Cancellable? cancellable) throws GLib.Error {
-+				// Clean implementation - delegate to parent attach without any protocol discovery logic
-+				// 干净的实现 - 委托给父级attach方法，不包含任何协议发现逻辑
- 				return yield parent.attach (pid, options, this, cancellable);
- 			}
- 
-@@ -959,6 +1027,86 @@ namespace Frida {
- 					out string token) throws Error {
- 				parent.open_tcp_transport (id, cancellable, out port, out token);
- 			}
-+
-+			/**
-+			 * FridMira Protocol Negotiation Interface
-+			 * FridMira协议协商接口
-+			 *
-+			 * This is the dedicated method for clients to negotiate the RPC protocol with the server.
-+			 * 这是客户端与服务器协商RPC协议的专用方法。
-+			 *
-+			 * @param client_params Client parameters for negotiation (version, supported algorithms, etc.)
-+			 *                      客户端协商参数（版本、支持的算法等）
-+			 * @param cancellable   Cancellation token
-+			 * @return Protocol negotiation result containing server protocol information
-+			 *         包含服务器协议信息的协商结果
-+			 */
-+			public async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
-+					Cancellable? cancellable) throws GLib.Error {
-+				var result = new HashTable<string, Variant> (null, null);
-+
-+				// Check if FridMira framework is globally enabled
-+				// 检查FridMira框架是否全局启用
-+				bool fridmira_enabled = Frida.FridMira.is_globally_enabled();
-+
-+				// Check if FridMira RPC is enabled
-+				// 检查FridMira RPC是否启用
-+				bool fridmira_rpc_enabled = fridmira_enabled && Frida.FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
-+
-+				if (!fridmira_rpc_enabled) {
-+					// FridMira RPC is not enabled - return standard protocol
-+					// FridMira RPC未启用 - 返回标准协议
-+					result["enabled"] = new Variant.boolean (false);
-+					result["mode"] = new Variant.string ("standard");
-+					result["version"] = new Variant.string ("16.7.19");
-+					result["message"] = new Variant.string ("FridMira RPC is disabled");
-+
-+					return result;
-+				}
-+
-+				// FridMira RPC is enabled - provide protocol information
-+				// FridMira RPC已启用 - 提供协议信息
-+				try {
-+					result["enabled"] = new Variant.boolean (true);
-+					result["mode"] = new Variant.string ("fridmira");
-+					result["version"] = new Variant.string ("16.7.19");
-+
-+					// Get current dynamic protocol information
-+					// 获取当前动态协议信息
-+					result["protocol_id"] = new Variant.string (
-+						Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (null));
-+					result["call_command"] = new Variant.string (
-+						Frida.FridMiraRpcProtocolEnhancer.get_call_command (null));
-+					result["ok_response"] = new Variant.string (
-+						Frida.FridMiraRpcProtocolEnhancer.get_ok_response (null));
-+
-+					// Additional metadata for future extensibility
-+					// 用于未来扩展性的附加元数据
-+					result["protocol_version"] = new Variant.string ("1.0");
-+					result["negotiation_timestamp"] = new Variant.int64 (GLib.get_real_time ());
-+
-+					// Echo back client information for validation if provided
-+					// 如果提供了客户端信息，回显以供验证
-+					Variant? client_version = client_params.lookup ("client_version");
-+					if (client_version != null) {
-+						result["client_version_echo"] = client_version;
-+					}
-+
-+					result["message"] = new Variant.string ("Protocol negotiation successful");
-+
-+				} catch (GLib.Error e) {
-+					// If there's an error getting protocol information, fall back to disabled mode
-+					// 如果获取协议信息时出错，回退到禁用模式
-+					result["enabled"] = new Variant.boolean (false);
-+					result["mode"] = new Variant.string ("error");
-+					result["version"] = new Variant.string ("16.7.19");
-+					result["message"] = new Variant.string ("Failed to retrieve protocol information: %s".printf(e.message));
-+				}
-+
-+				return result;
-+			}
-+
-+
- 		}
- 
- 		private class PendingSpawn {
-@@ -1142,5 +1290,44 @@ namespace Frida {
+@@ -1142,5 +1209,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
@@ -274,67 +159,8 @@ index cc64470f..d80fbfaf 100644
 +			set;
 +			default = false;
 +		}
-+
-+
  	}
  }
-diff --git a/src/portal-service.vala b/src/portal-service.vala
-index 0d24d559..f366c9b5 100644
---- a/src/portal-service.vala
-+++ b/src/portal-service.vala
-@@ -1054,7 +1054,7 @@ namespace Frida {
- 					return;
- 
- 				BusService bus = controller.bus;
--				if (bus.status != ATTACHED)
-+				if (bus.status != BusStatus.ATTACHED)
- 					return;
- 
- 				bool has_data = data != null;
-@@ -1313,6 +1313,23 @@ namespace Frida {
- 			public async ServiceSessionId open_service (string address, Cancellable? cancellable) throws Error, IOError {
- 				throw new Error.NOT_SUPPORTED ("Services are not supported by this backend");
- 			}
-+
-+			public async HashTable<string, Variant> fridmira_negotiate_protocol (HashTable<string, Variant> client_params,
-+					Cancellable? cancellable) throws Error, IOError {
-+				// PortalService ControlChannel protocol negotiation
-+				// PortalService ControlChannel协议协商
-+				var result = new HashTable<string, Variant> (null, null);
-+
-+				// Portal mode uses standard protocol by default
-+				// Portal模式默认使用标准协议
-+				result["enabled"] = new Variant.boolean (false);
-+				result["mode"] = new Variant.string ("standard");
-+				result["version"] = new Variant.string ("16.7.19");
-+				result["protocol_version"] = new Variant.string ("1.0");
-+				result["note"] = new Variant.string ("Portal mode uses standard RPC protocol");
-+
-+				return result;
-+			}
- 		}
- 
- 		private class BusService : Object, BusSession {
-@@ -1331,16 +1348,16 @@ namespace Frida {
- 					return _status;
- 				}
- 			}
--			private BusStatus _status = DETACHED;
-+			private BusStatus _status = BusStatus.DETACHED;
- 
- 			public BusService (PortalService parent, uint connection_id) {
- 				Object (parent: parent, connection_id: connection_id);
- 			}
- 
- 			public async void attach (Cancellable? cancellable) throws Error, IOError {
--				if (_status == ATTACHED)
-+				if (_status == BusStatus.ATTACHED)
- 					return;
--				_status = ATTACHED;
-+				_status = BusStatus.ATTACHED;
- 				parent.handle_bus_attach (connection_id);
- 			}
- 
 -- 
 2.45.1.windows.1
 
