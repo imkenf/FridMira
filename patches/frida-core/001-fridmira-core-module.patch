@@ -1,17 +1,17 @@
-From d1a0be8e38783cfe955eb280f1ef3deeb1ee3877 Mon Sep 17 00:00:00 2001
+From 4a84e8c6ed3319bfbf451b9836c16c4b6c987c37 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 263 ++++++++++++
- lib/mira/fridmira-file.vala   | 275 +++++++++++++
- lib/mira/fridmira-memory.vala | 226 +++++++++++
- lib/mira/fridmira-rpc.vala    | 741 ++++++++++++++++++++++++++++++++++
- lib/mira/fridmira-symbol.vala | 212 ++++++++++
- lib/mira/fridmira-thread.vala | 167 ++++++++
- lib/mira/fridmira.vala        | 340 ++++++++++++++++
- 7 files changed, 2224 insertions(+)
+ lib/mira/fridmira-agent.vala  | 263 +++++++++++
+ lib/mira/fridmira-file.vala   | 275 +++++++++++
+ lib/mira/fridmira-memory.vala | 226 +++++++++
+ lib/mira/fridmira-rpc.vala    | 839 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-symbol.vala | 212 +++++++++
+ lib/mira/fridmira-thread.vala | 167 +++++++
+ lib/mira/fridmira.vala        | 340 ++++++++++++++
+ 7 files changed, 2322 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..a7131f57
+index 00000000..8a902330
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,741 @@
+@@ -0,0 +1,839 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -942,6 +942,10 @@ index 00000000..a7131f57
 +				_fixed_protocol_id = generate_obfuscated_protocol_deterministic(_deterministic_seed);
 +				_fixed_call_command = generate_obfuscated_command_deterministic(_deterministic_seed + 1);
 +				_fixed_ok_response = generate_obfuscated_response_deterministic(_deterministic_seed + 2);
++
++				// Save configuration to file for diagnostic commands to read
++				// 保存配置到文件供诊断命令读取
++				save_protocol_config_to_file();
 +
 +				initialized = true;
 +			} finally {
@@ -1169,6 +1173,87 @@ index 00000000..a7131f57
 +		}
 +
 +		/**
++		 * Protocol configuration file path
++		 * 协议配置文件路径
++		 */
++		private static string get_config_file_path() {
++			return "./fridmira_config.json";
++		}
++
++		/**
++		 * Save protocol configuration to file
++		 * 将协议配置保存到文件
++		 */
++		private static void save_protocol_config_to_file() {
++			ensure_initialized();
++
++			try {
++				var json_builder = new Json.Builder();
++				json_builder
++					.begin_object()
++					.set_member_name("protocol_id")
++					.add_string_value(_fixed_protocol_id)
++					.set_member_name("call_command")
++					.add_string_value(_fixed_call_command)
++					.set_member_name("ok_response")
++					.add_string_value(_fixed_ok_response)
++					.set_member_name("deterministic_seed")
++					.add_int_value(_deterministic_seed)
++					.set_member_name("timestamp")
++					.add_string_value(new DateTime.now_local().to_string())
++					.end_object();
++
++				string json_data = Json.to_string(json_builder.get_root(), true);
++				string config_file = get_config_file_path();
++
++				GLib.FileUtils.set_contents(config_file, json_data);
++			} catch (Error e) {
++				// Silently ignore file write errors to avoid breaking server startup
++				// 静默忽略文件写入错误，避免影响服务器启动
++			}
++		}
++
++		/**
++		 * Load protocol configuration from file
++		 * 从文件加载协议配置
++		 */
++		private static bool load_protocol_config_from_file() {
++			string config_file = get_config_file_path();
++
++			try {
++				string json_data;
++				if (!GLib.FileUtils.get_contents(config_file, out json_data)) {
++					return false;
++				}
++
++				var parser = new Json.Parser();
++				parser.load_from_data(json_data);
++				var root = parser.get_root();
++
++				if (!root.get_node_type().equals(Json.NodeType.OBJECT)) {
++					return false;
++				}
++
++				var obj = root.get_object();
++
++				if (!obj.has_member("protocol_id") || !obj.has_member("call_command") ||
++				    !obj.has_member("ok_response") || !obj.has_member("deterministic_seed")) {
++					return false;
++				}
++
++				_fixed_protocol_id = obj.get_string_member("protocol_id");
++				_fixed_call_command = obj.get_string_member("call_command");
++				_fixed_ok_response = obj.get_string_member("ok_response");
++				_deterministic_seed = (uint32)obj.get_int_member("deterministic_seed");
++
++				return true;
++
++			} catch (Error e) {
++				return false;
++			}
++		}
++
++		/**
 +		 * Generate deterministic seed for consistent protocol generation
 +		 * 生成确定性种子以确保协议生成的一致性
 +		 */
@@ -1378,12 +1463,25 @@ index 00000000..a7131f57
 +		public static string export_protocol_config_json() {
 +			bool fridmira_enabled = FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
 +
-+			string protocol_id = fridmira_enabled ?
-+				FridMiraRpcProtocolEnhancer.get_protocol_id(null) : "frida:rpc";
-+			string call_command = fridmira_enabled ?
-+				FridMiraRpcProtocolEnhancer.get_call_command(null) : "call";
-+			string ok_response = fridmira_enabled ?
-+				FridMiraRpcProtocolEnhancer.get_ok_response(null) : "ok";
++			string protocol_id;
++			string call_command;
++			string ok_response;
++
++			if (fridmira_enabled) {
++				// Load configuration from running server's config file
++				// 从运行中服务器的配置文件加载配置
++				if (FridMiraRpcProtocolEnhancer.load_protocol_config_from_file()) {
++					protocol_id = FridMiraRpcProtocolEnhancer._fixed_protocol_id;
++					call_command = FridMiraRpcProtocolEnhancer._fixed_call_command;
++					ok_response = FridMiraRpcProtocolEnhancer._fixed_ok_response;
++				} else {
++					throw new Error.NOT_SUPPORTED("No FridMira server configuration found. Please ensure server is running.");
++				}
++			} else {
++				protocol_id = "frida:rpc";
++				call_command = "call";
++				ok_response = "ok";
++			}
 +
 +			var json_builder = new Json.Builder();
 +			json_builder
