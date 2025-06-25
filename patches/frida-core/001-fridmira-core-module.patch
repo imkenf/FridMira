@@ -1,4 +1,4 @@
-From 9afecd3703970bb5f74cf80ba7b1b539efaa90af Mon Sep 17 00:00:00 2001
+From 72e8397ced8d7b09019f63cc72c92d664e00d1c2 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -7,11 +7,11 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-agent.vala  | 263 +++++++++++
  lib/mira/fridmira-file.vala   | 275 +++++++++++
  lib/mira/fridmira-memory.vala | 226 +++++++++
- lib/mira/fridmira-rpc.vala    | 839 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 852 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++
  lib/mira/fridmira.vala        | 340 ++++++++++++++
- 7 files changed, 2322 insertions(+)
+ 7 files changed, 2335 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -804,10 +804,10 @@ index 00000000..f71561db
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..ec1d919b
+index 00000000..e0f0b135
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,839 @@
+@@ -0,0 +1,852 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -1176,7 +1176,7 @@ index 00000000..ec1d919b
 +		 * Protocol configuration file path
 +		 * 协议配置文件路径
 +		 */
-+		private static string get_config_file_path() {
++		public static string get_config_file_path() {
 +			return "./fridmira_config.json";
 +		}
 +
@@ -1184,7 +1184,7 @@ index 00000000..ec1d919b
 +		 * Save protocol configuration to file
 +		 * 将协议配置保存到文件
 +		 */
-+		private static void save_protocol_config_to_file() {
++		public static void save_protocol_config_to_file() {
 +			ensure_initialized();
 +
 +			try {
@@ -1217,7 +1217,7 @@ index 00000000..ec1d919b
 +		 * Load protocol configuration from file
 +		 * 从文件加载协议配置
 +		 */
-+		private static bool load_protocol_config_from_file() {
++		public static bool load_protocol_config_from_file() {
 +			string config_file = get_config_file_path();
 +
 +			try {
@@ -1460,27 +1460,38 @@ index 00000000..ec1d919b
 +		 * Export protocol configuration to JSON for programmatic use
 +		 * 将协议配置导出为JSON以供程序使用
 +		 */
-+		public static string export_protocol_config_json() throws Error {
++		public static string export_protocol_config_json() {
 +			bool fridmira_enabled = FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled();
 +
 +			string protocol_id;
 +			string call_command;
 +			string ok_response;
++			bool server_running;
 +
 +			if (fridmira_enabled) {
-+				// Load configuration from running server's config file
-+				// 从运行中服务器的配置文件加载配置
++				// Try to load configuration from running server's config file
++				// 尝试从运行中服务器的配置文件加载配置
 +				if (FridMiraRpcProtocolEnhancer.load_protocol_config_from_file()) {
++					// Use loaded configuration from running server
++					// 使用从运行服务器加载的配置
 +					protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
 +					call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
 +					ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
++					server_running = true;
 +				} else {
-+					throw new IOError.NOT_FOUND("No FridMira server configuration found. Please ensure server is running.");
++					// No running server found, generate temporary diagnostic config
++					// 未找到运行中的服务器，生成临时诊断配置
++					protocol_id = "frida:rpc";
++					call_command = "call";
++					ok_response = "ok";
++					fridmira_enabled = false; // Mark as disabled in JSON output
++					server_running = false;
 +				}
 +			} else {
 +				protocol_id = "frida:rpc";
 +				call_command = "call";
 +				ok_response = "ok";
++				server_running = false;
 +			}
 +
 +			var json_builder = new Json.Builder();
@@ -1494,6 +1505,8 @@ index 00000000..ec1d919b
 +				.add_string_value(call_command)
 +				.set_member_name("response")
 +				.add_string_value(ok_response)
++				.set_member_name("server_running")
++				.add_boolean_value(server_running)
 +				.end_object();
 +
 +			return Json.to_string(json_builder.get_root(), true);
