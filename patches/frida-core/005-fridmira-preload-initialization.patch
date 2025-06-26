@@ -1,14 +1,14 @@
-From 55196ef6746b19a1933ab1c28d84f9e596cbd046 Mon Sep 17 00:00:00 2001
+From 4399bb4e2cf2909a4ef0c86fc5ec515784a2113f Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 110 +++++++++++++++++++++++++++++++++++----
- 1 file changed, 101 insertions(+), 9 deletions(-)
+ src/control-service.vala | 60 +++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 53 insertions(+), 7 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..6abee232 100644
+index cc64470f..083f1a7a 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..6abee232 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,60 @@ namespace Frida {
+@@ -117,17 +129,14 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -48,65 +48,17 @@ index cc64470f..6abee232 100644
  			try {
  				yield service.start (cancellable);
  
--				if (options.enable_preload) {
--					var base_host_session = host_session as LocalHostSession;
+ 				if (options.enable_preload) {
+ 					var base_host_session = host_session as LocalHostSession;
 -					if (base_host_session != null)
 -						base_host_session.preload.begin (io_cancellable);
-+				// Start service with FridMira protection
-+				// 启动FridMira保护的服务
-+				if (options.fridmira_enabled) {
-+					// FridMira-enabled service startup with protected preload
-+					// FridMira启用的服务启动，包含受保护的preload
-+
-+					// Check if verbose logging is enabled via environment variable
-+					// 通过环境变量检查是否启用详细日志
-+					bool verbose_enabled = GLib.Environment.get_variable("FRIDA_VERBOSE") != null;
-+
-+					if (options.enable_preload) {
-+						var base_host_session = host_session as LocalHostSession;
-+						if (base_host_session != null) {
-+							if (verbose_enabled) {
-+								stdout.printf ("FridMira: Starting preload operation...\n");
-+							}
-+							yield base_host_session.preload (io_cancellable);
-+							if (verbose_enabled) {
-+								stdout.printf ("FridMira: Preload complete\n");
-+							}
-+						}
-+					} else {
-+						if (verbose_enabled) {
-+							stdout.printf ("FridMira: Preload disabled by configuration\n");
-+						}
-+					}
-+
-+					// 框架状态报告
-+					if (verbose_enabled) {
-+						int active_modules = 0;
-+						active_modules += !options.fridmira_no_symbol ? 1 : 0;
-+						active_modules += !options.fridmira_no_thread ? 1 : 0;
-+						active_modules += !options.fridmira_no_rpc ? 1 : 0;
-+						active_modules += !options.fridmira_no_file ? 1 : 0;
-+						active_modules += !options.fridmira_no_gum ? 1 : 0;
-+						// Agent Management默认禁用，需要FRIDMIRA_AGENT_MODE=1
-+						string? agent_mode = GLib.Environment.get_variable("FRIDMIRA_AGENT_MODE");
-+						active_modules += (agent_mode == "1") ? 1 : 0;
-+
-+						stdout.printf ("FridMira: Server ready - %d/6 modules active\n", active_modules);
-+						stdout.printf ("FridMira: ======================================\n");
-+					}
-+				} else {
-+					// Standard mode without FridMira
-+					// 不使用FridMira的标准模式
-+					if (options.enable_preload) {
-+						var base_host_session = host_session as LocalHostSession;
-+						if (base_host_session != null) {
-+							yield base_host_session.preload (io_cancellable);
-+						}
++					if (base_host_session != null) {
++						yield base_host_session.preload (io_cancellable);
 +					}
  				}
  
  				state = STARTED;
-@@ -1142,5 +1197,42 @@ namespace Frida {
+@@ -1142,5 +1151,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
