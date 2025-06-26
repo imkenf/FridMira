@@ -1,14 +1,14 @@
-From 648a92eb27b8445fc2534892ffdee38bcd5d83ad Mon Sep 17 00:00:00 2001
+From e5078d020abe67afb3f4606458caae835664b36d Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 108 +++++++++++++++++++++++++++++++++++----
- 1 file changed, 99 insertions(+), 9 deletions(-)
+ src/control-service.vala | 133 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 124 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..96c17f17 100644
+index cc64470f..8ad64d05 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..96c17f17 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,58 @@ namespace Frida {
+@@ -117,17 +129,83 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -64,10 +64,35 @@ index cc64470f..96c17f17 100644
 +						if (base_host_session != null) {
 +							if (verbose_enabled) {
 +								stdout.printf ("FridMira: Executing protected preload...\n");
++								stdout.flush (); // Ensure output is immediately visible
 +							}
-+							yield base_host_session.preload (io_cancellable);
-+							if (verbose_enabled) {
-+								stdout.printf ("FridMira: Preload complete\n");
++							try {
++								yield base_host_session.preload (io_cancellable);
++								if (verbose_enabled) {
++									stdout.printf ("FridMira: Preload complete\n");
++									stdout.flush ();
++								}
++							} catch (Error e) {
++								// IMPORTANT: Always show preload failures regardless of verbose mode
++								// 重要：无论是否verbose模式都显示preload失败信息
++								stderr.printf ("FridMira: PRELOAD FAILED - %s\n", e.message);
++								stderr.printf ("FridMira: Error Type: %s\n", e.get_type().name());
++								stderr.printf ("FridMira: Error Domain: %s (Code: %d)\n",
++								              e.domain.to_string(), e.code);
++
++								if (verbose_enabled) {
++									stderr.printf ("FridMira: Detailed Analysis:\n");
++									stderr.printf ("FridMira:   - This may indicate system compatibility issues\n");
++									stderr.printf ("FridMira:   - Check if target process architecture matches server\n");
++									stderr.printf ("FridMira:   - Verify system permissions and SELinux/AppArmor policies\n");
++									stderr.printf ("FridMira:   - Try running with --no-preload flag if issues persist\n");
++								}
++
++								stderr.printf ("FridMira: Continuing server startup without preload...\n");
++								stderr.flush ();
++
++								// Continue execution even if preload fails
++								// 即使preload失败也继续执行
 +							}
 +						}
 +					} else {
@@ -104,7 +129,7 @@ index cc64470f..96c17f17 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1195,42 @@ namespace Frida {
+@@ -1142,5 +1220,42 @@ namespace Frida {
  			set;
  			default = true;
  		}

@@ -1,4 +1,4 @@
-From a49cb3cdc06a14952cda63a3f61ec583d45787a8 Mon Sep 17 00:00:00 2001
+From 3242917b49236dc5c6452859d611362bd0474edb Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -2001,7 +2001,7 @@ index 00000000..71f0a4a9
 +}
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 00000000..5d14155a
+index 00000000..aeb96678
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
 @@ -0,0 +1,305 @@
@@ -2181,7 +2181,7 @@ index 00000000..5d14155a
 +				if (verbose) {
 +					string protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
 +					string call_cmd = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					stdout.printf("FridMira:   [✓] RPC Protocol Enhancement (%s:%s)\n", protocol_id, call_cmd);
++					stdout.printf("FridMira:   [✓] RPC Protocol Enhancement (%s + %s)\n", protocol_id, call_cmd);
 +				}
 +			} else if (verbose) {
 +				stdout.printf("FridMira:   [✗] RPC Protocol Enhancement (disabled)\n");
