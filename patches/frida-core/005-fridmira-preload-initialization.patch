@@ -1,14 +1,14 @@
-From f84c863502efe0ef78c0a5eb570fd44795df5ed4 Mon Sep 17 00:00:00 2001
+From 12187bd7081b8b8a38629fd8b5c013916d118a35 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 194 +++++++++++++++++++++++++++++++++++++--
- 1 file changed, 185 insertions(+), 9 deletions(-)
+ src/control-service.vala | 239 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 230 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..f94ebbb9 100644
+index cc64470f..172e26eb 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..f94ebbb9 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,144 @@ namespace Frida {
+@@ -117,17 +129,189 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -102,10 +102,42 @@ index cc64470f..f94ebbb9 100644
 +							try {
 +								if (verbose_enabled) {
 +									stdout.printf ("FridMira: Starting preload operation...\n");
++									stdout.printf ("FridMira: Temporarily disabling symbol obfuscation for preload compatibility...\n");
++									stdout.flush ();
++								}
++
++								// CRITICAL FIX: Only disable Symbol Obfuscation during preload to avoid conflicts
++								// 关键修复：只在preload期间禁用符号混淆以避免冲突
++								string? original_symbol = GLib.Environment.get_variable("FRIDMIRA_SYMBOL_MODE");
++
++								// Only temporarily disable Symbol Obfuscation during preload
++								// 只在preload期间临时禁用符号混淆
++								// Keep RPC protocol and other modules active for compatibility
++								// 保持RPC协议和其他模块活跃以保证兼容性
++								GLib.Environment.set_variable("FRIDMIRA_SYMBOL_MODE", "0", true);
++
++								if (verbose_enabled) {
++									stdout.printf ("FridMira: Symbol obfuscation temporarily disabled for preload\n");
++									stdout.printf ("FridMira: RPC and other modules remain active\n");
 +									stdout.flush ();
 +								}
 +
 +								yield base_host_session.preload (combined_cancellable);
++
++								// Restore Symbol Obfuscation after successful preload
++								// 成功preload后恢复符号混淆
++								if (original_symbol != null) {
++									GLib.Environment.set_variable("FRIDMIRA_SYMBOL_MODE", original_symbol, true);
++								} else {
++									// If original was not set, restore to enabled
++									// 如果原始值未设置，恢复为启用状态
++									GLib.Environment.set_variable("FRIDMIRA_SYMBOL_MODE", "1", true);
++								}
++
++								if (verbose_enabled) {
++									stdout.printf ("FridMira: Symbol obfuscation re-enabled after preload\n");
++									stdout.flush ();
++								}
 +
 +								// Cancel timeout since preload completed successfully
 +								// 由于preload成功完成，取消超时
@@ -122,6 +154,19 @@ index cc64470f..f94ebbb9 100644
 +								// 由于出现错误，取消超时
 +								if (timeout_source_id != 0) {
 +									Source.remove (timeout_source_id);
++								}
++
++								// IMPORTANT: Restore Symbol Obfuscation even if preload failed
++								// 重要：即使preload失败也要恢复符号混淆
++								string? current_symbol = GLib.Environment.get_variable("FRIDMIRA_SYMBOL_MODE");
++
++								// Restore symbol obfuscation if it was temporarily disabled
++								// 如果符号混淆被临时禁用，则恢复它
++								if (current_symbol == "0") {
++									GLib.Environment.set_variable("FRIDMIRA_SYMBOL_MODE", "1", true);
++									if (verbose_enabled) {
++										stderr.printf ("FridMira: Symbol obfuscation restored after preload failure\n");
++									}
 +								}
 +
 +								if (e is IOError.CANCELLED && timeout_cancellable.is_cancelled ()) {
@@ -190,7 +235,7 @@ index cc64470f..f94ebbb9 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1281,42 @@ namespace Frida {
+@@ -1142,5 +1326,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
