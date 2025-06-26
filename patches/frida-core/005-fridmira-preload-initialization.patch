@@ -1,14 +1,14 @@
-From e28d42da9f333507997668976ede7dbc831093da Mon Sep 17 00:00:00 2001
+From 648a92eb27b8445fc2534892ffdee38bcd5d83ad Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 122 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 113 insertions(+), 9 deletions(-)
+ src/control-service.vala | 108 +++++++++++++++++++++++++++++++++++----
+ 1 file changed, 99 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..2be1ac46 100644
+index cc64470f..96c17f17 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..2be1ac46 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,72 @@ namespace Frida {
+@@ -117,17 +129,58 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -63,11 +63,11 @@ index cc64470f..2be1ac46 100644
 +						var base_host_session = host_session as LocalHostSession;
 +						if (base_host_session != null) {
 +							if (verbose_enabled) {
-+								stdout.printf ("FridMira: Executing preload with anti-detection protection...\n");
++								stdout.printf ("FridMira: Executing protected preload...\n");
 +							}
 +							yield base_host_session.preload (io_cancellable);
 +							if (verbose_enabled) {
-+								stdout.printf ("FridMira: Preload completed successfully\n");
++								stdout.printf ("FridMira: Preload complete\n");
 +							}
 +						}
 +					} else {
@@ -77,34 +77,20 @@ index cc64470f..2be1ac46 100644
 +					}
 +
 +					// Preload后详细框架状态报告
++					// Final status summary
 +					if (verbose_enabled) {
-+						stdout.printf ("FridMira: ==========================================\n");
-+						stdout.printf ("FridMira: Framework Status Report\n");
-+						stdout.printf ("FridMira: ==========================================\n");
++						int active_modules = 0;
++						active_modules += !options.fridmira_no_symbol ? 1 : 0;
++						active_modules += !options.fridmira_no_thread ? 1 : 0;
++						active_modules += !options.fridmira_no_rpc ? 1 : 0;
++						active_modules += !options.fridmira_no_file ? 1 : 0;
++						active_modules += !options.fridmira_no_gum ? 1 : 0;
++						// Agent Management默认禁用，需要FRIDMIRA_AGENT_MODE=1
++						string? agent_mode = GLib.Environment.get_variable("FRIDMIRA_AGENT_MODE");
++						active_modules += (agent_mode == "1") ? 1 : 0;
 +
-+						// Show brief module status overview
-+						// 显示简要的模块状态概览
-+						stdout.printf ("FridMira: Preload Protection Status:\n");
-+						stdout.printf ("FridMira:   Symbol Obfuscation: %s\n", !options.fridmira_no_symbol ? "ACTIVE" : "DISABLED");
-+						stdout.printf ("FridMira:   Thread Obfuscation: %s\n", !options.fridmira_no_thread ? "ACTIVE" : "DISABLED");
-+						stdout.printf ("FridMira:   RPC Protocol Enhancement: %s\n", !options.fridmira_no_rpc ? "ACTIVE" : "DISABLED");
-+						stdout.printf ("FridMira:   File System Obfuscation: %s\n", !options.fridmira_no_file ? "ACTIVE" : "DISABLED");
-+						stdout.printf ("FridMira:   Memory Obfuscation: %s\n", !options.fridmira_no_gum ? "ACTIVE" : "DISABLED");
-+
-+						// Agent模块状态
-+						stdout.printf ("FridMira: [✗] Agent Library Management Module - DISABLED\n");
-+
-+						// 未来模块占位符
-+						stdout.printf ("FridMira: [⏳] Network Protocol Obfuscation Module - PENDING\n");
-+						stdout.printf ("FridMira:     Status: Development planned for v1.1\n");
-+						stdout.printf ("FridMira: [⏳] Process Name Obfuscation Module - PENDING\n");
-+						stdout.printf ("FridMira:     Status: Research phase\n");
-+						stdout.printf ("FridMira: [⏳] Dynamic Library Loading Obfuscation - PENDING\n");
-+						stdout.printf ("FridMira:     Status: Design phase\n");
-+
-+						stdout.printf ("FridMira: ------------------------------------------\n");
-+						stdout.printf ("FridMira: ✅ All enabled modules operational\n");
-+						stdout.printf ("FridMira: ==========================================\n");
++						stdout.printf ("FridMira: Server ready - %d/6 modules active\n", active_modules);
++						stdout.printf ("FridMira: ======================================\n");
 +					}
 +				} else {
 +					// Standard mode without FridMira
@@ -118,7 +104,7 @@ index cc64470f..2be1ac46 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1209,42 @@ namespace Frida {
+@@ -1142,5 +1195,42 @@ namespace Frida {
  			set;
  			default = true;
  		}

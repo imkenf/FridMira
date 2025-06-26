@@ -1,17 +1,17 @@
-From 4bbae2aa5d0d7a628ebcf1c2f5f018ed71101c55 Mon Sep 17 00:00:00 2001
+From a49cb3cdc06a14952cda63a3f61ec583d45787a8 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 263 +++++++++++
- lib/mira/fridmira-file.vala   | 275 +++++++++++
- lib/mira/fridmira-memory.vala | 226 +++++++++
- lib/mira/fridmira-rpc.vala    | 852 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-agent.vala  | 264 +++++++++++
+ lib/mira/fridmira-file.vala   | 275 ++++++++++++
+ lib/mira/fridmira-memory.vala | 227 ++++++++++
+ lib/mira/fridmira-rpc.vala    | 798 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++
- lib/mira/fridmira.vala        | 340 ++++++++++++++
- 7 files changed, 2335 insertions(+)
+ lib/mira/fridmira.vala        | 305 +++++++++++++
+ 7 files changed, 2248 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -22,10 +22,10 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 diff --git a/lib/mira/fridmira-agent.vala b/lib/mira/fridmira-agent.vala
 new file mode 100644
-index 00000000..a2567bbe
+index 00000000..bc1aa0eb
 --- /dev/null
 +++ b/lib/mira/fridmira-agent.vala
-@@ -0,0 +1,263 @@
+@@ -0,0 +1,264 @@
 +/**
 + * FridMira: Agent Library Management Module
 + * FridMira: Agent库管理模块
@@ -287,6 +287,7 @@ index 00000000..a2567bbe
 +			       "  Library path: %s\n".printf(lib_path) +
 +			       "  Temp directory: %s".printf(temp_dir);
 +		}
++
 +	}
 +}
 diff --git a/lib/mira/fridmira-file.vala b/lib/mira/fridmira-file.vala
@@ -572,10 +573,10 @@ index 00000000..c504bd4e
 +}
 diff --git a/lib/mira/fridmira-memory.vala b/lib/mira/fridmira-memory.vala
 new file mode 100644
-index 00000000..f71561db
+index 00000000..7efe2b02
 --- /dev/null
 +++ b/lib/mira/fridmira-memory.vala
-@@ -0,0 +1,226 @@
+@@ -0,0 +1,227 @@
 +/**
 + * FridMira: Memory Obfuscation Module
 + * FridMira: 内存混淆模块
@@ -800,14 +801,15 @@ index 00000000..f71561db
 +			       "  Demo memory: 'frida_gum_heap' → '%s'\n".printf(demo_memory) +
 +			       "  Demo pool: '%s'".printf(demo_pool);
 +		}
++
 +	}
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..e1d15a30
+index 00000000..30f29289
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,852 @@
+@@ -0,0 +1,798 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -905,7 +907,6 @@ index 00000000..e1d15a30
 +	public class FridMiraRpcProtocolEnhancer {
 +		private static HashMap<string, string> session_protocols;
 +		private static HashMap<string, string> session_commands;
-+		private static HashMap<string, string> session_responses;
 +		private static bool initialized = false;
 +		private static Mutex init_mutex = Mutex();
 +		private static bool enhanced_mode_cached = false;
@@ -915,7 +916,6 @@ index 00000000..e1d15a30
 +		// 固定协议缓存，确保服务器行为一致性
 +		private static string? _fixed_protocol_id = null;
 +		private static string? _fixed_call_command = null;
-+		private static string? _fixed_ok_response = null;
 +		private static uint32 _deterministic_seed = 0;
 +
 +		/**
@@ -931,7 +931,6 @@ index 00000000..e1d15a30
 +
 +				session_protocols = new HashMap<string, string>();
 +				session_commands = new HashMap<string, string>();
-+				session_responses = new HashMap<string, string>();
 +
 +				// Generate deterministic seed based on process ID and start time
 +				// 基于进程ID和启动时间生成确定性种子
@@ -941,7 +940,6 @@ index 00000000..e1d15a30
 +				// 使用确定性种子初始化固定协议缓存以确保服务器一致性
 +				_fixed_protocol_id = generate_obfuscated_protocol_deterministic(_deterministic_seed);
 +				_fixed_call_command = generate_obfuscated_command_deterministic(_deterministic_seed + 1);
-+				_fixed_ok_response = generate_obfuscated_response_deterministic(_deterministic_seed + 2);
 +
 +				// Save configuration to file for diagnostic commands to read
 +				// 保存配置到文件供诊断命令读取
@@ -1035,21 +1033,9 @@ index 00000000..e1d15a30
 +		 * 获取会话的OK响应
 +		 */
 +		public static string get_ok_response(string? session_id) {
-+			if (!is_enhanced_mode_enabled()) {
-+				return "ok";
-+			}
-+
-+			ensure_initialized();
-+
-+			if (session_id == null) {
-+				return _fixed_ok_response;
-+			}
-+
-+			if (!session_responses.has_key(session_id)) {
-+				session_responses[session_id] = generate_obfuscated_response();
-+			}
-+
-+			return session_responses[session_id];
++			// Always return standard "ok" response as per requirement
++			// 根据要求始终返回标准"ok"响应
++			return "ok";
 +		}
 +
 +		/**
@@ -1096,30 +1082,9 @@ index 00000000..e1d15a30
 +		 * 检查OK响应是否有效
 +		 */
 +		public static bool is_valid_ok_response(string status) {
-+			if (!is_enhanced_mode_enabled()) {
-+				return status == "ok";
-+			}
-+
-+			ensure_initialized();
-+
-+			// Standard response is always valid
-+			if (status == "ok") {
-+				return true;
-+			}
-+
-+			// Check session-specific responses
-+			foreach (var session_response in session_responses.values) {
-+				if (status == session_response) {
-+					return true;
-+				}
-+			}
-+
-+			// Check if it matches our obfuscation pattern
-+			return status.has_prefix("ack") ||
-+			       status == "done" ||
-+			       status == "complete" ||
-+			       status == "ready" ||
-+			       status == "success";
++			// Only standard "ok" response is valid as per requirement
++			// 根据要求只有标准"ok"响应有效
++			return status == "ok";
 +		}
 +
 +		/**
@@ -1134,9 +1099,6 @@ index 00000000..e1d15a30
 +			}
 +			if (session_commands != null) {
 +				session_commands.unset(session_id);
-+			}
-+			if (session_responses != null) {
-+				session_responses.unset(session_id);
 +			}
 +		}
 +
@@ -1163,14 +1125,7 @@ index 00000000..e1d15a30
 +			return commands[Random.int_range(0, commands.length)];
 +		}
 +
-+		/**
-+		 * Generate obfuscated response
-+		 * 生成混淆的响应
-+		 */
-+		private static string generate_obfuscated_response() {
-+			string[] responses = {"ack", "done", "complete", "ready", "success"};
-+			return responses[Random.int_range(0, responses.length)];
-+		}
++
 +
 +		/**
 +		 * Protocol configuration file path
@@ -1185,7 +1140,10 @@ index 00000000..e1d15a30
 +		 * 将协议配置保存到文件
 +		 */
 +		public static void save_protocol_config_to_file() {
-+			ensure_initialized();
++			// FIXED: Remove ensure_initialized() call to avoid deadlock
++			// 修复：移除ensure_initialized()调用以避免死锁
++			// This method is only called from within init(), so initialization is guaranteed
++			// 此方法仅在init()内部调用，因此初始化是有保证的
 +
 +			try {
 +				var json_builder = new Json.Builder();
@@ -1196,7 +1154,7 @@ index 00000000..e1d15a30
 +					.set_member_name("call_command")
 +					.add_string_value(_fixed_call_command)
 +					.set_member_name("ok_response")
-+					.add_string_value(_fixed_ok_response)
++					.add_string_value("ok")
 +					.set_member_name("deterministic_seed")
 +					.add_int_value(_deterministic_seed)
 +					.set_member_name("timestamp")
@@ -1237,13 +1195,12 @@ index 00000000..e1d15a30
 +				var obj = root.get_object();
 +
 +				if (!obj.has_member("protocol_id") || !obj.has_member("call_command") ||
-+				    !obj.has_member("ok_response") || !obj.has_member("deterministic_seed")) {
++				    !obj.has_member("deterministic_seed")) {
 +					return false;
 +				}
 +
 +				_fixed_protocol_id = obj.get_string_member("protocol_id");
 +				_fixed_call_command = obj.get_string_member("call_command");
-+				_fixed_ok_response = obj.get_string_member("ok_response");
 +				_deterministic_seed = (uint32)obj.get_int_member("deterministic_seed");
 +
 +				return true;
@@ -1310,16 +1267,7 @@ index 00000000..e1d15a30
 +			return commands[seed % commands.length];
 +		}
 +
-+		/**
-+		 * Generate obfuscated response using deterministic seed
-+		 * 使用确定性种子生成混淆的响应
-+		 */
-+		private static string generate_obfuscated_response_deterministic(uint32 seed) {
-+			string[] responses = {"ack", "done", "complete", "ready", "success"};
-+			// Use seed to deterministically select response
-+			// 使用种子确定性地选择响应
-+			return responses[seed % responses.length];
-+		}
++
 +	}
 +}
 +
@@ -1420,11 +1368,11 @@ index 00000000..e1d15a30
 +			status.append("2. Active Protocol Configuration:\n");
 +			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
 +				status.append("   Protocol ID: %s\n".printf(
-+					FridMiraRpcProtocolEnhancer.get_protocol_id(null)));
++				FridMiraRpcProtocolEnhancer.get_protocol_id(null)));
 +				status.append("   Call Command: %s\n".printf(
-+					FridMiraRpcProtocolEnhancer.get_call_command(null)));
++				FridMiraRpcProtocolEnhancer.get_call_command(null)));
 +				status.append("   OK Response: %s\n".printf(
-+					FridMiraRpcProtocolEnhancer.get_ok_response(null)));
++				FridMiraRpcProtocolEnhancer.get_ok_response(null)));
 +				status.append("   Status: ENHANCED - Only FridMira clients can connect\n\n");
 +			} else {
 +				status.append("   Protocol ID: frida:rpc\n");
@@ -2053,10 +2001,10 @@ index 00000000..71f0a4a9
 +}
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 00000000..ce85eed8
+index 00000000..5d14155a
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
-@@ -0,0 +1,340 @@
+@@ -0,0 +1,305 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework Core
 + * FridMira: Frida 反检测框架核心
@@ -2136,7 +2084,7 @@ index 00000000..ce85eed8
 +			_bootstrap_initialized = true;
 +
 +			if (verbose) {
-+				stdout.printf("FridMira: Bootstrap initialized - temp dir: %s\n", obfuscated_temp_name);
++				stdout.printf("FridMira: Bootstrap complete\n");
 +			}
 +		}
 +
@@ -2169,16 +2117,7 @@ index 00000000..ce85eed8
 +			_verbose_mode = verbose;
 +
 +			if (verbose) {
-+				stdout.printf("FridMira: ------------------------------------------\n");
-+				stdout.printf("FridMira: Starting modular framework initialization\n");
-+
-+				// Get and display verbose mode status
-+				// 获取并显示详细模式状态
-+				string? frida_verbose = GLib.Environment.get_variable("FRIDA_VERBOSE");
-+				string? fridmira_verbose = GLib.Environment.get_variable("FRIDMIRA_VERBOSE");
-+				stdout.printf("FridMira: Verbose mode: FRIDA_VERBOSE=%s, FRIDMIRA_VERBOSE=%s\n",
-+					frida_verbose ?? "null", fridmira_verbose ?? "null");
-+				stdout.printf("FridMira: ------------------------------------------\n");
++				stdout.printf("FridMira: Initializing protection modules...\n");
 +			}
 +
 +			// Initialize all modules
@@ -2193,11 +2132,7 @@ index 00000000..ce85eed8
 +			_framework_initialized = true;
 +
 +			if (verbose) {
-+				stdout.printf("FridMira: ------------------------------------------\n");
-+				stdout.printf("FridMira: ✅ Framework initialization COMPLETED\n");
-+				stdout.printf("FridMira: Anti-detection protection is now ACTIVE\n");
-+				stdout.printf("FridMira: All obfuscation modules are operational\n");
-+				stdout.printf("FridMira: ------------------------------------------\n");
++				stdout.printf("FridMira: All modules initialized successfully\n");
 +			}
 +		}
 +
@@ -2207,17 +2142,14 @@ index 00000000..ce85eed8
 +		 */
 +		private static void initialize_symbol_obfuscation(bool verbose) {
 +			if (FridMiraSymbolObfuscator.is_enhanced_mode_enabled()) {
-+				// Symbol obfuscator is stateless and doesn't need explicit init
-+				// 符号混淆器是无状态的，不需要显式初始化
 +				if (verbose) {
-+					stdout.printf("FridMira: [✓] Symbol Obfuscation Module - ACTIVE\n");
-+					// Show runtime obfuscation capability
-+					// 显示运行时混淆能力
-+					string sample_symbol = FridMiraSymbolObfuscator.obfuscate_symbol("frida_rpc_call");
-+					stdout.printf("FridMira:     Runtime obfuscation ready: 'frida_*' → '%s' style\n", sample_symbol);
++					// Show actual obfuscated symbol example
++					string sample_original = "frida_rpc_call";
++					string sample_obfuscated = FridMiraSymbolObfuscator.obfuscate_symbol(sample_original);
++					stdout.printf("FridMira:   [✓] Symbol Obfuscation (%s)\n", sample_obfuscated);
 +				}
 +			} else if (verbose) {
-+				stdout.printf("FridMira: [✗] Symbol Obfuscation Module - DISABLED\n");
++				stdout.printf("FridMira:   [✗] Symbol Obfuscation (disabled)\n");
 +			}
 +		}
 +
@@ -2227,17 +2159,14 @@ index 00000000..ce85eed8
 +		 */
 +		private static void initialize_thread_obfuscation(bool verbose) {
 +			if (FridMiraThreadObfuscator.is_enhanced_mode_enabled()) {
-+				// Thread obfuscator is stateless and doesn't need explicit init
-+				// 线程混淆器是无状态的，不需要显式初始化
 +				if (verbose) {
-+					stdout.printf("FridMira: [✓] Thread Obfuscation Module - ACTIVE\n");
-+					// Show runtime thread name obfuscation capability
-+					// 显示运行时线程名混淆能力
-+					string sample_thread = FridMiraThreadObfuscator.obfuscate_thread_name("frida-server-main-loop");
-+					stdout.printf("FridMira:     Runtime thread names: 'frida-*' → '%s' style\n", sample_thread);
++					// Show actual obfuscated thread name
++					string sample_original = "frida-server-loop";
++					string sample_obfuscated = FridMiraThreadObfuscator.obfuscate_thread_name(sample_original);
++					stdout.printf("FridMira:   [✓] Thread Obfuscation (%s)\n", sample_obfuscated);
 +				}
 +			} else if (verbose) {
-+				stdout.printf("FridMira: [✗] Thread Obfuscation Module - DISABLED\n");
++				stdout.printf("FridMira:   [✗] Thread Obfuscation (disabled)\n");
 +			}
 +		}
 +
@@ -2250,16 +2179,12 @@ index 00000000..ce85eed8
 +				FridMiraRpcProtocolEnhancer.init();
 +				Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter();
 +				if (verbose) {
-+					stdout.printf("FridMira: [✓] RPC Protocol Enhancement Module - ACTIVE\n");
-+					// Show active protocol obfuscation
-+					// 显示激活的协议混淆
-+					string current_protocol = FridMiraRpcProtocolEnhancer.get_dynamic_protocol_id();
-+					string current_call = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					stdout.printf("FridMira:     Active Protocol ID: '%s'\n", current_protocol);
-+					stdout.printf("FridMira:     Active Call Command: '%s'\n", current_call);
++					string protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
++					string call_cmd = FridMiraRpcProtocolEnhancer.get_call_command(null);
++					stdout.printf("FridMira:   [✓] RPC Protocol Enhancement (%s:%s)\n", protocol_id, call_cmd);
 +				}
 +			} else if (verbose) {
-+				stdout.printf("FridMira: [✗] RPC Protocol Enhancement Module - DISABLED\n");
++				stdout.printf("FridMira:   [✗] RPC Protocol Enhancement (disabled)\n");
 +			}
 +		}
 +
@@ -2269,19 +2194,14 @@ index 00000000..ce85eed8
 +		 */
 +		private static void initialize_file_system_obfuscation(bool verbose) {
 +			if (FridMiraFileSystemObfuscator.is_enhanced_mode_enabled()) {
-+				// File system obfuscator is stateless and doesn't need explicit init
-+				// 文件系统混淆器是无状态的，不需要显式初始化
 +				if (verbose) {
-+					stdout.printf("FridMira: [✓] File System Obfuscation Module - ACTIVE\n");
-+					// Show runtime file name generation
-+					// 显示运行时文件名生成
++					// Show actual generated file names
 +					string sample_lib = FridMiraFileSystemObfuscator.generate_lib_name();
 +					string sample_socket = FridMiraFileSystemObfuscator.generate_realistic_socket_name();
-+					stdout.printf("FridMira:     Dynamic library names: '%s' style\n", sample_lib);
-+					stdout.printf("FridMira:     Dynamic socket names: '%s' style\n", sample_socket);
++					stdout.printf("FridMira:   [✓] File System Obfuscation (%s, %s)\n", sample_lib, sample_socket);
 +				}
 +			} else if (verbose) {
-+				stdout.printf("FridMira: [✗] File System Obfuscation Module - DISABLED\n");
++				stdout.printf("FridMira:   [✗] File System Obfuscation (disabled)\n");
 +			}
 +		}
 +
@@ -2291,17 +2211,14 @@ index 00000000..ce85eed8
 +		 */
 +		private static void initialize_memory_obfuscation(bool verbose) {
 +			if (FridMiraMemoryObfuscator.is_enhanced_mode_enabled()) {
-+				// Memory obfuscator is stateless and doesn't need explicit init
-+				// 内存混淆器是无状态的，不需要显式初始化
 +				if (verbose) {
-+					stdout.printf("FridMira: [✓] Memory Obfuscation Module - ACTIVE\n");
-+					// Show runtime memory identifier obfuscation
-+					// 显示运行时内存标识符混淆
-+					string sample_memory = FridMiraMemoryObfuscator.obfuscate_memory_identifier("frida_gum_heap");
-+					stdout.printf("FridMira:     Runtime memory IDs: 'frida_*' → '%s' style\n", sample_memory);
++					// Show actual obfuscated memory identifier
++					string sample_original = "frida_gum_heap";
++					string sample_obfuscated = FridMiraMemoryObfuscator.obfuscate_memory_identifier(sample_original);
++					stdout.printf("FridMira:   [✓] Memory Obfuscation (%s)\n", sample_obfuscated);
 +				}
 +			} else if (verbose) {
-+				stdout.printf("FridMira: [✗] Memory Obfuscation Module - DISABLED\n");
++				stdout.printf("FridMira:   [✗] Memory Obfuscation (disabled)\n");
 +			}
 +		}
 +
@@ -2311,17 +2228,13 @@ index 00000000..ce85eed8
 +		 */
 +		private static void initialize_agent_library_management(bool verbose) {
 +			if (FridMiraAgentLibraryManager.is_enhanced_mode_enabled()) {
-+				// Agent library manager is stateless and doesn't need explicit init
-+				// Agent库管理器是无状态的，不需要显式初始化
 +				if (verbose) {
-+					stdout.printf("FridMira: [✓] Agent Library Management Module - ACTIVE\n");
-+					// Demonstrate agent library obfuscation
-+					// 演示Agent库混淆
-+					string demo_agent = FridMiraAgentLibraryManager.get_obfuscated_agent_name();
-+					stdout.printf("FridMira:     Demo agent name: '%s'\n", demo_agent);
++					// Show actual obfuscated agent name
++					string agent_name = FridMiraAgentLibraryManager.get_obfuscated_agent_name();
++					stdout.printf("FridMira:   [✓] Agent Library Management (%s.so)\n", agent_name);
 +				}
 +			} else if (verbose) {
-+				stdout.printf("FridMira: [✗] Agent Library Management Module - DISABLED\n");
++				stdout.printf("FridMira:   [✗] Agent Library Management (disabled)\n");
 +			}
 +		}
 +

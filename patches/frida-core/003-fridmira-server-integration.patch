@@ -1,14 +1,14 @@
-From a07ad7a3d0a7fb859595788deb8b6c6185570800 Mon Sep 17 00:00:00 2001
+From 55652539b34f3051dc69cd3d89447076dd33d6f6 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:02:38 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 513 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 486 insertions(+), 27 deletions(-)
+ server/server.vala | 486 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 459 insertions(+), 27 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b38..6f431ba8 100644
+index 67bf4b38..fd627bd4 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,23 @@ namespace Frida.Server {
@@ -314,7 +314,7 @@ index 67bf4b38..6f431ba8 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +424,125 @@ namespace Frida.Server {
+@@ -192,23 +424,119 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
@@ -336,16 +336,16 @@ index 67bf4b38..6f431ba8 100644
 -		TemporaryDirectory.use_sysroot (options.sysroot);
 +			ReadyHandler on_ready) throws Error {
 +		if (verbose) {
-+			stdout.printf ("FridMira: Starting application...\n");
++			stdout.printf ("FridMira: Initializing server...\n");
 +		}
  
 -		application = new Application (device_id, endpoint_params, options);
 +		// CRITICAL: Initialize FridMira BEFORE any system initialization (like v1.00)
-+		// 关键：在任何系统初始化之前初始化FridMira（如v1.00版本）
++		// 关键：在任何系统初始化之前初始化FridMira
 +		if (options.fridmira_enabled) {
 +			if (verbose) {
 +				stdout.printf ("FridMira: ==========================================\n");
-+				stdout.printf ("FridMira: Framework Bootstrap\n");
++				stdout.printf ("FridMira: Anti-Detection Framework Bootstrap\n");
 +				stdout.printf ("FridMira: ==========================================\n");
 +			}
  
@@ -382,7 +382,7 @@ index 67bf4b38..6f431ba8 100644
 +				Frida.FridMira.initialize_fridmira_framework (verbose);
 +
 +				if (verbose) {
-+					stdout.printf ("FridMira: ✅ Bootstrap completed - preload protection active\n");
++					stdout.printf ("FridMira: Bootstrap completed - preload protection active\n");
 +					stdout.printf ("FridMira: ==========================================\n");
 +				}
 +			} catch (Error e) {
@@ -409,12 +409,12 @@ index 67bf4b38..6f431ba8 100644
 +			if (obfuscated_name != null && options.fridmira_enabled) {
 +				temp_dir_name = obfuscated_name;
 +				if (verbose) {
-+					stdout.printf ("FridMira: Using obfuscated temp dir: %s\n", temp_dir_name);
++					stdout.printf ("FridMira: Using obfuscated directory: %s\n", temp_dir_name);
 +				}
 +			} else {
 +				temp_dir_name = (directory != null) ? directory : DEFAULT_DIRECTORY;
 +				if (verbose) {
-+					stdout.printf ("FridMira: Using standard temp dir: %s\n", temp_dir_name);
++					stdout.printf ("FridMira: Using standard directory: %s\n", temp_dir_name);
 +				}
 +			}
 +
@@ -434,9 +434,6 @@ index 67bf4b38..6f431ba8 100644
 +
 +		try {
 +			application = new Application (device_id, endpoint_params, options);
-+			if (verbose) {
-+				stdout.printf ("FridMira: Application instance created successfully\n");
-+			}
 +		} catch (Error e) {
 +			stderr.printf ("FridMira: ERROR during Application creation: %s\n", e.message);
 +			throw e;
@@ -444,20 +441,11 @@ index 67bf4b38..6f431ba8 100644
 +
 +		// Setup improved signal handlers for graceful shutdown
 +		// 设置改进的信号处理器以实现优雅关闭
-+		if (verbose) {
-+			stdout.printf ("FridMira: Setting up signal handlers...\n");
-+		}
 +		setup_signal_handlers ();
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -217,9 +551,64 @@ namespace Frida.Server {
- 			});
- 		}
- 
-+		if (verbose) {
-+			stdout.printf ("FridMira: Starting application main loop...\n");
-+		}
+@@ -220,6 +548,54 @@ namespace Frida.Server {
  		return application.run ();
  	}
  
@@ -466,16 +454,12 @@ index 67bf4b38..6f431ba8 100644
 +	 * 设置改进的信号处理器以实现优雅关闭
 +	 */
 +	private static void setup_signal_handlers () {
-+		if (verbose) {
-+			stdout.printf ("FridMira: Configuring signal handlers for graceful shutdown...\n");
-+		}
-+
 +		// Configure main-loop friendly signal handlers using GLib.unix_signal_add
 +		// 使用 GLib.unix_signal_add 配置与主循环兼容的信号处理器，避免在异步信号环境中调用非安全函数
 +#if !WINDOWS
 +		GLib.Unix.signal_add (Posix.Signal.INT, () => {
 +			if (verbose) {
-+				stdout.printf ("FridMira: Received SIGINT, scheduling graceful shutdown...\n");
++				stdout.printf ("FridMira: Received SIGINT, shutting down...\n");
 +			}
 +
 +			// Schedule stop on idle to ensure we are on the main context
@@ -494,7 +478,7 @@ index 67bf4b38..6f431ba8 100644
 +
 +		GLib.Unix.signal_add (Posix.Signal.TERM, () => {
 +			if (verbose) {
-+				stdout.printf ("FridMira: Received SIGTERM, scheduling graceful shutdown...\n");
++				stdout.printf ("FridMira: Received SIGTERM, shutting down...\n");
 +			}
 +
 +			GLib.Idle.add (() => {
@@ -516,12 +500,12 @@ index 67bf4b38..6f431ba8 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +673,67 @@ namespace Frida.Server {
+@@ -284,22 +660,53 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
 +			if (verbose) {
-+				stdout.printf ("FridMira: Starting application services...\n");
++				stdout.printf ("FridMira: Starting services...\n");
 +			}
 +
  			try {
@@ -537,20 +521,9 @@ index 67bf4b38..6f431ba8 100644
 +					}
 +
 +					try {
-+						if (verbose) {
-+							stdout.printf ("FridMira: Creating DeviceManager...\n");
-+						}
 +						manager = new DeviceManager.with_nonlocal_backends_only ();
-+
-+						if (verbose) {
-+							stdout.printf ("FridMira: Getting device by ID...\n");
-+						}
 +						var device = yield manager.get_device_by_id (device_id, 0, io_cancellable);
 +						device.lost.connect (on_device_lost);
-+
-+						if (verbose) {
-+							stdout.printf ("FridMira: Creating ControlService with device...\n");
-+						}
 +						service = yield new ControlService.with_device (device, endpoint_params, options);
 +					} catch (GLib.Error e) {
 +						stderr.printf ("FridMira: ERROR during remote device setup: %s\n", e.message);
@@ -563,9 +536,6 @@ index 67bf4b38..6f431ba8 100644
 +					}
 +
 +					try {
-+						if (verbose) {
-+							stdout.printf ("FridMira: Creating local ControlService...\n");
-+						}
 +						service = new ControlService (endpoint_params, options);
 +					} catch (GLib.Error e) {
 +						stderr.printf ("FridMira: ERROR during local ControlService creation: %s\n", e.message);
@@ -589,16 +559,16 @@ index 67bf4b38..6f431ba8 100644
 +					}
  					return;
 +				}
-+				stderr.printf ("FridMira: CRITICAL ERROR during application start: %s\n", e.message);
++				stderr.printf ("FridMira: CRITICAL ERROR during startup: %s\n", e.message);
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +742,19 @@ namespace Frida.Server {
+@@ -308,12 +715,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
 +				if (verbose) {
-+					stdout.printf ("FridMira: Application ready and fully protected by FridMira\n");
++					stdout.printf ("FridMira: Server ready and listening\n");
 +				}
  				ready (true);
  				return false;
@@ -607,13 +577,13 @@ index 67bf4b38..6f431ba8 100644
  
  		public void stop () {
 +			if (verbose) {
-+				stdout.printf ("FridMira: Stopping application...\n");
++				stdout.printf ("FridMira: Stopping server...\n");
 +			}
 +
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,32 +762,48 @@ namespace Frida.Server {
+@@ -321,32 +735,48 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -628,7 +598,7 @@ index 67bf4b38..6f431ba8 100644
  			try {
  				if (service != null) {
 +					if (verbose) {
-+						stdout.printf ("FridMira: Stopping control service...\n");
++						stdout.printf ("FridMira: Stopping services...\n");
 +					}
  					yield service.stop ();
  					service = null;
@@ -663,7 +633,7 @@ index 67bf4b38..6f431ba8 100644
  			stop ();
  		}
  	}
-@@ -357,4 +814,6 @@ namespace Frida.Server {
+@@ -357,4 +787,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
