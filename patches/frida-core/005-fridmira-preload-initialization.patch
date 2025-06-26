@@ -1,14 +1,14 @@
-From 12187bd7081b8b8a38629fd8b5c013916d118a35 Mon Sep 17 00:00:00 2001
+From 185044af8a481b5e088b0fe9a3cb2de8436abb9d Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 239 +++++++++++++++++++++++++++++++++++++--
- 1 file changed, 230 insertions(+), 9 deletions(-)
+ src/control-service.vala | 106 +++++++++++++++++++++++++++++++++++----
+ 1 file changed, 97 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..172e26eb 100644
+index cc64470f..6175d51c 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..172e26eb 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,189 @@ namespace Frida {
+@@ -117,17 +129,56 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -52,164 +52,31 @@ index cc64470f..172e26eb 100644
 -					var base_host_session = host_session as LocalHostSession;
 -					if (base_host_session != null)
 -						base_host_session.preload.begin (io_cancellable);
-+				// FridMira-enabled service startup with protected preload
-+				// FridMira启用的服务启动，包含受保护的preload
++				// Start service with FridMira protection
++				// 启动FridMira保护的服务
 +				if (options.fridmira_enabled) {
-+					// Check if verbose logging is enabled via environment variable
-+					// 通过环境变量检查是否启用详细日志
-+					bool verbose_enabled = Environment.get_variable("FRIDA_VERBOSE") != null;
++					// FridMira-enabled service startup with protected preload
++					// FridMira启用的服务启动，包含受保护的preload
 +
 +					if (options.enable_preload) {
 +						var base_host_session = host_session as LocalHostSession;
 +						if (base_host_session != null) {
-+							if (verbose_enabled) {
-+								stdout.printf ("FridMira: Executing protected preload...\n");
-+								stdout.printf ("FridMira: Setting up preload timeout (30 seconds)...\n");
-+								stdout.flush (); // Ensure output is immediately visible
++							if (verbose) {
++								stdout.printf ("FridMira: Starting preload operation...\n");
 +							}
-+
-+							// Create timeout cancellable for preload operation
-+							// 为preload操作创建超时取消器
-+							var timeout_cancellable = new Cancellable ();
-+							var combined_cancellable = new Cancellable ();
-+
-+							// Combine IO cancellable with timeout cancellable
-+							// 组合IO取消器和超时取消器
-+							io_cancellable.cancelled.connect (() => {
-+								if (!combined_cancellable.is_cancelled ()) {
-+									combined_cancellable.cancel ();
-+								}
-+							});
-+
-+							timeout_cancellable.cancelled.connect (() => {
-+								if (!combined_cancellable.is_cancelled ()) {
-+									combined_cancellable.cancel ();
-+								}
-+							});
-+
-+							// Setup 30-second timeout
-+							// 设置30秒超时
-+							uint timeout_source_id = 0;
-+							timeout_source_id = Timeout.add_seconds (30, () => {
-+								if (verbose_enabled) {
-+									stderr.printf ("FridMira: Preload timeout reached (30 seconds)\n");
-+									stderr.flush ();
-+								}
-+								timeout_cancellable.cancel ();
-+								return false; // Remove timeout source
-+							});
-+
-+							try {
-+								if (verbose_enabled) {
-+									stdout.printf ("FridMira: Starting preload operation...\n");
-+									stdout.printf ("FridMira: Temporarily disabling symbol obfuscation for preload compatibility...\n");
-+									stdout.flush ();
-+								}
-+
-+								// CRITICAL FIX: Only disable Symbol Obfuscation during preload to avoid conflicts
-+								// 关键修复：只在preload期间禁用符号混淆以避免冲突
-+								string? original_symbol = GLib.Environment.get_variable("FRIDMIRA_SYMBOL_MODE");
-+
-+								// Only temporarily disable Symbol Obfuscation during preload
-+								// 只在preload期间临时禁用符号混淆
-+								// Keep RPC protocol and other modules active for compatibility
-+								// 保持RPC协议和其他模块活跃以保证兼容性
-+								GLib.Environment.set_variable("FRIDMIRA_SYMBOL_MODE", "0", true);
-+
-+								if (verbose_enabled) {
-+									stdout.printf ("FridMira: Symbol obfuscation temporarily disabled for preload\n");
-+									stdout.printf ("FridMira: RPC and other modules remain active\n");
-+									stdout.flush ();
-+								}
-+
-+								yield base_host_session.preload (combined_cancellable);
-+
-+								// Restore Symbol Obfuscation after successful preload
-+								// 成功preload后恢复符号混淆
-+								if (original_symbol != null) {
-+									GLib.Environment.set_variable("FRIDMIRA_SYMBOL_MODE", original_symbol, true);
-+								} else {
-+									// If original was not set, restore to enabled
-+									// 如果原始值未设置，恢复为启用状态
-+									GLib.Environment.set_variable("FRIDMIRA_SYMBOL_MODE", "1", true);
-+								}
-+
-+								if (verbose_enabled) {
-+									stdout.printf ("FridMira: Symbol obfuscation re-enabled after preload\n");
-+									stdout.flush ();
-+								}
-+
-+								// Cancel timeout since preload completed successfully
-+								// 由于preload成功完成，取消超时
-+								if (timeout_source_id != 0) {
-+									Source.remove (timeout_source_id);
-+								}
-+
-+								if (verbose_enabled) {
-+									stdout.printf ("FridMira: Preload complete\n");
-+									stdout.flush ();
-+								}
-+							} catch (Error e) {
-+								// Cancel timeout since we got an error
-+								// 由于出现错误，取消超时
-+								if (timeout_source_id != 0) {
-+									Source.remove (timeout_source_id);
-+								}
-+
-+								// IMPORTANT: Restore Symbol Obfuscation even if preload failed
-+								// 重要：即使preload失败也要恢复符号混淆
-+								string? current_symbol = GLib.Environment.get_variable("FRIDMIRA_SYMBOL_MODE");
-+
-+								// Restore symbol obfuscation if it was temporarily disabled
-+								// 如果符号混淆被临时禁用，则恢复它
-+								if (current_symbol == "0") {
-+									GLib.Environment.set_variable("FRIDMIRA_SYMBOL_MODE", "1", true);
-+									if (verbose_enabled) {
-+										stderr.printf ("FridMira: Symbol obfuscation restored after preload failure\n");
-+									}
-+								}
-+
-+								if (e is IOError.CANCELLED && timeout_cancellable.is_cancelled ()) {
-+									// This was a timeout
-+									// 这是超时
-+									stderr.printf ("FridMira: PRELOAD TIMEOUT - Operation exceeded 30 seconds\n");
-+									stderr.printf ("FridMira: This may indicate:\n");
-+									stderr.printf ("FridMira:   - Heavy system load causing slow initialization\n");
-+									stderr.printf ("FridMira:   - Deadlock in preload libraries\n");
-+									stderr.printf ("FridMira:   - System compatibility issues\n");
-+									stderr.printf ("FridMira: Recommendation: Try --no-preload flag\n");
-+								} else {
-+									// This was a regular error
-+									// 这是常规错误
-+									stderr.printf ("FridMira: PRELOAD FAILED - %s\n", e.message);
-+									stderr.printf ("FridMira: Error Domain: %s (Code: %d)\n",
-+									              e.domain.to_string(), e.code);
-+
-+									if (verbose_enabled) {
-+										stderr.printf ("FridMira: Detailed Analysis:\n");
-+										stderr.printf ("FridMira:   - This may indicate system compatibility issues\n");
-+										stderr.printf ("FridMira:   - Check if target process architecture matches server\n");
-+										stderr.printf ("FridMira:   - Verify system permissions and SELinux/AppArmor policies\n");
-+										stderr.printf ("FridMira:   - Try running with --no-preload flag if issues persist\n");
-+									}
-+								}
-+
-+								stderr.printf ("FridMira: Continuing server startup without preload...\n");
-+								stderr.flush ();
-+
-+								// Continue execution even if preload fails/times out
-+								// 即使preload失败或超时也继续执行
++							yield base_host_session.preload (io_cancellable);
++							if (verbose) {
++								stdout.printf ("FridMira: Preload complete\n");
 +							}
 +						}
 +					} else {
-+						if (verbose_enabled) {
++						if (verbose) {
 +							stdout.printf ("FridMira: Preload disabled by configuration\n");
 +						}
 +					}
 +
-+					// Preload后详细框架状态报告
-+					// Final status summary
-+					if (verbose_enabled) {
++					// 框架状态报告
++					if (verbose) {
 +						int active_modules = 0;
 +						active_modules += !options.fridmira_no_symbol ? 1 : 0;
 +						active_modules += !options.fridmira_no_thread ? 1 : 0;
@@ -235,7 +102,7 @@ index cc64470f..172e26eb 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1326,42 @@ namespace Frida {
+@@ -1142,5 +1193,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
