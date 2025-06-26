@@ -1,4 +1,4 @@
-From 30eb3adf226901f24b9903e024672f994f787e70 Mon Sep 17 00:00:00 2001
+From 25d7e244ff515769e9aaf16e59419f9740856eda Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -10,8 +10,8 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-rpc.vala    | 793 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++
- lib/mira/fridmira.vala        | 305 +++++++++++++
- 7 files changed, 2243 insertions(+)
+ lib/mira/fridmira.vala        | 325 ++++++++++++++
+ 7 files changed, 2263 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -806,7 +806,7 @@ index 00000000..7efe2b02
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..b2ce4782
+index 00000000..89fabad0
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
 @@ -0,0 +1,793 @@
@@ -1035,7 +1035,7 @@ index 00000000..b2ce4782
 +		public static string get_ok_response(string? session_id) {
 +			// Always return standard "ok" response as per requirement
 +			// 根据要求始终返回标准"ok"响应
-+			return "ok";
++				return "ok";
 +		}
 +
 +		/**
@@ -1084,7 +1084,7 @@ index 00000000..b2ce4782
 +		public static bool is_valid_ok_response(string status) {
 +			// Only standard "ok" response is valid as per requirement
 +			// 根据要求只有标准"ok"响应有效
-+			return status == "ok";
++				return status == "ok";
 +		}
 +
 +		/**
@@ -1996,10 +1996,10 @@ index 00000000..71f0a4a9
 +}
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 00000000..aeb96678
+index 00000000..fcd458bf
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,325 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework Core
 + * FridMira: Frida 反检测框架核心
@@ -2171,8 +2171,9 @@ index 00000000..aeb96678
 +		 */
 +		private static void initialize_rpc_protocol_enhancement(bool verbose) {
 +			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++				// Only initialize the enhancer itself, not set it globally yet
++				// 仅初始化增强器本身，暂不全局设置
 +				FridMiraRpcProtocolEnhancer.init();
-+				Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter();
 +				if (verbose) {
 +					string protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
 +					string call_cmd = FridMiraRpcProtocolEnhancer.get_call_command(null);
@@ -2180,6 +2181,25 @@ index 00000000..aeb96678
 +				}
 +			} else if (verbose) {
 +				stdout.printf("FridMira:   [✗] RPC Protocol Enhancement (disabled)\n");
++			}
++		}
++
++		/**
++		 * Activate RPC Protocol Enhancement
++		 * 激活RPC协议增强
++		 *
++		 * This should be called after preload is complete to avoid
++		 * interfering with internal RPC communications during startup.
++		 * 这应该在preload完成后调用，以避免在启动期间干扰内部RPC通信。
++		 */
++		public static void activate_rpc_enhancement() {
++			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled() && _framework_initialized) {
++				// Now it's safe to set the global RPC enhancer
++				// 现在可以安全地设置全局RPC增强器
++				Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter();
++				if (_verbose_mode) {
++					stdout.printf("FridMira: RPC Protocol Enhancement activated\n");
++				}
 +			}
 +		}
 +
