@@ -1,14 +1,14 @@
-From 185044af8a481b5e088b0fe9a3cb2de8436abb9d Mon Sep 17 00:00:00 2001
+From 55196ef6746b19a1933ab1c28d84f9e596cbd046 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 106 +++++++++++++++++++++++++++++++++++----
- 1 file changed, 97 insertions(+), 9 deletions(-)
+ src/control-service.vala | 110 +++++++++++++++++++++++++++++++++++----
+ 1 file changed, 101 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..6175d51c 100644
+index cc64470f..6abee232 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..6175d51c 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,56 @@ namespace Frida {
+@@ -117,17 +129,60 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -58,25 +58,29 @@ index cc64470f..6175d51c 100644
 +					// FridMira-enabled service startup with protected preload
 +					// FridMira启用的服务启动，包含受保护的preload
 +
++					// Check if verbose logging is enabled via environment variable
++					// 通过环境变量检查是否启用详细日志
++					bool verbose_enabled = GLib.Environment.get_variable("FRIDA_VERBOSE") != null;
++
 +					if (options.enable_preload) {
 +						var base_host_session = host_session as LocalHostSession;
 +						if (base_host_session != null) {
-+							if (verbose) {
++							if (verbose_enabled) {
 +								stdout.printf ("FridMira: Starting preload operation...\n");
 +							}
 +							yield base_host_session.preload (io_cancellable);
-+							if (verbose) {
++							if (verbose_enabled) {
 +								stdout.printf ("FridMira: Preload complete\n");
 +							}
 +						}
 +					} else {
-+						if (verbose) {
++						if (verbose_enabled) {
 +							stdout.printf ("FridMira: Preload disabled by configuration\n");
 +						}
 +					}
 +
 +					// 框架状态报告
-+					if (verbose) {
++					if (verbose_enabled) {
 +						int active_modules = 0;
 +						active_modules += !options.fridmira_no_symbol ? 1 : 0;
 +						active_modules += !options.fridmira_no_thread ? 1 : 0;
@@ -102,7 +106,7 @@ index cc64470f..6175d51c 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1193,42 @@ namespace Frida {
+@@ -1142,5 +1197,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
