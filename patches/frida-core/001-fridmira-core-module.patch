@@ -1,4 +1,4 @@
-From 3242917b49236dc5c6452859d611362bd0474edb Mon Sep 17 00:00:00 2001
+From 30eb3adf226901f24b9903e024672f994f787e70 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -7,11 +7,11 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-agent.vala  | 264 +++++++++++
  lib/mira/fridmira-file.vala   | 275 ++++++++++++
  lib/mira/fridmira-memory.vala | 227 ++++++++++
- lib/mira/fridmira-rpc.vala    | 798 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-rpc.vala    | 793 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 +++++++++
  lib/mira/fridmira-thread.vala | 167 +++++++
  lib/mira/fridmira.vala        | 305 +++++++++++++
- 7 files changed, 2248 insertions(+)
+ 7 files changed, 2243 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -806,10 +806,10 @@ index 00000000..7efe2b02
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..30f29289
+index 00000000..b2ce4782
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,798 @@
+@@ -0,0 +1,793 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -941,9 +941,9 @@ index 00000000..30f29289
 +				_fixed_protocol_id = generate_obfuscated_protocol_deterministic(_deterministic_seed);
 +				_fixed_call_command = generate_obfuscated_command_deterministic(_deterministic_seed + 1);
 +
-+				// Save configuration to file for diagnostic commands to read
-+				// 保存配置到文件供诊断命令读取
-+				save_protocol_config_to_file();
++				// REMOVED: File I/O operation causing preload issues
++				// 移除：导致preload问题的文件I/O操作
++				// save_protocol_config_to_file();
 +
 +				initialized = true;
 +			} finally {
@@ -1140,10 +1140,9 @@ index 00000000..30f29289
 +		 * 将协议配置保存到文件
 +		 */
 +		public static void save_protocol_config_to_file() {
-+			// FIXED: Remove ensure_initialized() call to avoid deadlock
-+			// 修复：移除ensure_initialized()调用以避免死锁
-+			// This method is only called from within init(), so initialization is guaranteed
-+			// 此方法仅在init()内部调用，因此初始化是有保证的
++			// Ensure initialization for diagnostic commands
++			// 为诊断命令确保初始化
++			ensure_initialized();
 +
 +			try {
 +				var json_builder = new Json.Builder();
@@ -1308,6 +1307,10 @@ index 00000000..30f29289
 +				string call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
 +				string ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
 +
++				// Save configuration for future reference
++				// 保存配置以备将来参考
++				FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
++
 +				config.append("\n[REQUIRED CLIENT SETTINGS]\n");
 +				config.append("Protocol ID: '%s'\n".printf(protocol_id));
 +				config.append("Call Command: '%s'\n".printf(call_command));
@@ -1367,12 +1370,17 @@ index 00000000..30f29289
 +			// Current protocol configuration
 +			status.append("2. Active Protocol Configuration:\n");
 +			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
-+				status.append("   Protocol ID: %s\n".printf(
-+				FridMiraRpcProtocolEnhancer.get_protocol_id(null)));
-+				status.append("   Call Command: %s\n".printf(
-+				FridMiraRpcProtocolEnhancer.get_call_command(null)));
-+				status.append("   OK Response: %s\n".printf(
-+				FridMiraRpcProtocolEnhancer.get_ok_response(null)));
++				string protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
++				string call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
++				string ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
++
++				// Save configuration for diagnostic purposes
++				// 保存配置以便诊断
++				FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
++
++				status.append("   Protocol ID: %s\n".printf(protocol_id));
++				status.append("   Call Command: %s\n".printf(call_command));
++				status.append("   OK Response: %s\n".printf(ok_response));
 +				status.append("   Status: ENHANCED - Only FridMira clients can connect\n\n");
 +			} else {
 +				status.append("   Protocol ID: frida:rpc\n");
@@ -1414,32 +1422,21 @@ index 00000000..30f29289
 +			string protocol_id;
 +			string call_command;
 +			string ok_response;
-+			bool server_running;
 +
 +			if (fridmira_enabled) {
-+				// Try to load configuration from running server's config file
-+				// 尝试从运行中服务器的配置文件加载配置
-+				if (FridMiraRpcProtocolEnhancer.load_protocol_config_from_file()) {
-+					// Use loaded configuration from running server
-+					// 使用从运行服务器加载的配置
-+					protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
-+					call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
-+					server_running = true;
-+				} else {
-+					// No running server found, generate temporary diagnostic config
-+					// 未找到运行中的服务器，生成临时诊断配置
-+					protocol_id = "frida:rpc";
-+					call_command = "call";
-+					ok_response = "ok";
-+					fridmira_enabled = false; // Mark as disabled in JSON output
-+					server_running = false;
-+				}
++				// Get configuration directly from memory (always current)
++				// 直接从内存获取配置（始终是最新的）
++				protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
++				call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
++				ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
++
++				// Save current configuration to file for future reference
++				// 将当前配置保存到文件以备将来参考
++				FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
 +			} else {
 +				protocol_id = "frida:rpc";
 +				call_command = "call";
 +				ok_response = "ok";
-+				server_running = false;
 +			}
 +
 +			var json_builder = new Json.Builder();
@@ -1453,8 +1450,6 @@ index 00000000..30f29289
 +				.add_string_value(call_command)
 +				.set_member_name("response")
 +				.add_string_value(ok_response)
-+				.set_member_name("server_running")
-+				.add_boolean_value(server_running)
 +				.end_object();
 +
 +			return Json.to_string(json_builder.get_root(), true);

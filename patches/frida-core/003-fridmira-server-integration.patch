@@ -1,4 +1,4 @@
-From a17de1b94c25d4d7adbee707ebd31b2d236c3e3c Mon Sep 17 00:00:00 2001
+From 6fdc6fcdcecb3503521951bfcf31be7e358ddd52 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:02:38 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
@@ -8,7 +8,7 @@ Subject: [PATCH 003/006] Integrate FridMira server functionality
  1 file changed, 459 insertions(+), 27 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b38..fe179acb 100644
+index 67bf4b38..fd627bd4 100644
 --- a/server/server.vala
 +++ b/server/server.vala
 @@ -18,6 +18,23 @@ namespace Frida.Server {
@@ -340,7 +340,7 @@ index 67bf4b38..fe179acb 100644
 +		}
  
 -		application = new Application (device_id, endpoint_params, options);
-+		// CRITICAL: Initialize FridMira BEFORE any system initialization
++		// CRITICAL: Initialize FridMira BEFORE any system initialization (like v1.00)
 +		// 关键：在任何系统初始化之前初始化FridMira
 +		if (options.fridmira_enabled) {
 +			if (verbose) {
