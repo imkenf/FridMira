@@ -1,14 +1,14 @@
-From d40221519c404897b857b8df2ef7c8152a4788ca Mon Sep 17 00:00:00 2001
+From f84c863502efe0ef78c0a5eb570fd44795df5ed4 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 132 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 123 insertions(+), 9 deletions(-)
+ src/control-service.vala | 194 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 185 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..b13b8f29 100644
+index cc64470f..f94ebbb9 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..b13b8f29 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,82 @@ namespace Frida {
+@@ -117,17 +129,144 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -64,34 +64,96 @@ index cc64470f..b13b8f29 100644
 +						if (base_host_session != null) {
 +							if (verbose_enabled) {
 +								stdout.printf ("FridMira: Executing protected preload...\n");
++								stdout.printf ("FridMira: Setting up preload timeout (30 seconds)...\n");
 +								stdout.flush (); // Ensure output is immediately visible
 +							}
++
++							// Create timeout cancellable for preload operation
++							// 为preload操作创建超时取消器
++							var timeout_cancellable = new Cancellable ();
++							var combined_cancellable = new Cancellable ();
++
++							// Combine IO cancellable with timeout cancellable
++							// 组合IO取消器和超时取消器
++							io_cancellable.cancelled.connect (() => {
++								if (!combined_cancellable.is_cancelled ()) {
++									combined_cancellable.cancel ();
++								}
++							});
++
++							timeout_cancellable.cancelled.connect (() => {
++								if (!combined_cancellable.is_cancelled ()) {
++									combined_cancellable.cancel ();
++								}
++							});
++
++							// Setup 30-second timeout
++							// 设置30秒超时
++							uint timeout_source_id = 0;
++							timeout_source_id = Timeout.add_seconds (30, () => {
++								if (verbose_enabled) {
++									stderr.printf ("FridMira: Preload timeout reached (30 seconds)\n");
++									stderr.flush ();
++								}
++								timeout_cancellable.cancel ();
++								return false; // Remove timeout source
++							});
++
 +							try {
-+								yield base_host_session.preload (io_cancellable);
++								if (verbose_enabled) {
++									stdout.printf ("FridMira: Starting preload operation...\n");
++									stdout.flush ();
++								}
++
++								yield base_host_session.preload (combined_cancellable);
++
++								// Cancel timeout since preload completed successfully
++								// 由于preload成功完成，取消超时
++								if (timeout_source_id != 0) {
++									Source.remove (timeout_source_id);
++								}
++
 +								if (verbose_enabled) {
 +									stdout.printf ("FridMira: Preload complete\n");
 +									stdout.flush ();
 +								}
-+														} catch (Error e) {
-+								// IMPORTANT: Always show preload failures regardless of verbose mode
-+								// 重要：无论是否verbose模式都显示preload失败信息
-+								stderr.printf ("FridMira: PRELOAD FAILED - %s\n", e.message);
-+								stderr.printf ("FridMira: Error Domain: %s (Code: %d)\n",
-+								              e.domain.to_string(), e.code);
++							} catch (Error e) {
++								// Cancel timeout since we got an error
++								// 由于出现错误，取消超时
++								if (timeout_source_id != 0) {
++									Source.remove (timeout_source_id);
++								}
 +
-+								if (verbose_enabled) {
-+									stderr.printf ("FridMira: Detailed Analysis:\n");
-+									stderr.printf ("FridMira:   - This may indicate system compatibility issues\n");
-+									stderr.printf ("FridMira:   - Check if target process architecture matches server\n");
-+									stderr.printf ("FridMira:   - Verify system permissions and SELinux/AppArmor policies\n");
-+									stderr.printf ("FridMira:   - Try running with --no-preload flag if issues persist\n");
++								if (e is IOError.CANCELLED && timeout_cancellable.is_cancelled ()) {
++									// This was a timeout
++									// 这是超时
++									stderr.printf ("FridMira: PRELOAD TIMEOUT - Operation exceeded 30 seconds\n");
++									stderr.printf ("FridMira: This may indicate:\n");
++									stderr.printf ("FridMira:   - Heavy system load causing slow initialization\n");
++									stderr.printf ("FridMira:   - Deadlock in preload libraries\n");
++									stderr.printf ("FridMira:   - System compatibility issues\n");
++									stderr.printf ("FridMira: Recommendation: Try --no-preload flag\n");
++								} else {
++									// This was a regular error
++									// 这是常规错误
++									stderr.printf ("FridMira: PRELOAD FAILED - %s\n", e.message);
++									stderr.printf ("FridMira: Error Domain: %s (Code: %d)\n",
++									              e.domain.to_string(), e.code);
++
++									if (verbose_enabled) {
++										stderr.printf ("FridMira: Detailed Analysis:\n");
++										stderr.printf ("FridMira:   - This may indicate system compatibility issues\n");
++										stderr.printf ("FridMira:   - Check if target process architecture matches server\n");
++										stderr.printf ("FridMira:   - Verify system permissions and SELinux/AppArmor policies\n");
++										stderr.printf ("FridMira:   - Try running with --no-preload flag if issues persist\n");
++									}
 +								}
 +
 +								stderr.printf ("FridMira: Continuing server startup without preload...\n");
 +								stderr.flush ();
 +
-+								// Continue execution even if preload fails
-+								// 即使preload失败也继续执行
++								// Continue execution even if preload fails/times out
++								// 即使preload失败或超时也继续执行
 +							}
 +						}
 +					} else {
@@ -128,7 +190,7 @@ index cc64470f..b13b8f29 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1219,42 @@ namespace Frida {
+@@ -1142,5 +1281,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
