@@ -1,14 +1,14 @@
-From e5078d020abe67afb3f4606458caae835664b36d Mon Sep 17 00:00:00 2001
+From d40221519c404897b857b8df2ef7c8152a4788ca Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 133 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 124 insertions(+), 9 deletions(-)
+ src/control-service.vala | 132 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 123 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..8ad64d05 100644
+index cc64470f..b13b8f29 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..8ad64d05 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,83 @@ namespace Frida {
+@@ -117,17 +129,82 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -72,11 +72,10 @@ index cc64470f..8ad64d05 100644
 +									stdout.printf ("FridMira: Preload complete\n");
 +									stdout.flush ();
 +								}
-+							} catch (Error e) {
++														} catch (Error e) {
 +								// IMPORTANT: Always show preload failures regardless of verbose mode
 +								// 重要：无论是否verbose模式都显示preload失败信息
 +								stderr.printf ("FridMira: PRELOAD FAILED - %s\n", e.message);
-+								stderr.printf ("FridMira: Error Type: %s\n", e.get_type().name());
 +								stderr.printf ("FridMira: Error Domain: %s (Code: %d)\n",
 +								              e.domain.to_string(), e.code);
 +
@@ -129,7 +128,7 @@ index cc64470f..8ad64d05 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1220,42 @@ namespace Frida {
+@@ -1142,5 +1219,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
