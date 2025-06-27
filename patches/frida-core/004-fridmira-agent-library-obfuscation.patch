@@ -1,14 +1,14 @@
-From c3775df36f49e68b1e0cb11ea573af310e134819 Mon Sep 17 00:00:00 2001
+From cd8abca5031aefb20e250b22a503ced6e84f5ff2 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
- src/agent-container.vala              | 31 +++++++++++++-
- src/host-session-service.vala         | 58 +++++++++++++++++++++++++++
- src/linux/linux-host-session.vala     | 19 ++++++++-
- src/windows/windows-host-session.vala | 19 +++++----
- 4 files changed, 116 insertions(+), 11 deletions(-)
+ src/agent-container.vala              | 31 ++++++++++-
+ src/host-session-service.vala         | 58 ++++++++++++++++++++
+ src/linux/linux-host-session.vala     | 76 +++++++++++++++++++++++++--
+ src/windows/windows-host-session.vala | 19 ++++---
+ 4 files changed, 172 insertions(+), 12 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -178,7 +178,7 @@ index b7a0c167..8a7862ca 100644
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbec..b77fc0d9 100644
+index 55a0fbec..5549d349 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
 @@ -360,7 +360,11 @@ namespace Frida {
@@ -193,7 +193,122 @@ index 55a0fbec..b77fc0d9 100644
  			string parameters = make_agent_parameters (pid, "", options);
  			AgentFeatures features = CONTROL_CHANNEL;
  			var linjector = (Linjector) injector;
-@@ -953,7 +957,19 @@ namespace Frida {
+@@ -474,7 +478,17 @@ namespace Frida {
+ 		}
+ 
+ 		public async void preload (Cancellable? cancellable) throws Error, IOError {
++			// FridMira DEBUG: RoboLauncher preload started
++			// FridMira 调试：RoboLauncher preload 开始
++			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.preload - Starting\\n");
++			}
++
+ 			yield ensure_loaded (cancellable);
++
++			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.preload - Completed successfully\\n");
++			}
+ 		}
+ 
+ 		public async void close (Cancellable? cancellable) throws IOError {
+@@ -634,6 +648,13 @@ namespace Frida {
+ 		}
+ 
+ 		private async void ensure_loaded (Cancellable? cancellable) throws Error, IOError {
++			// FridMira DEBUG: RoboLauncher ensure_loaded
++			// FridMira 调试：RoboLauncher ensure_loaded
++			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
++
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Starting\\n");
++
+ 			while (ensure_request != null) {
+ 				try {
+ 					yield ensure_request.future.wait_async (cancellable);
+@@ -661,29 +682,54 @@ namespace Frida {
+ 				}
+ 			};
+ 
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Enumerating processes\\n");
++
+ 			foreach (HostProcessInfo info in System.enumerate_processes (new ProcessQueryOptions ())) {
+ 				var name = info.name;
+ 				if (name == "zygote" || name == "zygote64" || name == "usap32" || name == "usap64") {
+ 					uint pid = info.pid;
+-					if (zygote_agents.has_key (pid))
++
++					if (verbose)
++						stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Found %s process: %u\\n", name, pid);
++
++					if (zygote_agents.has_key (pid)) {
++						if (verbose)
++							stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Agent already exists for %s:%u\\n", name, pid);
+ 						continue;
++					}
+ 
+ 					pending++;
++					if (verbose)
++						stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Starting injection for %s:%u\\n", name, pid);
+ 					do_inject_zygote_agent.begin (pid, name, cancellable, on_complete);
+ 				}
+ 			}
+ 
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Process enumeration complete, pending: %u\\n", pending);
++
+ 			on_complete (null);
+ 
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Waiting for completion\\n");
++
+ 			yield;
+ 
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - All injections completed\\n");
++
+ 			on_complete = null;
+ 
+ 			if (first_error == null) {
+ 				ensure_request.resolve (true);
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Success\\n");
+ 			} else {
+ 				ensure_request.reject (first_error);
+ 				ensure_request = null;
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Error: %s\\n", first_error.message);
+ 
+ 				throw_api_error (first_error);
+ 			}
+@@ -700,13 +746,26 @@ namespace Frida {
+ 		}
+ 
+ 		private async void inject_zygote_agent (uint pid, string name, Cancellable? cancellable) throws Error, IOError {
++			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
++
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: inject_zygote_agent - Starting for %s:%u\\n", name, pid);
++
+ 			var agent = new ZygoteAgent (host_session, pid, name);
+ 			zygote_agents[pid] = agent;
+ 			agent.unloaded.connect (on_zygote_agent_unloaded);
+ 
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: inject_zygote_agent - ZygoteAgent created, calling load()\\n");
++
+ 			try {
+ 				yield agent.load (cancellable);
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: inject_zygote_agent - ZygoteAgent loaded successfully for %s:%u\\n", name, pid);
+ 			} catch (GLib.Error e) {
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: inject_zygote_agent - Error loading ZygoteAgent for %s:%u: %s\\n", name, pid, e.message);
++
+ 				agent.unloaded.disconnect (on_zygote_agent_unloaded);
+ 				zygote_agents.unset (pid);
+ 
+@@ -953,7 +1012,19 @@ namespace Frida {
  		}
  
  		protected override async uint get_target_pid (Cancellable? cancellable) throws Error, IOError {
@@ -214,7 +329,7 @@ index 55a0fbec..b77fc0d9 100644
  		}
  
  		protected override async string? load_source (Cancellable? cancellable) throws Error, IOError {
-@@ -1656,5 +1672,4 @@ namespace Frida {
+@@ -1656,5 +1727,4 @@ namespace Frida {
  			return pid;
  		}
  	}
