@@ -1,14 +1,14 @@
-From 824f86bbbeeef6eba9169568e8dadcf00ef68f68 Mon Sep 17 00:00:00 2001
+From a623eee39ec08d8f02903f0c8dbf0109174b929d Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 118 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 109 insertions(+), 9 deletions(-)
+ src/control-service.vala | 110 +++++++++++++++++++++++++++++++++++----
+ 1 file changed, 101 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..0401a935 100644
+index cc64470f..6abee232 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..0401a935 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,68 @@ namespace Frida {
+@@ -117,17 +129,60 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -72,19 +72,11 @@ index cc64470f..0401a935 100644
 +							if (verbose_enabled) {
 +								stdout.printf ("FridMira: Preload complete\n");
 +							}
-+
-+							// Activate RPC enhancement after preload to avoid interference
-+							// 在preload后激活RPC增强以避免干扰
-+							Frida.FridMira.activate_rpc_enhancement();
 +						}
 +					} else {
 +						if (verbose_enabled) {
 +							stdout.printf ("FridMira: Preload disabled by configuration\n");
 +						}
-+
-+						// Activate RPC enhancement even if preload is disabled
-+						// 即使preload被禁用也要激活RPC增强
-+						Frida.FridMira.activate_rpc_enhancement();
 +					}
 +
 +					// 框架状态报告
@@ -114,7 +106,7 @@ index cc64470f..0401a935 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1205,42 @@ namespace Frida {
+@@ -1142,5 +1197,42 @@ namespace Frida {
  			set;
  			default = true;
  		}

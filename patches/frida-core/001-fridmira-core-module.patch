@@ -1,17 +1,17 @@
-From dd676d2644243cf1ea5aee974878fed4044463c6 Mon Sep 17 00:00:00 2001
+From 350a314ab5f002c41b46381e51e3698a8cceb819 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 264 +++++++++++
- lib/mira/fridmira-file.vala   | 275 +++++++++++
- lib/mira/fridmira-memory.vala | 227 +++++++++
- lib/mira/fridmira-rpc.vala    | 862 ++++++++++++++++++++++++++++++++++
- lib/mira/fridmira-symbol.vala | 212 +++++++++
- lib/mira/fridmira-thread.vala | 167 +++++++
- lib/mira/fridmira.vala        | 330 +++++++++++++
- 7 files changed, 2337 insertions(+)
+ lib/mira/fridmira-agent.vala  | 264 +++++++++++++
+ lib/mira/fridmira-file.vala   | 275 ++++++++++++++
+ lib/mira/fridmira-memory.vala | 227 +++++++++++
+ lib/mira/fridmira-rpc.vala    | 697 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-symbol.vala | 212 +++++++++++
+ lib/mira/fridmira-thread.vala | 167 ++++++++
+ lib/mira/fridmira.vala        | 305 +++++++++++++++
+ 7 files changed, 2147 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -806,10 +806,10 @@ index 00000000..7efe2b02
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..28a8c0da
+index 00000000..a0127b94
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,862 @@
+@@ -0,0 +1,697 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -912,12 +912,6 @@ index 00000000..28a8c0da
 +		private static bool enhanced_mode_cached = false;
 +		private static bool enhanced_mode_checked = false;
 +
-+		// Fixed protocol cache for consistent server behavior
-+		// 固定协议缓存，确保服务器行为一致性
-+		private static string? _fixed_protocol_id = null;
-+		private static string? _fixed_call_command = null;
-+		private static uint32 _deterministic_seed = 0;
-+
 +		/**
 +		 * Initialize the RPC protocol enhancer
 +		 * 初始化RPC协议增强器
@@ -932,18 +926,6 @@ index 00000000..28a8c0da
 +				session_protocols = new HashMap<string, string>();
 +				session_commands = new HashMap<string, string>();
 +
-+				// Generate deterministic seed based on process ID and start time
-+				// 基于进程ID和启动时间生成确定性种子
-+				_deterministic_seed = generate_deterministic_seed();
-+
-+				// Initialize fixed protocol cache for server consistency using deterministic seed
-+				// 使用确定性种子初始化固定协议缓存以确保服务器一致性
-+				_fixed_protocol_id = generate_obfuscated_protocol_deterministic(_deterministic_seed);
-+				_fixed_call_command = generate_obfuscated_command_deterministic(_deterministic_seed + 1);
-+
-+				// REMOVED: File I/O operation causing preload issues
-+				// 移除：导致preload问题的文件I/O操作
-+				// save_protocol_config_to_file();
 +
 +				initialized = true;
 +			} finally {
@@ -996,7 +978,7 @@ index 00000000..28a8c0da
 +			ensure_initialized();
 +
 +			if (session_id == null) {
-+				return _fixed_protocol_id;
++				return generate_obfuscated_protocol();
 +			}
 +
 +			if (!session_protocols.has_key(session_id)) {
@@ -1018,7 +1000,7 @@ index 00000000..28a8c0da
 +			ensure_initialized();
 +
 +			if (session_id == null) {
-+				return _fixed_call_command;
++				return generate_obfuscated_command();
 +			}
 +
 +			if (!session_commands.has_key(session_id)) {
@@ -1145,17 +1127,21 @@ index 00000000..28a8c0da
 +			ensure_initialized();
 +
 +			try {
++				// Get current dynamic configuration
++				// 获取当前动态配置
++				string current_protocol = get_protocol_id(null);
++				string current_command = get_call_command(null);
++				string current_response = get_ok_response(null);
++
 +				var json_builder = new Json.Builder();
 +				json_builder
 +					.begin_object()
 +					.set_member_name("protocol_id")
-+					.add_string_value(_fixed_protocol_id)
++					.add_string_value(current_protocol)
 +					.set_member_name("call_command")
-+					.add_string_value(_fixed_call_command)
++					.add_string_value(current_command)
 +					.set_member_name("ok_response")
-+					.add_string_value("ok")
-+					.set_member_name("deterministic_seed")
-+					.add_int_value(_deterministic_seed)
++					.add_string_value(current_response)
 +					.set_member_name("timestamp")
 +					.add_string_value(new DateTime.now_local().to_string())
 +					.end_object();
@@ -1171,100 +1157,18 @@ index 00000000..28a8c0da
 +		}
 +
 +		/**
-+		 * Load protocol configuration from file
-+		 * 从文件加载协议配置
++		 * Load protocol configuration from file (simplified for dynamic mode)
++		 * 从文件加载协议配置（为动态模式简化）
 +		 */
 +		public static bool load_protocol_config_from_file() {
-+			string config_file = get_config_file_path();
-+
-+			try {
-+				string json_data;
-+				if (!GLib.FileUtils.get_contents(config_file, out json_data)) {
-+					return false;
-+				}
-+
-+				var parser = new Json.Parser();
-+				parser.load_from_data(json_data);
-+				var root = parser.get_root();
-+
-+				if (root.get_node_type() != Json.NodeType.OBJECT) {
-+					return false;
-+				}
-+
-+				var obj = root.get_object();
-+
-+				if (!obj.has_member("protocol_id") || !obj.has_member("call_command") ||
-+				    !obj.has_member("deterministic_seed")) {
-+					return false;
-+				}
-+
-+				_fixed_protocol_id = obj.get_string_member("protocol_id");
-+				_fixed_call_command = obj.get_string_member("call_command");
-+				_deterministic_seed = (uint32)obj.get_int_member("deterministic_seed");
-+
-+				return true;
-+
-+			} catch (Error e) {
-+				return false;
-+			}
++			// In dynamic generation mode, file loading is not needed
++			// 在动态生成模式下，不需要文件加载
++			// Configuration is generated on-demand
++			// 配置按需生成
++			return false;
 +		}
 +
-+		/**
-+		 * Generate deterministic seed for consistent protocol generation
-+		 * 生成确定性种子以确保协议生成的一致性
-+		 */
-+		private static uint32 generate_deterministic_seed() {
-+			// Use process ID as base for deterministic generation
-+			// 使用进程ID作为确定性生成的基础
-+#if WINDOWS
-+			uint32 pid = (uint32) GLib.Process.get_pid();
-+#else
-+			uint32 pid = (uint32) Posix.getpid();
-+#endif
 +
-+			// Add a fixed magic number to avoid predictable seeds
-+			// 添加固定魔数以避免可预测的种子
-+			uint32 magic = 0x46524944;  // "FRID" in hex
-+
-+			// Use XOR to combine them
-+			// 使用XOR组合它们
-+			uint32 seed = pid ^ magic;
-+
-+			// Ensure seed is not zero (would disable deterministic behavior)
-+			// 确保种子不为零（否则会禁用确定性行为）
-+			if (seed == 0) {
-+				seed = 0x4D495241;  // "MIRA" in hex as fallback
-+			}
-+
-+			return seed;
-+		}
-+
-+		/**
-+		 * Generate obfuscated protocol using deterministic seed
-+		 * 使用确定性种子生成混淆的协议
-+		 */
-+		private static string generate_obfuscated_protocol_deterministic(uint32 seed) {
-+			string[] prefixes = {"sys", "android", "linux", "proc", "dev"};
-+			string[] suffixes = {"rpc", "ipc", "msg", "comm", "ctl"};
-+
-+			// Use seed to deterministically select prefix and suffix
-+			// 使用种子确定性地选择前缀和后缀
-+			string prefix = prefixes[seed % prefixes.length];
-+			string suffix = suffixes[(seed >> 8) % suffixes.length];
-+
-+			return "%s:%s".printf(prefix, suffix);
-+		}
-+
-+		/**
-+		 * Generate obfuscated command using deterministic seed
-+		 * 使用确定性种子生成混淆的命令
-+		 */
-+		private static string generate_obfuscated_command_deterministic(uint32 seed) {
-+			string[] commands = {"exec", "run", "invoke", "proc", "handle"};
-+			// Use seed to deterministically select command
-+			// 使用种子确定性地选择命令
-+			return commands[seed % commands.length];
-+		}
 +
 +
 +	}
@@ -1303,36 +1207,13 @@ index 00000000..28a8c0da
 +			config.append("Enhanced Mode: %s\n".printf(enhanced_enabled ? "ENABLED" : "DISABLED"));
 +
 +			if (enhanced_enabled) {
-+				string protocol_id;
-+				string call_command;
-+				string ok_response;
++				string protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
++				string call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
++				string ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
 +
-+				// Try to load configuration from running server first
-+				// 首先尝试从运行中的服务器加载配置
-+				bool loaded_from_file = FridMiraRpcProtocolEnhancer.load_protocol_config_from_file();
-+
-+				if (loaded_from_file) {
-+					// Use server's configuration
-+					// 使用服务器的配置
-+					protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
-+					call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
-+
-+					config.append("Source: Running server configuration\n");
-+				} else {
-+					// Fallback: generate new configuration
-+					// 后备方案：生成新配置
-+					ensure_initialized();
-+					protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
-+					call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
-+
-+					// Save configuration for future reference
-+					// 保存配置以备将来参考
-+					FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
-+
-+					config.append("Source: Newly generated configuration\n");
-+				}
++				// Save configuration for future reference
++				// 保存配置以备将来参考
++				FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
 +
 +				config.append("\n[REQUIRED CLIENT SETTINGS]\n");
 +				config.append("Protocol ID: '%s'\n".printf(protocol_id));
@@ -1356,23 +1237,13 @@ index 00000000..28a8c0da
 +				config.append("    protocolId: '%s',\n".printf(protocol_id));
 +				config.append("    callCommand: '%s',\n".printf(call_command));
 +				config.append("    okResponse: '%s'\n".printf(ok_response));
-+				config.append("  });\n\n");
-+
-+				config.append("[CONNECTION REQUIREMENTS]\n");
-+				config.append("• Standard Frida clients CANNOT connect to this server\n");
-+				config.append("• Only FridMira-compatible clients will work\n");
-+				config.append("• Configure your client with the exact parameters above\n\n");
-+
-+				config.append("[TROUBLESHOOTING]\n");
-+				config.append("• If connection fails, verify protocol parameters match exactly\n");
-+				config.append("• Check server logs for protocol mismatch errors\n");
-+				config.append("• Ensure FridMira support is enabled in your client\n");
-+
++				config.append("  });\n");
 +			} else {
-+				config.append("\n[STANDARD MODE]\n");
-+				config.append("Server is running in standard Frida mode.\n");
-+				config.append("Regular Frida clients can connect normally.\n");
-+				config.append("No special configuration required.\n");
++				config.append("\n[STANDARD FRIDA MODE]\n");
++				config.append("Protocol ID: 'frida:rpc'\n");
++				config.append("Call Command: 'call'\n");
++				config.append("OK Response: 'ok'\n");
++				config.append("\nNote: Any standard Frida client can connect.\n");
 +			}
 +
 +			return config.str;
@@ -1403,47 +1274,18 @@ index 00000000..28a8c0da
 +			// Current protocol configuration
 +			status.append("2. Active Protocol Configuration:\n");
 +			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
-+				// Try to load configuration from running server first
-+				// 首先尝试从运行中的服务器加载配置
-+				bool loaded_from_file = FridMiraRpcProtocolEnhancer.load_protocol_config_from_file();
++				string protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
++				string call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
++				string ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
 +
-+				string protocol_id;
-+				string call_command;
-+				string ok_response;
-+
-+				if (loaded_from_file) {
-+					// Use server's configuration
-+					// 使用服务器的配置
-+					protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
-+					call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
-+					status.append("   Source: Running server configuration\n");
-+				} else {
-+					// Fallback: generate new configuration
-+					// 后备方案：生成新配置
-+					ensure_initialized();
-+					protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
-+					call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
-+					status.append("   Source: Newly generated configuration\n");
-+
-+					// Save configuration for diagnostic purposes
-+					// 保存配置以便诊断
-+					FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
-+				}
++				// Save configuration for diagnostic purposes
++				// 保存配置以便诊断
++				FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
 +
 +				status.append("   Protocol ID: %s\n".printf(protocol_id));
 +				status.append("   Call Command: %s\n".printf(call_command));
 +				status.append("   OK Response: %s\n".printf(ok_response));
 +				status.append("   Status: ENHANCED - Only FridMira clients can connect\n\n");
-+
-+				if (RpcClient.enhancer != null) {
-+					status.append("   Enhancer Status: ACTIVE\n");
-+					status.append("   Enhancer Type: %s\n\n".printf(RpcClient.enhancer.get_type().name()));
-+				} else {
-+					status.append("   Enhancer Status: NOT SET - server may be starting\n\n");
-+				}
-+
 +			} else {
 +				status.append("   Protocol ID: frida:rpc\n");
 +				status.append("   Call Command: call\n");
@@ -1486,42 +1328,35 @@ index 00000000..28a8c0da
 +			string ok_response;
 +
 +			if (fridmira_enabled) {
-+				// Try to load configuration from running server first
-+				// 首先尝试从运行中的服务器加载配置
-+				bool loaded_from_file = FridMiraRpcProtocolEnhancer.load_protocol_config_from_file();
++				// Get configuration directly from memory (always current)
++				// 直接从内存获取配置（始终是最新的）
++				protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
++				call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
++				ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
 +
-+				if (loaded_from_file) {
-+					// Use server's configuration
-+					// 使用服务器的配置
-+					protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
-+					call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
-+				} else {
-+					// Fallback: generate new configuration
-+					// 后备方案：生成新配置
-+					ensure_initialized();
-+					protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
-+					call_command = FridMiraRpcProtocolEnhancer.get_call_command(null);
-+					ok_response = FridMiraRpcProtocolEnhancer.get_ok_response(null);
-+
-+					// Save current configuration to file for future reference
-+					// 将当前配置保存到文件以备将来参考
-+					FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
-+				}
++				// Save current configuration to file for future reference
++				// 将当前配置保存到文件以备将来参考
++				FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
 +			} else {
 +				protocol_id = "frida:rpc";
 +				call_command = "call";
 +				ok_response = "ok";
 +			}
 +
-+			// Simple JSON structure - optimized for client use
-+			// 简单JSON结构 - 为客户端使用优化
-+			return "{\n  \"fridmira\": %s,\n  \"protocol\": \"%s\",\n  \"command\": \"%s\",\n  \"response\": \"%s\"\n}".printf(
-+				fridmira_enabled ? "true" : "false",
-+				protocol_id,
-+				call_command,
-+				ok_response
-+			);
++			var json_builder = new Json.Builder();
++			json_builder
++				.begin_object()
++				.set_member_name("fridmira")
++				.add_boolean_value(fridmira_enabled)
++				.set_member_name("protocol")
++				.add_string_value(protocol_id)
++				.set_member_name("command")
++				.add_string_value(call_command)
++				.set_member_name("response")
++				.add_string_value(ok_response)
++				.end_object();
++
++			return Json.to_string(json_builder.get_root(), true);
 +		}
 +
 +		/**
@@ -2065,10 +1900,10 @@ index 00000000..71f0a4a9
 +}
 diff --git a/lib/mira/fridmira.vala b/lib/mira/fridmira.vala
 new file mode 100644
-index 00000000..57b59d9b
+index 00000000..aeb96678
 --- /dev/null
 +++ b/lib/mira/fridmira.vala
-@@ -0,0 +1,330 @@
+@@ -0,0 +1,305 @@
 +/**
 + * FridMira: Frida Anti-Detection Framework Core
 + * FridMira: Frida 反检测框架核心
@@ -2240,9 +2075,8 @@ index 00000000..57b59d9b
 +		 */
 +		private static void initialize_rpc_protocol_enhancement(bool verbose) {
 +			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
-+				// Only initialize the enhancer itself, not set it globally yet
-+				// 仅初始化增强器本身，暂不全局设置
 +				FridMiraRpcProtocolEnhancer.init();
++				Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter();
 +				if (verbose) {
 +					string protocol_id = FridMiraRpcProtocolEnhancer.get_protocol_id(null);
 +					string call_cmd = FridMiraRpcProtocolEnhancer.get_call_command(null);
@@ -2250,30 +2084,6 @@ index 00000000..57b59d9b
 +				}
 +			} else if (verbose) {
 +				stdout.printf("FridMira:   [✗] RPC Protocol Enhancement (disabled)\n");
-+			}
-+		}
-+
-+		/**
-+		 * Activate RPC Protocol Enhancement
-+		 * 激活RPC协议增强
-+		 *
-+		 * This should be called after preload is complete to avoid
-+		 * interfering with internal RPC communications during startup.
-+		 * 这应该在preload完成后调用，以避免在启动期间干扰内部RPC通信。
-+		 */
-+		public static void activate_rpc_enhancement() {
-+			if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled() && _framework_initialized) {
-+				// Now it's safe to set the global RPC enhancer
-+				// 现在可以安全地设置全局RPC增强器
-+				Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter();
-+
-+				// Save current server configuration for diagnostic commands
-+				// 为诊断命令保存当前服务器配置
-+				FridMiraRpcProtocolEnhancer.save_protocol_config_to_file();
-+
-+				if (_verbose_mode) {
-+					stdout.printf("FridMira: RPC Protocol Enhancement activated\n");
-+				}
 +			}
 +		}
 +
