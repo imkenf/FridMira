@@ -1,14 +1,14 @@
-From 1d79540500168d3cda078fb9ee12c3e414e0ea13 Mon Sep 17 00:00:00 2001
+From 3dc91a49859b0f9d0faf2d42d7f33ac203389d11 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
  src/agent-container.vala              | 31 ++++++++++++++++++++++++++-
- src/host-session-service.vala         | 21 ++++++++++++++++++
+ src/host-session-service.vala         |  9 ++++++++
  src/linux/linux-host-session.vala     |  5 ++++-
  src/windows/windows-host-session.vala | 19 +++++++++-------
- 4 files changed, 66 insertions(+), 10 deletions(-)
+ 4 files changed, 54 insertions(+), 10 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -65,37 +65,32 @@ index eecfa1f6..c4244aaa 100644
  
  		private void start_worker_thread () {
 diff --git a/src/host-session-service.vala b/src/host-session-service.vala
-index b7a0c167..ab77854d 100644
+index b7a0c167..4455fe71 100644
 --- a/src/host-session-service.vala
 +++ b/src/host-session-service.vala
-@@ -689,6 +689,27 @@ namespace Frida {
- 				}
+@@ -1510,6 +1510,11 @@ namespace Frida {
+ 			}
+ 			ensure_request = new Promise<bool> ();
+ 
++			// FridMira: Temporarily disable RPC obfuscation for InternalAgent loading
++			// FridMira: 为InternalAgent加载临时禁用RPC混淆
++			var original_enhancer = RpcClient.enhancer;
++			RpcClient.enhancer = null;
++
+ 			try {
+ 				yield ensure_unloaded (cancellable);
+ 
+@@ -1543,6 +1548,10 @@ namespace Frida {
+ 				ensure_request.resolve (true);
+ 			} catch (GLib.Error e) {
+ 				ensure_request.reject (e);
++			} finally {
++				// FridMira: Restore RPC obfuscation
++				// FridMira: 恢复RPC混淆
++				RpcClient.enhancer = original_enhancer;
  			}
  
-+			// FridMira RPC Protocol Integration for Preload Agents
-+			// FridMira RPC协议集成，用于Preload Agent
-+			if (RpcClient.enhancer != null) {
-+				string protocol_id = RpcClient.enhancer.get_protocol_id (null);
-+				string call_command = RpcClient.enhancer.get_call_command (null);
-+				string ok_response = RpcClient.enhancer.get_ok_response (null);
-+
-+				// Only include if different from standard protocol
-+				// 只有当协议与标准协议不同时才包含
-+				if (protocol_id != "frida:rpc" || call_command != "call" || ok_response != "ok") {
-+					parameters
-+						.append_c ('|')
-+						.append ("fridmira-protocol:")
-+						.append (protocol_id)
-+						.append_c (',')
-+						.append (call_command)
-+						.append_c (',')
-+						.append (ok_response);
-+				}
-+			}
-+
- 			return parameters.str;
- 		}
- 
+ 			var pending_error = ensure_request.future.error;
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
 index 55a0fbec..cca78d5e 100644
 --- a/src/linux/linux-host-session.vala
