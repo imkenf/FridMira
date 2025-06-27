@@ -1,13 +1,13 @@
-From 4788c915fef7f02d6b5605a3a009c1ff8cdf2093 Mon Sep 17 00:00:00 2001
+From 8947971c24aa69b3e9308c3c66561ec83ce1363d Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
  src/agent-container.vala              | 31 ++++++++++++++++++++++++++-
- src/linux/linux-host-session.vala     | 21 ++++++++++++------
+ src/linux/linux-host-session.vala     | 15 ++++++++++---
  src/windows/windows-host-session.vala | 19 +++++++++-------
- 3 files changed, 56 insertions(+), 15 deletions(-)
+ 3 files changed, 53 insertions(+), 12 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -64,51 +64,39 @@ index eecfa1f6..c4244aaa 100644
  
  		private void start_worker_thread () {
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbec..3c00f7cc 100644
+index 55a0fbec..ce0803d3 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
-@@ -357,12 +357,16 @@ namespace Frida {
- 			yield helper.kill (pid, cancellable);
- 		}
+@@ -90,9 +90,14 @@ namespace Frida {
  
--		protected override async Future<IOStream> perform_attach_to (uint pid, HashTable<string, Variant> options,
--				Cancellable? cancellable, out Object? transport) throws Error, IOError {
--			uint id;
--			string entrypoint = "frida_agent_main";
--			string parameters = make_agent_parameters (pid, "", options);
--			AgentFeatures features = CONTROL_CHANNEL;
-+			protected override async Future<IOStream> perform_attach_to (uint pid, HashTable<string, Variant> options,
-+			Cancellable? cancellable, out Object? transport) throws Error, IOError {
-+		uint id;
-+
-+		// Standard Agent entry point - symbol obfuscation requires compile-time patching
-+		// 标准Agent入口点 - 符号混淆需要编译时补丁
-+		string entrypoint = "frida_agent_main";
-+
-+		string parameters = make_agent_parameters (pid, "", options);
-+		AgentFeatures features = CONTROL_CHANNEL;
- 			var linjector = (Linjector) injector;
- #if HAVE_EMBEDDED_ASSETS
- 			id = yield linjector.inject_library_resource (pid, agent, entrypoint, parameters, features, cancellable);
-@@ -704,6 +708,9 @@ namespace Frida {
- 			zygote_agents[pid] = agent;
- 			agent.unloaded.connect (on_zygote_agent_unloaded);
- 
+ 		public override async void preload (Cancellable? cancellable) throws Error, IOError {
+ #if ANDROID
+-			yield system_server_agent.preload (cancellable);
+-
+-			yield robo_launcher.preload (cancellable);
 +			var existing_enhancer = RpcClient.enhancer;
 +			RpcClient.enhancer = null;
-+
- 			try {
- 				yield agent.load (cancellable);
- 			} catch (GLib.Error e) {
-@@ -721,6 +728,8 @@ namespace Frida {
- 					throw (IOError) e;
- 
- 				throw (Error) e;
++			try {
++				yield system_server_agent.preload (cancellable);
++				yield robo_launcher.preload (cancellable);
 +			} finally {
 +				RpcClient.enhancer = existing_enhancer;
- 			}
++			}
+ #endif
  		}
  
+@@ -360,7 +365,11 @@ namespace Frida {
+ 		protected override async Future<IOStream> perform_attach_to (uint pid, HashTable<string, Variant> options,
+ 				Cancellable? cancellable, out Object? transport) throws Error, IOError {
+ 			uint id;
++
++			// Standard Agent entry point - symbol obfuscation requires compile-time patching
++			// 标准Agent入口点 - 符号混淆需要编译时补丁
+ 			string entrypoint = "frida_agent_main";
++
+ 			string parameters = make_agent_parameters (pid, "", options);
+ 			AgentFeatures features = CONTROL_CHANNEL;
+ 			var linjector = (Linjector) injector;
 diff --git a/src/windows/windows-host-session.vala b/src/windows/windows-host-session.vala
 index 1f9c32eb..26518e6c 100644
 --- a/src/windows/windows-host-session.vala
