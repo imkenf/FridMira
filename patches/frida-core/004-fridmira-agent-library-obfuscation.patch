@@ -1,14 +1,14 @@
-From 222b2ff01b8e027e4de69d6aa4f2bbe8c3bbb3d9 Mon Sep 17 00:00:00 2001
+From b15e75b2b0f582a3e28671252f79d10fbf5ba2b6 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
- src/agent-container.vala              | 31 ++++++++-
- src/host-session-service.vala         | 58 +++++++++++++++++
- src/linux/linux-host-session.vala     | 94 ++++++++++++++++++++++++++-
- src/windows/windows-host-session.vala | 19 +++---
- 4 files changed, 190 insertions(+), 12 deletions(-)
+ src/agent-container.vala              |  31 ++++++-
+ src/host-session-service.vala         |  58 +++++++++++++
+ src/linux/linux-host-session.vala     | 120 +++++++++++++++++++++++++-
+ src/windows/windows-host-session.vala |  19 ++--
+ 4 files changed, 216 insertions(+), 12 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -178,7 +178,7 @@ index b7a0c167..8a7862ca 100644
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbec..3af7f0a9 100644
+index 55a0fbec..a6835fe6 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
 @@ -90,9 +90,27 @@ namespace Frida {
@@ -336,7 +336,51 @@ index 55a0fbec..3af7f0a9 100644
  				agent.unloaded.disconnect (on_zygote_agent_unloaded);
  				zygote_agents.unset (pid);
  
-@@ -953,7 +1030,19 @@ namespace Frida {
+@@ -810,17 +887,43 @@ namespace Frida {
+ 		}
+ 
+ 		public async void preload (Cancellable? cancellable) throws Error, IOError {
++			// FridMira DEBUG: SystemServerAgent preload detailed logging
++			// FridMira 调试：SystemServerAgent preload 详细日志
++			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
++
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Starting\\n");
++
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Calling enumerate_applications()\\n");
+ 			yield enumerate_applications (new ApplicationQueryOptions (), cancellable);
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - enumerate_applications() completed\\n");
+ 
+ 			try {
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Calling get_process_name()\\n");
+ 				yield get_process_name ("", 0, cancellable);
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - get_process_name() completed\\n");
+ 			} catch (Error e) {
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - get_process_name() error: %s\\n", e.message);
+ 			}
+ 
+ 			try {
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Calling start_package()\\n");
+ 				yield start_package ("", new DefaultActivityEntrypoint (), cancellable);
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - start_package() completed\\n");
+ 			} catch (Error e) {
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - start_package() error: %s\\n", e.message);
+ 			}
++
++			if (verbose)
++				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - All operations completed\\n");
+ 		}
+ 
+ 		public async HostApplicationInfo get_frontmost_application (FrontmostQueryOptions options,
+@@ -953,7 +1056,19 @@ namespace Frida {
  		}
  
  		protected override async uint get_target_pid (Cancellable? cancellable) throws Error, IOError {
@@ -357,7 +401,7 @@ index 55a0fbec..3af7f0a9 100644
  		}
  
  		protected override async string? load_source (Cancellable? cancellable) throws Error, IOError {
-@@ -1656,5 +1745,4 @@ namespace Frida {
+@@ -1656,5 +1771,4 @@ namespace Frida {
  			return pid;
  		}
  	}
