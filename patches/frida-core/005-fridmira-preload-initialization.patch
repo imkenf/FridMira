@@ -1,14 +1,14 @@
-From f8dd8d7345c47a31ba934eae69a9bdd5148296af Mon Sep 17 00:00:00 2001
+From 9f494a8f3d94caccfea32dd0d52cab7c7879f46c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 119 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 110 insertions(+), 9 deletions(-)
+ src/control-service.vala | 143 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 134 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..c45fbd0b 100644
+index cc64470f..f1350426 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..c45fbd0b 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,69 @@ namespace Frida {
+@@ -117,17 +129,93 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -71,6 +71,14 @@ index cc64470f..c45fbd0b 100644
 +						// Decide if we should abort; for now, we'll log and continue
 +					}
 +
++					// Temporarily disable RPC enhancer during preload to avoid communication mismatch
++					// 在preload期间暂时禁用RPC增强器以避免通信不匹配
++					var rpc_enhancer_backup = Frida.RpcClient.enhancer;
++					Frida.RpcClient.enhancer = null;
++					if (verbose_enabled && rpc_enhancer_backup != null) {
++						stdout.printf("FridMira: RPC enhancement temporarily disabled for preload.\n");
++					}
++
 +					if (options.enable_preload) {
 +						var base_host_session = host_session as LocalHostSession;
 +						if (base_host_session != null) {
@@ -78,6 +86,22 @@ index cc64470f..c45fbd0b 100644
 +								stdout.printf ("FridMira: Starting preload operation...\n");
 +							}
 +							yield base_host_session.preload (io_cancellable);
++							if (verbose_enabled) {
++								stdout.printf ("FridMira: Preload complete\n");
++							}
++						}
++					}
++
++					// Restore RPC enhancer after preload
++					// 在preload后恢复RPC增强器
++					Frida.RpcClient.enhancer = rpc_enhancer_backup;
++					if (verbose_enabled && rpc_enhancer_backup != null) {
++						stdout.printf("FridMira: RPC enhancement re-enabled.\n");
++					}
++
++					if (options.enable_preload) {
++						var base_host_session = host_session as LocalHostSession;
++						if (base_host_session != null) {
 +							if (verbose_enabled) {
 +								stdout.printf ("FridMira: Preload complete\n");
 +							}
@@ -115,7 +139,7 @@ index cc64470f..c45fbd0b 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1206,42 @@ namespace Frida {
+@@ -1142,5 +1230,42 @@ namespace Frida {
  			set;
  			default = true;
  		}
