@@ -1,4 +1,4 @@
-From ccad78b320e2efb0d26e4c693a048d0eb1df0166 Mon Sep 17 00:00:00 2001
+From 9e4b5f80d11f781ccbe815a53736d1479ce54d6e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
@@ -12,7 +12,7 @@ Subject: [PATCH 004/006] FridMira Agent Library Management Module
  5 files changed, 118 insertions(+), 13 deletions(-)
 
 diff --git a/lib/agent/agent.vala b/lib/agent/agent.vala
-index 6c8c4d9b..4277b4bd 100644
+index 6c8c4d9b..e3d72df6 100644
 --- a/lib/agent/agent.vala
 +++ b/lib/agent/agent.vala
 @@ -280,7 +280,37 @@ namespace Frida.Agent {
@@ -40,9 +40,9 @@ index 6c8c4d9b..4277b4bd 100644
 +					string protocol = obj.get_string_member ("protocol");
 +					string command = obj.get_string_member ("command");
 +
-+					var enhancer = new global::Frida.FridMiraRpcEnhancerAdapter ();
++					var enhancer = new FridMiraRpcEnhancerAdapter ();
 +					enhancer.set_override_protocol (protocol, command);
-+					global::Frida.RpcClient.enhancer = enhancer;
++					RpcClient.enhancer = enhancer;
 +				}
 +
 +				tokens = obj.get_string_member ("address").split ("|");
