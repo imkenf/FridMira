@@ -1,4 +1,4 @@
-From 9e4b5f80d11f781ccbe815a53736d1479ce54d6e Mon Sep 17 00:00:00 2001
+From 820790ad321d570feda642dd2462c7bc7dee4968 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
@@ -119,7 +119,7 @@ index eecfa1f6..c4244aaa 100644
  
  		private void start_worker_thread () {
 diff --git a/src/host-session-service.vala b/src/host-session-service.vala
-index b7a0c167..fe60c610 100644
+index b7a0c167..83f5012a 100644
 --- a/src/host-session-service.vala
 +++ b/src/host-session-service.vala
 @@ -662,8 +662,28 @@ namespace Frida {
@@ -147,8 +147,8 @@ index b7a0c167..fe60c610 100644
 +				});
 +			}
 +
-+			var node = Json.Node.alloc ();
-+			node.init_object (data);
++			var node = new Json.Node (Json.NodeType.OBJECT);
++			node.set_object (data);
 +			parameters.append (Json.to_string (node, false));
  
  			string[] features = { "exceptor", "exit-monitor", "thread-suspend-monitor" };
