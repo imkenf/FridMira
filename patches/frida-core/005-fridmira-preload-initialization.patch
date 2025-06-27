@@ -1,14 +1,14 @@
-From b8bcb8deb0d86e0db1477845bdb7c1d1d271f011 Mon Sep 17 00:00:00 2001
+From a5c25cecea01a3224d7512e5a79a0f67df40ff6c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 153 +++++++++++++++++++++++++++++++++++++--
- 1 file changed, 145 insertions(+), 8 deletions(-)
+ src/control-service.vala | 178 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 170 insertions(+), 8 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..54a93509 100644
+index cc64470f..cf10fbed 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..54a93509 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,99 @@ namespace Frida {
+@@ -117,17 +129,124 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -51,30 +51,25 @@ index cc64470f..54a93509 100644
 -				if (options.enable_preload) {
 +				// CRITICAL: Initialize RPC enhancer BEFORE any preload operations
 +				// 关键：在任何preload操作之前初始化RPC增强器
++				bool rpc_enhancer_enabled = false;
 +				if (options.fridmira_enabled) {
 +					// Check if verbose logging is enabled via environment variable
 +					// 通过环境变量检查是否启用详细日志
 +					bool verbose_enabled = GLib.Environment.get_variable("FRIDA_VERBOSE") != null;
 +
 +					if (verbose_enabled) {
-+						stdout.printf ("FridMira: Setting up RPC enhancer before preload...\n");
++						stdout.printf ("FridMira: Preparing RPC configuration for preload...\n");
 +					}
 +
-+					// Ensure RPC enhancer is properly initialized for preload operations
-+					// 确保RPC增强器为preload操作正确初始化
++					// Initialize RPC enhancement but don't set enhancer yet for preload compatibility
++					// 初始化RPC增强但暂不设置增强器以确保preload兼容性
 +					try {
-+						// Initialize RPC protocol enhancement if not already done
-+						// 如果尚未完成，则初始化RPC协议增强
 +						if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
 +							FridMiraRpcProtocolEnhancer.init();
++							rpc_enhancer_enabled = true;
 +
-+							// Set the enhancer BEFORE any operations that might use RPC
-+							// 在任何可能使用RPC的操作之前设置增强器
-+							if (Frida.RpcClient.enhancer == null) {
-+								Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter();
-+								if (verbose_enabled) {
-+									stdout.printf ("FridMira: RPC enhancer configured for preload operations\n");
-+								}
++							if (verbose_enabled) {
++								stdout.printf ("FridMira: RPC enhancer initialized (will be activated after preload)\n");
 +							}
 +						}
 +					} catch (Error e) {
@@ -83,8 +78,8 @@ index cc64470f..54a93509 100644
 +					}
 +				}
 +
-+				// Now perform preload with properly configured RPC
-+				// 现在使用正确配置的RPC执行preload
++				// Perform preload with standard RPC for compatibility with agents
++				// 使用标准RPC执行preload以确保与agents的兼容性
 +				if (options.enable_preload && !options.fridmira_no_preload) {
  					var base_host_session = host_session as LocalHostSession;
 -					if (base_host_session != null)
@@ -94,14 +89,23 @@ index cc64470f..54a93509 100644
 +						bool verbose_enabled = GLib.Environment.get_variable("FRIDA_VERBOSE") != null;
 +
 +						if (verbose_enabled) {
-+							stdout.printf ("FridMira: Starting preload operation with %s RPC...\n",
-+								options.fridmira_enabled ? "enhanced" : "standard");
++							stdout.printf ("FridMira: Starting preload operation with standard RPC (for agent compatibility)...\n");
 +						}
 +
 +						try {
++							// Temporarily ensure standard RPC for preload
++							// 暂时确保preload使用标准RPC
++							var original_enhancer = Frida.RpcClient.enhancer;
++							Frida.RpcClient.enhancer = null;
++
 +							yield base_host_session.preload (io_cancellable);
++
++							// Restore enhancer after successful preload
++							// preload成功后恢复增强器
++							Frida.RpcClient.enhancer = original_enhancer;
++
 +							if (verbose_enabled) {
-+								stdout.printf ("FridMira: Preload complete\n");
++								stdout.printf ("FridMira: Preload complete with standard RPC\n");
 +							}
 +						} catch (Error e) {
 +							if (verbose_enabled) {
@@ -117,6 +121,27 @@ index cc64470f..54a93509 100644
 +							stdout.printf ("FridMira: Preload disabled by configuration\n");
 +						} else if (options.fridmira_no_preload) {
 +							stdout.printf ("FridMira: Preload disabled by --no-preload flag\n");
++						}
++					}
++				}
++
++				// NOW activate RPC enhancer for new connections after preload success
++				// 现在在preload成功后为新连接激活RPC增强器
++				if (rpc_enhancer_enabled && FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++					bool verbose_enabled = GLib.Environment.get_variable("FRIDA_VERBOSE") != null;
++
++					try {
++						// Set the enhancer for future RPC operations
++						// 为未来的RPC操作设置增强器
++						if (Frida.RpcClient.enhancer == null) {
++							Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter();
++							if (verbose_enabled) {
++								stdout.printf ("FridMira: RPC enhancer activated for new connections\n");
++							}
++						}
++					} catch (Error e) {
++						if (verbose_enabled) {
++							stderr.printf ("FridMira: RPC enhancer activation failed: %s\n", e.message);
 +						}
 +					}
 +				}
@@ -144,7 +169,7 @@ index cc64470f..54a93509 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1236,48 @@ namespace Frida {
+@@ -1142,5 +1261,48 @@ namespace Frida {
  			set;
  			default = true;
  		}
