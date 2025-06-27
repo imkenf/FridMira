@@ -1,4 +1,4 @@
-From 0e6d3e7fbd0b07754c0ba97a7615ef71c6b8c73c Mon Sep 17 00:00:00 2001
+From c3775df36f49e68b1e0cb11ea573af310e134819 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
@@ -65,7 +65,7 @@ index eecfa1f6..c4244aaa 100644
  
  		private void start_worker_thread () {
 diff --git a/src/host-session-service.vala b/src/host-session-service.vala
-index b7a0c167..eee3229f 100644
+index b7a0c167..8a7862ca 100644
 --- a/src/host-session-service.vala
 +++ b/src/host-session-service.vala
 @@ -1510,21 +1510,52 @@ namespace Frida {
@@ -83,33 +83,33 @@ index b7a0c167..eee3229f 100644
 +
  			try {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Starting ensure_unloaded\n");
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Starting ensure_unloaded\\n");
  				yield ensure_unloaded (cancellable);
  
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Getting target PID\n");
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Getting target PID\\n");
  				target_pid = yield get_target_pid (cancellable);
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Got target PID: %u\n", target_pid);
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Got target PID: %u\\n", target_pid);
  
  				try {
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Attaching to target process\n");
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Attaching to target process\\n");
  					session_id = yield host_session.attach (target_pid, attach_options, cancellable);
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Attached, session_id: %u\n", session_id.handle);
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Attached successfully\\n");
  
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Linking agent session\n");
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Linking agent session\\n");
  					session = yield host_session.link_agent_session (session_id, (AgentMessageSink) this, cancellable);
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Agent session linked\n");
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Agent session linked\\n");
  
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading source\n");
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading source\\n");
  					string? source = yield load_source (cancellable);
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Source loaded, length: %d\n", source != null ? source.length : 0);
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Source loaded, length: %d\\n", source != null ? source.length : 0);
 +
  					if (source != null) {
  						var options = new ScriptOptions ();
@@ -117,7 +117,7 @@ index b7a0c167..eee3229f 100644
  						SnapshotTransport transport;
 +
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading snapshot\n");
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading snapshot\\n");
  						Bytes? snapshot = yield load_snapshot (cancellable, out transport);
  						if (snapshot != null) {
  							options.snapshot = snapshot;
@@ -126,44 +126,44 @@ index b7a0c167..eee3229f 100644
  						options.runtime = script_runtime;
  
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Creating script\n");
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Creating script\\n");
  						script = yield session.create_script (source, options._serialize (), cancellable);
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Script created, ID: %u\n", script.handle);
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Script created successfully\\n");
  
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading script\n");
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading script\\n");
  						yield load_script (cancellable);
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Script loaded successfully\n");
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Script loaded successfully\\n");
  					}
  				} catch (GLib.Error e) {
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Error during session setup: %s\n", e.message);
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Error during session setup: %s\\n", e.message);
  					throw_dbus_error (e);
  				}
  
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Resolving promise\n");
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Resolving promise\\n");
  				ensure_request.resolve (true);
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Promise resolved successfully\n");
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Promise resolved successfully\\n");
  			} catch (GLib.Error e) {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Error caught: %s\n", e.message);
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Error caught: %s\\n", e.message);
  				ensure_request.reject (e);
 +			} finally {
 +				// FridMira: Restore RPC obfuscation
 +				// FridMira: 恢复RPC混淆
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Restoring RPC enhancer\n");
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Restoring RPC enhancer\\n");
 +				RpcClient.enhancer = original_enhancer;
  			}
  
  			var pending_error = ensure_request.future.error;
  			if (pending_error != null) {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Pending error detected: %s\n", pending_error.message);
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Pending error detected: %s\\n", pending_error.message);
  				try {
  					yield ensure_unloaded (cancellable);
  				} finally {
@@ -173,7 +173,7 @@ index b7a0c167..eee3229f 100644
  			}
 +
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: ensure_loaded - Completed successfully\n");
++				stderr.printf ("FridMira: DEBUG: ensure_loaded - Completed successfully\\n");
  		}
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {
