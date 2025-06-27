@@ -1,14 +1,14 @@
-From a623eee39ec08d8f02903f0c8dbf0109174b929d Mon Sep 17 00:00:00 2001
+From b8bcb8deb0d86e0db1477845bdb7c1d1d271f011 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 110 +++++++++++++++++++++++++++++++++++----
- 1 file changed, 101 insertions(+), 9 deletions(-)
+ src/control-service.vala | 153 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 145 insertions(+), 8 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..6abee232 100644
+index cc64470f..54a93509 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -37,7 +37,7 @@ index cc64470f..6abee232 100644
  		}
  
  		public async void start (Cancellable? cancellable = null) throws Error, IOError {
-@@ -117,17 +129,60 @@ namespace Frida {
+@@ -117,17 +129,99 @@ namespace Frida {
  				throw new Error.INVALID_OPERATION ("Invalid operation");
  			state = STARTING;
  
@@ -49,37 +49,82 @@ index cc64470f..6abee232 100644
  				yield service.start (cancellable);
  
 -				if (options.enable_preload) {
--					var base_host_session = host_session as LocalHostSession;
--					if (base_host_session != null)
--						base_host_session.preload.begin (io_cancellable);
-+				// Start service with FridMira protection
-+				// 启动FridMira保护的服务
++				// CRITICAL: Initialize RPC enhancer BEFORE any preload operations
++				// 关键：在任何preload操作之前初始化RPC增强器
 +				if (options.fridmira_enabled) {
-+					// FridMira-enabled service startup with protected preload
-+					// FridMira启用的服务启动，包含受保护的preload
-+
 +					// Check if verbose logging is enabled via environment variable
 +					// 通过环境变量检查是否启用详细日志
 +					bool verbose_enabled = GLib.Environment.get_variable("FRIDA_VERBOSE") != null;
 +
-+					if (options.enable_preload) {
-+						var base_host_session = host_session as LocalHostSession;
-+						if (base_host_session != null) {
-+							if (verbose_enabled) {
-+								stdout.printf ("FridMira: Starting preload operation...\n");
++					if (verbose_enabled) {
++						stdout.printf ("FridMira: Setting up RPC enhancer before preload...\n");
++					}
++
++					// Ensure RPC enhancer is properly initialized for preload operations
++					// 确保RPC增强器为preload操作正确初始化
++					try {
++						// Initialize RPC protocol enhancement if not already done
++						// 如果尚未完成，则初始化RPC协议增强
++						if (FridMiraRpcProtocolEnhancer.is_enhanced_mode_enabled()) {
++							FridMiraRpcProtocolEnhancer.init();
++
++							// Set the enhancer BEFORE any operations that might use RPC
++							// 在任何可能使用RPC的操作之前设置增强器
++							if (Frida.RpcClient.enhancer == null) {
++								Frida.RpcClient.enhancer = new Frida.FridMiraRpcEnhancerAdapter();
++								if (verbose_enabled) {
++									stdout.printf ("FridMira: RPC enhancer configured for preload operations\n");
++								}
 +							}
++						}
++					} catch (Error e) {
++						stderr.printf ("FridMira: WARNING - RPC enhancer setup failed: %s\n", e.message);
++						stderr.printf ("FridMira: Continuing with standard RPC mode\n");
++					}
++				}
++
++				// Now perform preload with properly configured RPC
++				// 现在使用正确配置的RPC执行preload
++				if (options.enable_preload && !options.fridmira_no_preload) {
+ 					var base_host_session = host_session as LocalHostSession;
+-					if (base_host_session != null)
+-						base_host_session.preload.begin (io_cancellable);
++					if (base_host_session != null) {
++						// Check if verbose logging is enabled
++						bool verbose_enabled = GLib.Environment.get_variable("FRIDA_VERBOSE") != null;
++
++						if (verbose_enabled) {
++							stdout.printf ("FridMira: Starting preload operation with %s RPC...\n",
++								options.fridmira_enabled ? "enhanced" : "standard");
++						}
++
++						try {
 +							yield base_host_session.preload (io_cancellable);
 +							if (verbose_enabled) {
 +								stdout.printf ("FridMira: Preload complete\n");
 +							}
-+						}
-+					} else {
-+						if (verbose_enabled) {
-+							stdout.printf ("FridMira: Preload disabled by configuration\n");
++						} catch (Error e) {
++							if (verbose_enabled) {
++								stderr.printf ("FridMira: Preload failed: %s\n", e.message);
++							}
++							throw e;
 +						}
 +					}
++				} else {
++					bool verbose_enabled = GLib.Environment.get_variable("FRIDA_VERBOSE") != null;
++					if (verbose_enabled) {
++						if (!options.enable_preload) {
++							stdout.printf ("FridMira: Preload disabled by configuration\n");
++						} else if (options.fridmira_no_preload) {
++							stdout.printf ("FridMira: Preload disabled by --no-preload flag\n");
++						}
++					}
++				}
 +
-+					// 框架状态报告
++				// Framework status report after successful initialization
++				// 成功初始化后的框架状态报告
++				if (options.fridmira_enabled) {
++					bool verbose_enabled = GLib.Environment.get_variable("FRIDA_VERBOSE") != null;
 +					if (verbose_enabled) {
 +						int active_modules = 0;
 +						active_modules += !options.fridmira_no_symbol ? 1 : 0;
@@ -92,21 +137,14 @@ index cc64470f..6abee232 100644
 +						active_modules += (agent_mode == "1") ? 1 : 0;
 +
 +						stdout.printf ("FridMira: Server ready - %d/6 modules active\n", active_modules);
++						stdout.printf ("FridMira: RPC enhancer: %s\n",
++							(Frida.RpcClient.enhancer != null) ? "ACTIVE" : "INACTIVE");
 +						stdout.printf ("FridMira: ======================================\n");
-+					}
-+				} else {
-+					// Standard mode without FridMira
-+					// 不使用FridMira的标准模式
-+					if (options.enable_preload) {
-+						var base_host_session = host_session as LocalHostSession;
-+						if (base_host_session != null) {
-+							yield base_host_session.preload (io_cancellable);
-+						}
 +					}
  				}
  
  				state = STARTED;
-@@ -1142,5 +1197,42 @@ namespace Frida {
+@@ -1142,5 +1236,48 @@ namespace Frida {
  			set;
  			default = true;
  		}
@@ -143,6 +181,12 @@ index cc64470f..6abee232 100644
 +		}
 +
 +		public bool fridmira_no_gum {
++			get;
++			set;
++			default = false;
++		}
++
++		public bool fridmira_no_preload {
 +			get;
 +			set;
 +			default = false;
