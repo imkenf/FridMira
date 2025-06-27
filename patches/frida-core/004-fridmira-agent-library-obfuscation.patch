@@ -1,16 +1,16 @@
-From 6c4a0f121aee791cc42332b7c39c1e6f5578ee07 Mon Sep 17 00:00:00 2001
+From 4788c915fef7f02d6b5605a3a009c1ff8cdf2093 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
-Date: Thu, 19 Jun 2025 09:30:05 +0800
-Subject: [PATCH 004/006] Agent Library Management Module
+Date: Fri, 20 Jun 2025 17:01:27 +0800
+Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
  src/agent-container.vala              | 31 ++++++++++++++++++++++++++-
- src/linux/linux-host-session.vala     | 16 ++++++++------
+ src/linux/linux-host-session.vala     | 21 ++++++++++++------
  src/windows/windows-host-session.vala | 19 +++++++++-------
- 3 files changed, 51 insertions(+), 15 deletions(-)
+ 3 files changed, 56 insertions(+), 15 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
-index eecfa1f..c4244aa 100644
+index eecfa1f6..c4244aaa 100644
 --- a/src/agent-container.vala
 +++ b/src/agent-container.vala
 @@ -21,12 +21,34 @@ namespace Frida {
@@ -64,7 +64,7 @@ index eecfa1f..c4244aa 100644
  
  		private void start_worker_thread () {
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbe..f6bf37f 100644
+index 55a0fbec..3c00f7cc 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
 @@ -357,12 +357,16 @@ namespace Frida {
@@ -90,8 +90,27 @@ index 55a0fbe..f6bf37f 100644
  			var linjector = (Linjector) injector;
  #if HAVE_EMBEDDED_ASSETS
  			id = yield linjector.inject_library_resource (pid, agent, entrypoint, parameters, features, cancellable);
+@@ -704,6 +708,9 @@ namespace Frida {
+ 			zygote_agents[pid] = agent;
+ 			agent.unloaded.connect (on_zygote_agent_unloaded);
+ 
++			var existing_enhancer = RpcClient.enhancer;
++			RpcClient.enhancer = null;
++
+ 			try {
+ 				yield agent.load (cancellable);
+ 			} catch (GLib.Error e) {
+@@ -721,6 +728,8 @@ namespace Frida {
+ 					throw (IOError) e;
+ 
+ 				throw (Error) e;
++			} finally {
++				RpcClient.enhancer = existing_enhancer;
+ 			}
+ 		}
+ 
 diff --git a/src/windows/windows-host-session.vala b/src/windows/windows-host-session.vala
-index 1f9c32e..26518e6 100644
+index 1f9c32eb..26518e6c 100644
 --- a/src/windows/windows-host-session.vala
 +++ b/src/windows/windows-host-session.vala
 @@ -218,16 +218,19 @@ namespace Frida {
