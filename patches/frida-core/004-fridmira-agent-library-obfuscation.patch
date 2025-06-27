@@ -1,4 +1,4 @@
-From 3dc91a49859b0f9d0faf2d42d7f33ac203389d11 Mon Sep 17 00:00:00 2001
+From 70cdf0503350579f2d65e25de4e60caf315c4883 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
@@ -6,9 +6,9 @@ Subject: [PATCH 004/006] FridMira Agent Library Management Module
 ---
  src/agent-container.vala              | 31 ++++++++++++++++++++++++++-
  src/host-session-service.vala         |  9 ++++++++
- src/linux/linux-host-session.vala     |  5 ++++-
+ src/linux/linux-host-session.vala     | 19 ++++++++++++++--
  src/windows/windows-host-session.vala | 19 +++++++++-------
- 4 files changed, 54 insertions(+), 10 deletions(-)
+ 4 files changed, 67 insertions(+), 11 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -92,7 +92,7 @@ index b7a0c167..4455fe71 100644
  
  			var pending_error = ensure_request.future.error;
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbec..cca78d5e 100644
+index 55a0fbec..b77fc0d9 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
 @@ -360,7 +360,11 @@ namespace Frida {
@@ -107,7 +107,28 @@ index 55a0fbec..cca78d5e 100644
  			string parameters = make_agent_parameters (pid, "", options);
  			AgentFeatures features = CONTROL_CHANNEL;
  			var linjector = (Linjector) injector;
-@@ -1656,5 +1660,4 @@ namespace Frida {
+@@ -953,7 +957,19 @@ namespace Frida {
+ 		}
+ 
+ 		protected override async uint get_target_pid (Cancellable? cancellable) throws Error, IOError {
+-			return LocalProcesses.get_pid ("system_server");
++			// FridMira DEBUG: Starting system_server PID lookup
++			// FridMira 调试：开始查找 system_server PID
++			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
++				stderr.printf ("FridMira: DEBUG: Looking up system_server PID...\\n");
++			}
++
++			uint pid = LocalProcesses.get_pid ("system_server");
++
++			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
++				stderr.printf ("FridMira: DEBUG: Found system_server PID: %u\\n", pid);
++			}
++
++			return pid;
+ 		}
+ 
+ 		protected override async string? load_source (Cancellable? cancellable) throws Error, IOError {
+@@ -1656,5 +1672,4 @@ namespace Frida {
  			return pid;
  		}
  	}
