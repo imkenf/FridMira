@@ -1,14 +1,14 @@
-From 4cfbdf71845021043de3b4a469169fef541f524e Mon Sep 17 00:00:00 2001
+From 2840e1e1fe93188eedd8b1bc5cfde89b2bd1d573 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
  src/agent-container.vala              |  31 ++++++-
- src/host-session-service.vala         |  75 +++++++++++++++-
+ src/host-session-service.vala         |  79 ++++++++++++++++-
  src/linux/linux-host-session.vala     | 120 +++++++++++++++++++++++++-
  src/windows/windows-host-session.vala |  19 ++--
- 4 files changed, 232 insertions(+), 13 deletions(-)
+ 4 files changed, 235 insertions(+), 14 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -65,13 +65,14 @@ index eecfa1f6..c4244aaa 100644
  
  		private void start_worker_thread () {
 diff --git a/src/host-session-service.vala b/src/host-session-service.vala
-index b7a0c167..49d9b8a7 100644
+index b7a0c167..12efdada 100644
 --- a/src/host-session-service.vala
 +++ b/src/host-session-service.vala
-@@ -1480,9 +1480,24 @@ namespace Frida {
+@@ -1480,9 +1480,37 @@ namespace Frida {
  
  		protected async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable)
  				throws Error, IOError {
+-			yield ensure_loaded (cancellable);
 +			// FridMira DEBUG: RPC call tracking
 +			// FridMira 调试：RPC调用跟踪
 +			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
@@ -79,30 +80,38 @@ index b7a0c167..49d9b8a7 100644
 +			if (verbose)
 +				stderr.printf ("FridMira: DEBUG: InternalAgent.call - Method: %s\\n", method);
 +
- 			yield ensure_loaded (cancellable);
- 
--			return yield rpc_client.call (method, args, data, cancellable);
-+			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: InternalAgent.call - ensure_loaded completed, calling rpc_client.call()\\n");
-+
-+			var result = yield rpc_client.call (method, args, data, cancellable);
-+
-+			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: InternalAgent.call - rpc_client.call completed successfully\\n");
-+
-+			return result;
- 		}
- 
- 		protected async void post (Json.Node message, Cancellable? cancellable) throws Error, IOError {
-@@ -1510,21 +1525,52 @@ namespace Frida {
- 			}
- 			ensure_request = new Promise<bool> ();
- 
-+			// FridMira: Temporarily disable RPC obfuscation for InternalAgent loading
-+			// FridMira: 为InternalAgent加载临时禁用RPC混淆
++			// FridMira: Temporarily disable RPC obfuscation for the entire call
++			// FridMira: 为整个调用过程临时禁用RPC混淆
 +			var original_enhancer = RpcClient.enhancer;
 +			RpcClient.enhancer = null;
 +
++			try {
++				yield ensure_loaded (cancellable);
++
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: InternalAgent.call - ensure_loaded completed, calling rpc_client.call()\\n");
++
++				var result = yield rpc_client.call (method, args, data, cancellable);
+ 
+-			return yield rpc_client.call (method, args, data, cancellable);
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: InternalAgent.call - rpc_client.call completed successfully\\n");
++
++				return result;
++			} finally {
++				// FridMira: Restore RPC obfuscation
++				// FridMira: 恢复RPC混淆
++				if (verbose)
++					stderr.printf ("FridMira: DEBUG: InternalAgent.call - Restoring RPC enhancer\\n");
++				RpcClient.enhancer = original_enhancer;
++			}
+ 		}
+ 
+ 		protected async void post (Json.Node message, Cancellable? cancellable) throws Error, IOError {
+@@ -1510,21 +1538,47 @@ namespace Frida {
+ 			}
+ 			ensure_request = new Promise<bool> ();
+ 
 +			// FridMira DEBUG: Add detailed logging for ensure_loaded process
 +			// FridMira 调试：为ensure_loaded过程添加详细日志
 +			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
@@ -147,7 +156,7 @@ index b7a0c167..49d9b8a7 100644
  						Bytes? snapshot = yield load_snapshot (cancellable, out transport);
  						if (snapshot != null) {
  							options.snapshot = snapshot;
-@@ -1532,21 +1578,45 @@ namespace Frida {
+@@ -1532,21 +1586,39 @@ namespace Frida {
  						}
  						options.runtime = script_runtime;
  
@@ -178,12 +187,6 @@ index b7a0c167..49d9b8a7 100644
 +				if (verbose)
 +					stderr.printf ("FridMira: DEBUG: ensure_loaded - Error caught: %s\\n", e.message);
  				ensure_request.reject (e);
-+			} finally {
-+				// FridMira: Restore RPC obfuscation
-+				// FridMira: 恢复RPC混淆
-+				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Restoring RPC enhancer\\n");
-+				RpcClient.enhancer = original_enhancer;
  			}
  
  			var pending_error = ensure_request.future.error;
@@ -193,7 +196,7 @@ index b7a0c167..49d9b8a7 100644
  				try {
  					yield ensure_unloaded (cancellable);
  				} finally {
-@@ -1555,6 +1625,9 @@ namespace Frida {
+@@ -1555,6 +1627,9 @@ namespace Frida {
  
  				throw_api_error (pending_error);
  			}
