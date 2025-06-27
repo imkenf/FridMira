@@ -1,69 +1,14 @@
-From 820790ad321d570feda642dd2462c7bc7dee4968 Mon Sep 17 00:00:00 2001
+From 119ddad79ebf6dfca3aabfec1b86c280911a8e8f Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
- lib/agent/agent.vala                  | 37 ++++++++++++++++++++++++++-
- src/agent-container.vala              | 31 +++++++++++++++++++++-
- src/host-session-service.vala         | 24 +++++++++++++++--
- src/linux/linux-host-session.vala     | 20 ++++++++++++++-
- src/windows/windows-host-session.vala | 19 ++++++++------
- 5 files changed, 118 insertions(+), 13 deletions(-)
+ src/agent-container.vala              | 31 ++++++++++++++++++++++++++-
+ src/linux/linux-host-session.vala     | 15 ++++++++++---
+ src/windows/windows-host-session.vala | 19 +++++++++-------
+ 3 files changed, 53 insertions(+), 12 deletions(-)
 
-diff --git a/lib/agent/agent.vala b/lib/agent/agent.vala
-index 6c8c4d9b..e3d72df6 100644
---- a/lib/agent/agent.vala
-+++ b/lib/agent/agent.vala
-@@ -280,7 +280,37 @@ namespace Frida.Agent {
- 		}
- 
- 		private async void start (owned FileDescriptorTablePadder padder) {
--			string[] tokens = agent_parameters.split ("|");
-+			/*
-+			 * FridMira: Initialize RPC obfuscation from server parameters.
-+			 * This is critical for ensuring the preload agent can communicate
-+			 * with a FridMira-enhanced server.
-+			 *
-+			 * FridMira: 从服务器参数初始化RPC混淆。
-+			 * 这对于确保preload agent能够与FridMira增强服务器通信至关重要。
-+			 */
-+			string[] tokens;
-+			try {
-+				var parser = new Json.Parser ();
-+				parser.load_from_data (agent_parameters);
-+
-+				var root = parser.get_root ();
-+				var obj = root.get_object ();
-+
-+				if (obj.has_member ("protocol")) {
-+					string protocol = obj.get_string_member ("protocol");
-+					string command = obj.get_string_member ("command");
-+
-+					var enhancer = new FridMiraRpcEnhancerAdapter ();
-+					enhancer.set_override_protocol (protocol, command);
-+					RpcClient.enhancer = enhancer;
-+				}
-+
-+				tokens = obj.get_string_member ("address").split ("|");
-+			} catch (Error e) {
-+				/* Fallback for standard parameters */
-+				tokens = agent_parameters.split ("|");
-+			}
-+
- 			unowned string transport_uri = tokens[0];
- 			bool enable_exceptor = true;
- #if DARWIN
-@@ -1704,4 +1734,9 @@ namespace Frida.Agent {
- 			return repeat;
- 		});
- 	}
-+
-+	[CCode (cname = "frida_agent_module_unload_policy_finalize")]
-+	internal void unload_policy_finalize (UnloadPolicy p) {
-+		/* NOP */
-+	}
- }
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
 --- a/src/agent-container.vala
@@ -118,46 +63,29 @@ index eecfa1f6..c4244aaa 100644
  		}
  
  		private void start_worker_thread () {
-diff --git a/src/host-session-service.vala b/src/host-session-service.vala
-index b7a0c167..83f5012a 100644
---- a/src/host-session-service.vala
-+++ b/src/host-session-service.vala
-@@ -662,8 +662,28 @@ namespace Frida {
- 			return null;
- 		}
- 
--		protected string make_agent_parameters (uint pid, string remote_address, HashTable<string, Variant> options) throws Error {
--			var parameters = new StringBuilder (remote_address);
-+		protected string make_agent_parameters (uint pid, string remote_address, HashTable<string, Variant> options, Json.Object? extra) throws Error {
-+			var parameters = new StringBuilder ();
-+
-+			var data = new Json.Object ();
-+			data.set_string_member ("address", remote_address);
-+			if (extra != null) {
-+				/*
-+				 * FridMira: Pass RPC configuration to the agent so it can use
-+				 * the same obfuscated protocol as the server, especially
-+				 * important for the preload agent.
-+				 *
-+				 * FridMira: 将RPC配置传递给agent，以便它能使用与服务器相同
-+				 * 的混淆协议，这对preload agent尤其重要。
-+				 */
-+				extra.foreach_member ((o, name, val) => {
-+					data.set_member (name, val.copy ());
-+				});
-+			}
-+
-+			var node = new Json.Node (Json.NodeType.OBJECT);
-+			node.set_object (data);
-+			parameters.append (Json.to_string (node, false));
- 
- 			string[] features = { "exceptor", "exit-monitor", "thread-suspend-monitor" };
- 			bool is_system_session = pid == 0;
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbec..55032d52 100644
+index 55a0fbec..ce0803d3 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
-@@ -360,8 +360,26 @@ namespace Frida {
+@@ -90,9 +90,14 @@ namespace Frida {
+ 
+ 		public override async void preload (Cancellable? cancellable) throws Error, IOError {
+ #if ANDROID
+-			yield system_server_agent.preload (cancellable);
+-
+-			yield robo_launcher.preload (cancellable);
++			var existing_enhancer = RpcClient.enhancer;
++			RpcClient.enhancer = null;
++			try {
++				yield system_server_agent.preload (cancellable);
++				yield robo_launcher.preload (cancellable);
++			} finally {
++				RpcClient.enhancer = existing_enhancer;
++			}
+ #endif
+ 		}
+ 
+@@ -360,7 +365,11 @@ namespace Frida {
  		protected override async Future<IOStream> perform_attach_to (uint pid, HashTable<string, Variant> options,
  				Cancellable? cancellable, out Object? transport) throws Error, IOError {
  			uint id;
@@ -165,26 +93,10 @@ index 55a0fbec..55032d52 100644
 +			// Standard Agent entry point - symbol obfuscation requires compile-time patching
 +			// 标准Agent入口点 - 符号混淆需要编译时补丁
  			string entrypoint = "frida_agent_main";
--			string parameters = make_agent_parameters (pid, "", options);
 +
-+			/*
-+			 * FridMira: Prepare RPC configuration to be passed to the agent.
-+			 * This ensures that even agents injected during preload can
-+			 * communicate using the obfuscated protocol.
-+			 *
-+			 * FridMira: 准备要传递给agent的RPC配置。
-+			 * 这确保了即使是在preload期间注入的agent也能使用混淆协议进行通信。
-+			 */
-+			var extra_params = new Json.Object ();
-+			if (RpcClient.enhancer != null) {
-+				extra_params.set_string_member ("protocol", RpcClient.enhancer.get_protocol_id (null));
-+				extra_params.set_string_member ("command", RpcClient.enhancer.get_call_command (null));
-+			}
-+
-+			string parameters = make_agent_parameters (pid, "", options, extra_params);
+ 			string parameters = make_agent_parameters (pid, "", options);
  			AgentFeatures features = CONTROL_CHANNEL;
  			var linjector = (Linjector) injector;
- #if HAVE_EMBEDDED_ASSETS
 diff --git a/src/windows/windows-host-session.vala b/src/windows/windows-host-session.vala
 index 1f9c32eb..26518e6c 100644
 --- a/src/windows/windows-host-session.vala

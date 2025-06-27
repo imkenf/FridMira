@@ -1,29 +1,15 @@
-From 8d990e1473ed6937d99063d52ead0e104ee92004 Mon Sep 17 00:00:00 2001
+From 904a7e4e25750eef162eb62167982cff06c2114c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:42:39 +0800
 Subject: [PATCH 002/006] Add FridMira framework to library build system
 
 ---
- lib/agent/meson.build |  2 +-
- lib/meson.build       |  1 +
- lib/mira/meson.build  | 21 +++++++++++++++++++++
- src/meson.build       |  4 ++--
- 4 files changed, 25 insertions(+), 3 deletions(-)
+ lib/meson.build      |  1 +
+ lib/mira/meson.build | 21 +++++++++++++++++++++
+ src/meson.build      |  4 ++--
+ 3 files changed, 24 insertions(+), 2 deletions(-)
  create mode 100644 lib/mira/meson.build
 
-diff --git a/lib/agent/meson.build b/lib/agent/meson.build
-index 266decf0..8a859cd2 100644
---- a/lib/agent/meson.build
-+++ b/lib/agent/meson.build
-@@ -47,7 +47,7 @@ raw_agent = shared_library('frida-agent-raw', agent_sources,
-   link_depends: extra_link_depends,
-   vs_module_defs: 'frida-agent.def',
-   override_options: ['b_asneeded=true'],
--  dependencies: [gio_dep, gee_dep, gum_dep, gumjs_dep, base_dep, pipe_dep, tls_provider_dep, payload_dep],
-+  dependencies: [gio_dep, gee_dep, gum_dep, gumjs_dep, base_dep, pipe_dep, tls_provider_dep, payload_dep, mira_dep],
- )
- 
- operations = ['--move', 'constructor', 'frida_init_memory', 'first']
 diff --git a/lib/meson.build b/lib/meson.build
 index 6c6e05b6..c39d37f4 100644
 --- a/lib/meson.build
