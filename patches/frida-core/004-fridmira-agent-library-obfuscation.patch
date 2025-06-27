@@ -1,15 +1,62 @@
-From c1439e7a8f34757dd82a51f5807ebb1b6df6d53d Mon Sep 17 00:00:00 2001
+From fc50d4642d1b23e1a5da3a015dc0f8ee93d831e9 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
- src/agent-container.vala              | 31 ++++++++++++++++++++++++++-
- src/host-session-service.vala         | 21 ++++++++++++++++--
- src/linux/linux-host-session.vala     | 20 ++++++++++++++++-
- src/windows/windows-host-session.vala | 19 +++++++++-------
- 4 files changed, 79 insertions(+), 12 deletions(-)
+ lib/agent/agent.vala                  | 37 +++++++++++++++++++++++++++
+ src/agent-container.vala              | 31 +++++++++++++++++++++-
+ src/host-session-service.vala         | 24 +++++++++++++++--
+ src/linux/linux-host-session.vala     | 20 ++++++++++++++-
+ src/windows/windows-host-session.vala | 19 ++++++++------
+ 5 files changed, 119 insertions(+), 12 deletions(-)
 
+diff --git a/lib/agent/agent.vala b/lib/agent/agent.vala
+index 6c8c4d9b..e6d1be1e 100644
+--- a/lib/agent/agent.vala
++++ b/lib/agent/agent.vala
+@@ -1704,4 +1704,41 @@ namespace Frida.Agent {
+ 			return repeat;
+ 		});
+ 	}
++
++	[ModuleInit]
++	public static void main () {
++	}
++}
++
++extern int frida_agent_main (char * data, int * len, void ** handle);
++
++int
++frida_agent_main (char * data, int * len, void ** handle) {
++	/*
++	 * FridMira: Initialize RPC obfuscation from server parameters.
++	 * This is critical for ensuring the preload agent can communicate
++	 * with a FridMira-enhanced server.
++	 *
++	 * FridMira: 从服务器参数初始化RPC混淆。
++	 * 这对于确保preload agent能够与FridMira增强服务器通信至关重要。
++	 */
++	try {
++		var parser = new Json.Parser ();
++		parser.load_from_data (data);
++		var root = parser.get_root ();
++		var obj = root.get_object ();
++		if (obj.has_member ("protocol")) {
++			string protocol = obj.get_string_member ("protocol");
++			string command = obj.get_string_member ("command");
++
++			var enhancer = new Frida.FridMiraRpcEnhancerAdapter ();
++			enhancer.set_override_protocol (protocol, command);
++			Frida.RpcClient.enhancer = enhancer;
++		}
++	} catch (Error e) {
++		/* Ignore parse errors, fallback to standard protocol */
++	}
++
++	var module = new Frida.AgentModule (data, len, handle);
++	return module.run ();
+ }
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
 --- a/src/agent-container.vala
@@ -65,10 +112,10 @@ index eecfa1f6..c4244aaa 100644
  
  		private void start_worker_thread () {
 diff --git a/src/host-session-service.vala b/src/host-session-service.vala
-index b7a0c167..dab1bbfb 100644
+index b7a0c167..fe60c610 100644
 --- a/src/host-session-service.vala
 +++ b/src/host-session-service.vala
-@@ -662,8 +662,25 @@ namespace Frida {
+@@ -662,8 +662,28 @@ namespace Frida {
  			return null;
  		}
  
@@ -92,7 +139,10 @@ index b7a0c167..dab1bbfb 100644
 +					data.set_member (name, val.copy ());
 +				});
 +			}
-+			parameters.append (data.to_string ());
++
++			var node = Json.Node.alloc ();
++			node.init_object (data);
++			parameters.append (Json.to_string (node, false));
  
  			string[] features = { "exceptor", "exit-monitor", "thread-suspend-monitor" };
  			bool is_system_session = pid == 0;

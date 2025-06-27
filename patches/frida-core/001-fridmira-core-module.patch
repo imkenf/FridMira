@@ -1,17 +1,17 @@
-From 6e909d8e308803398cc938498f2049d6412b3672 Mon Sep 17 00:00:00 2001
+From 7f89fcf04d30eb2d465c19979877a7d9a6800a8f Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
  lib/mira/fridmira-agent.vala  | 264 +++++++++++++
- lib/mira/fridmira-file.vala   | 275 ++++++++++++++
+ lib/mira/fridmira-file.vala   | 275 +++++++++++++
  lib/mira/fridmira-memory.vala | 227 +++++++++++
- lib/mira/fridmira-rpc.vala    | 697 ++++++++++++++++++++++++++++++++++
- lib/mira/fridmira-symbol.vala | 212 +++++++++++
+ lib/mira/fridmira-rpc.vala    | 711 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-symbol.vala | 212 ++++++++++
  lib/mira/fridmira-thread.vala | 167 ++++++++
  lib/mira/fridmira.vala        | 305 +++++++++++++++
- 7 files changed, 2147 insertions(+)
+ 7 files changed, 2161 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -806,10 +806,10 @@ index 00000000..7efe2b02
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..a0127b94
+index 00000000..665b3f25
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,697 @@
+@@ -0,0 +1,711 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -836,13 +836,27 @@ index 00000000..a0127b94
 +	 */
 +	public class FridMiraRpcEnhancerAdapter : Object, RpcProtocolEnhancer {
 +
++		private string? override_protocol_id = null;
++		private string? override_call_command = null;
++
++		public void set_override_protocol (string protocol_id, string call_command) {
++			override_protocol_id = protocol_id;
++			override_call_command = call_command;
++		}
++
 +		public string get_protocol_id (string? session_id) {
++			if (override_protocol_id != null) {
++				return override_protocol_id;
++			}
 +			// Return enhanced protocol if enabled, otherwise standard
 +			// 如果启用增强模式则返回增强协议，否则返回标准协议
 +			return Frida.FridMiraRpcProtocolEnhancer.get_protocol_id (session_id);
 +		}
 +
 +		public string get_call_command (string? session_id) {
++			if (override_call_command != null) {
++				return override_call_command;
++			}
 +			// Return enhanced command if enabled, otherwise standard
 +			// 如果启用增强模式则返回增强命令，否则返回标准命令
 +			return Frida.FridMiraRpcProtocolEnhancer.get_call_command (session_id);

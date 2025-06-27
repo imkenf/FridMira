@@ -1,4 +1,4 @@
-From 59c679c74bf818069ad4bd6b579ea0b600f2c58a Mon Sep 17 00:00:00 2001
+From 6d850acf2d7a2dc1f5326a57479fb165913b2076 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
