@@ -1,17 +1,17 @@
-From 0a1654e21966aa0dea3607763aab2d28a1f273fe Mon Sep 17 00:00:00 2001
+From 14d81d499479d845ca32808c50dc633ce67a0b7c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 575 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 564 insertions(+), 11 deletions(-)
+ lib/base/rpc.vala | 549 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 538 insertions(+), 11 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index c4654527..e368bfaf 100644
+index c4654527..d1f5209d 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
-@@ -1,17 +1,323 @@
+@@ -1,17 +1,297 @@
 +/*
 + * FRIDMIRA ENHANCED RPC MODULE / FRIDMIRA增强RPC模块
 + *
@@ -203,47 +203,21 @@ index c4654527..e368bfaf 100644
 +				stderr.printf ("FridMira: DEBUG: RpcClient.call - Enhancer present: %s\n", (enhancer != null) ? "YES" : "NO");
 +			}
 +
-+			// Smart protocol selection: Try enhanced protocol first, fallback to standard
-+			// 智能协议选择：首先尝试增强协议，失败时回退到标准协议
++			// Strict protocol selection: Use enhanced protocol when available, no fallback
++			// 严格协议选择：当可用时使用增强协议，无回退
 +			if (enhancer != null && should_use_enhanced_protocol()) {
 +				if (verbose) {
-+					stderr.printf ("FridMira: DEBUG: RpcClient.call - Using enhanced protocol path\n");
++					stderr.printf ("FridMira: DEBUG: RpcClient.call - Using enhanced protocol (no fallback)\n");
 +				}
-+				try {
-+					return yield call_with_enhanced_protocol (method, args, data, cancellable);
-+				} catch (Error e) {
-+					if (verbose) {
-+						stderr.printf ("FridMira: DEBUG: RpcClient.call - Enhanced protocol failed: %s\n", e.message);
-+					}
-+					// Enhanced protocol failed, try protocol discovery
-+					// 增强协议失败，尝试协议发现
-+					if (e is IOError.TIMED_OUT || e is IOError.CONNECTION_REFUSED) {
-+						try {
-+							yield discover_and_negotiate_protocol (cancellable);
-+							return yield call_with_enhanced_protocol (method, args, data, cancellable);
-+						} catch (Error discovery_error) {
-+							// Protocol discovery failed, fallback to standard protocol
-+							// 协议发现失败，回退到标准协议
-+							if (verbose) {
-+								stderr.printf ("FridMira: DEBUG: RpcClient.call - Protocol discovery failed (%s), falling back to standard protocol\n", discovery_error.message);
-+							}
-+						}
-+					}
-+				}
++				return yield call_with_enhanced_protocol (method, args, data, cancellable);
 +			} else {
 +				if (verbose) {
 +					bool should_use = should_use_enhanced_protocol();
-+					stderr.printf ("FridMira: DEBUG: RpcClient.call - Using standard protocol path (enhancer: %s, should_use_enhanced: %s)\n",
++					stderr.printf ("FridMira: DEBUG: RpcClient.call - Using standard protocol (enhancer: %s, should_use_enhanced: %s)\n",
 +						(enhancer != null) ? "YES" : "NO", should_use ? "YES" : "NO");
 +				}
++				return yield call_with_standard_protocol (method, args, data, cancellable);
 +			}
-+
-+			// Use standard protocol as fallback
-+			// 使用标准协议作为回退
-+			if (verbose) {
-+				stderr.printf ("FridMira: DEBUG: RpcClient.call - Falling back to standard protocol\n");
-+			}
-+			return yield call_with_standard_protocol (method, args, data, cancellable);
 +		}
 +
 +		/**
@@ -335,7 +309,7 @@ index c4654527..e368bfaf 100644
  			string request_id = Uuid.string_random ();
  
  			var request = new Json.Builder ();
-@@ -29,25 +335,60 @@ namespace Frida {
+@@ -29,25 +309,60 @@ namespace Frida {
  				.end_array ();
  			string raw_request = Json.to_string (request.get_root (), false);
  
@@ -397,7 +371,7 @@ index c4654527..e368bfaf 100644
  					if (pending_responses.unset (request_id))
  						pending.complete_with_error (new IOError.CANCELLED ("Operation was cancelled"));
  					return false;
-@@ -59,24 +400,115 @@ namespace Frida {
+@@ -59,24 +374,115 @@ namespace Frida {
  				waiting = false;
  
  				cancel_source.destroy ();
@@ -515,7 +489,7 @@ index c4654527..e368bfaf 100644
  				assert_not_reached ();
  			}
  			var message = parser.get_root ().get_object ();
-@@ -84,38 +516,159 @@ namespace Frida {
+@@ -84,38 +490,159 @@ namespace Frida {
  			bool handled = false;
  
  			var type = message.get_string_member ("type");
