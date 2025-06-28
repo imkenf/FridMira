@@ -1,17 +1,17 @@
-From 14d81d499479d845ca32808c50dc633ce67a0b7c Mon Sep 17 00:00:00 2001
+From 151b766ec2d9cf84ef988b57135196453653c20b Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 549 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 538 insertions(+), 11 deletions(-)
+ lib/base/rpc.vala | 532 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 521 insertions(+), 11 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index c4654527..d1f5209d 100644
+index c4654527..cfaba99d 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
-@@ -1,17 +1,297 @@
+@@ -1,17 +1,280 @@
 +/*
 + * FRIDMIRA ENHANCED RPC MODULE / FRIDMIRA增强RPC模块
 + *
@@ -194,8 +194,8 @@ index c4654527..d1f5209d 100644
 +		 * @throws IOError IO operation errors / IO操作错误
 +		 */
  		public async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable) throws Error, IOError {
-+			// FridMira DEBUG: Add detailed protocol selection debugging
-+			// FridMira 调试：添加详细的协议选择调试信息
++			// FridMira DEBUG: Add detailed call debugging
++			// FridMira 调试：添加详细的调用调试信息
 +			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
 +
 +			if (verbose) {
@@ -205,34 +205,17 @@ index c4654527..d1f5209d 100644
 +
 +			// Strict protocol selection: Use enhanced protocol when available, no fallback
 +			// 严格协议选择：当可用时使用增强协议，无回退
-+			if (enhancer != null && should_use_enhanced_protocol()) {
++			if (enhancer != null) {
 +				if (verbose) {
 +					stderr.printf ("FridMira: DEBUG: RpcClient.call - Using enhanced protocol (no fallback)\n");
 +				}
 +				return yield call_with_enhanced_protocol (method, args, data, cancellable);
 +			} else {
 +				if (verbose) {
-+					bool should_use = should_use_enhanced_protocol();
-+					stderr.printf ("FridMira: DEBUG: RpcClient.call - Using standard protocol (enhancer: %s, should_use_enhanced: %s)\n",
-+						(enhancer != null) ? "YES" : "NO", should_use ? "YES" : "NO");
++					stderr.printf ("FridMira: DEBUG: RpcClient.call - Using standard protocol (no enhancer available)\n");
 +				}
 +				return yield call_with_standard_protocol (method, args, data, cancellable);
 +			}
-+		}
-+
-+		/**
-+		 * Determine if enhanced protocol should be used
-+		 * 确定是否应该使用增强协议
-+		 */
-+		private bool should_use_enhanced_protocol() {
-+			// Check environment variable to enable enhanced mode
-+			// 检查环境变量以启用增强模式
-+			string? fridmira_mode = GLib.Environment.get_variable("FRIDMIRA_MODE");
-+			string? rpc_mode = GLib.Environment.get_variable("FRIDMIRA_RPC_MODE");
-+
-+			// Enhanced mode is enabled if either variable is set to "1"
-+			// 如果任一变量设置为"1"，则启用增强模式
-+			return (fridmira_mode == "1") || (rpc_mode == "1");
 +		}
 +
 +		/**
@@ -309,7 +292,7 @@ index c4654527..d1f5209d 100644
  			string request_id = Uuid.string_random ();
  
  			var request = new Json.Builder ();
-@@ -29,25 +309,60 @@ namespace Frida {
+@@ -29,25 +292,60 @@ namespace Frida {
  				.end_array ();
  			string raw_request = Json.to_string (request.get_root (), false);
  
@@ -371,7 +354,7 @@ index c4654527..d1f5209d 100644
  					if (pending_responses.unset (request_id))
  						pending.complete_with_error (new IOError.CANCELLED ("Operation was cancelled"));
  					return false;
-@@ -59,24 +374,115 @@ namespace Frida {
+@@ -59,24 +357,115 @@ namespace Frida {
  				waiting = false;
  
  				cancel_source.destroy ();
@@ -489,7 +472,7 @@ index c4654527..d1f5209d 100644
  				assert_not_reached ();
  			}
  			var message = parser.get_root ().get_object ();
-@@ -84,38 +490,159 @@ namespace Frida {
+@@ -84,38 +473,159 @@ namespace Frida {
  			bool handled = false;
  
  			var type = message.get_string_member ("type");
@@ -557,7 +540,7 @@ index c4654527..d1f5209d 100644
 +				if (verbose) {
 +					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - No protocol type found\n");
 +				}
-+				return false;
+ 				return false;
 +			}
 +
 +			if (verbose) {
@@ -590,7 +573,7 @@ index c4654527..d1f5209d 100644
 +				if (verbose) {
 +					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Rejecting unsupported protocol: %s\n", type);
 +				}
- 				return false;
++				return false;
 +			}
  
  			var request_id_value = rpc_message.get_element (1);
