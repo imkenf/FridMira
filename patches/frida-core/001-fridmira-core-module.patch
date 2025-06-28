@@ -1,17 +1,17 @@
-From 5a49174d40bf27cbf0ea88353a8e65212e545731 Mon Sep 17 00:00:00 2001
+From fb095de3ca184e3cc0d45fa0d6186b4933754a57 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
  lib/mira/fridmira-agent.vala  | 264 +++++++++++++
- lib/mira/fridmira-file.vala   | 275 ++++++++++++++
+ lib/mira/fridmira-file.vala   | 275 +++++++++++++
  lib/mira/fridmira-memory.vala | 227 +++++++++++
- lib/mira/fridmira-rpc.vala    | 697 ++++++++++++++++++++++++++++++++++
- lib/mira/fridmira-symbol.vala | 212 +++++++++++
+ lib/mira/fridmira-rpc.vala    | 721 ++++++++++++++++++++++++++++++++++
+ lib/mira/fridmira-symbol.vala | 212 ++++++++++
  lib/mira/fridmira-thread.vala | 167 ++++++++
- lib/mira/fridmira.vala        | 305 +++++++++++++++
- 7 files changed, 2147 insertions(+)
+ lib/mira/fridmira.vala        | 305 ++++++++++++++
+ 7 files changed, 2171 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -806,10 +806,10 @@ index 00000000..7efe2b02
 +}
 diff --git a/lib/mira/fridmira-rpc.vala b/lib/mira/fridmira-rpc.vala
 new file mode 100644
-index 00000000..a0127b94
+index 00000000..cdf209e0
 --- /dev/null
 +++ b/lib/mira/fridmira-rpc.vala
-@@ -0,0 +1,697 @@
+@@ -0,0 +1,721 @@
 +/**
 + * FridMira: RPC Protocol Module
 + * FridMira: RPC协议模块
@@ -907,10 +907,17 @@ index 00000000..a0127b94
 +	public class FridMiraRpcProtocolEnhancer {
 +		private static HashMap<string, string> session_protocols;
 +		private static HashMap<string, string> session_commands;
++		private static HashMap<string, string> session_responses;
 +		private static bool initialized = false;
 +		private static Mutex init_mutex = Mutex();
 +		private static bool enhanced_mode_cached = false;
 +		private static bool enhanced_mode_checked = false;
++
++		// Global protocol cache for null session_id calls
++		// 全局协议缓存，用于null session_id调用
++		private static string? global_protocol_id = null;
++		private static string? global_call_command = null;
++		private static Mutex global_protocol_mutex = Mutex();
 +
 +		/**
 +		 * Initialize the RPC protocol enhancer
@@ -925,7 +932,7 @@ index 00000000..a0127b94
 +
 +				session_protocols = new HashMap<string, string>();
 +				session_commands = new HashMap<string, string>();
-+
++				session_responses = new HashMap<string, string>();
 +
 +				initialized = true;
 +			} finally {
@@ -978,7 +985,17 @@ index 00000000..a0127b94
 +			ensure_initialized();
 +
 +			if (session_id == null) {
-+				return generate_obfuscated_protocol();
++				// Use global cached protocol for null session_id to ensure consistency
++				// 对null session_id使用全局缓存协议以确保一致性
++				global_protocol_mutex.lock();
++				try {
++					if (global_protocol_id == null) {
++						global_protocol_id = generate_obfuscated_protocol();
++					}
++					return global_protocol_id;
++				} finally {
++					global_protocol_mutex.unlock();
++				}
 +			}
 +
 +			if (!session_protocols.has_key(session_id)) {
@@ -1000,7 +1017,17 @@ index 00000000..a0127b94
 +			ensure_initialized();
 +
 +			if (session_id == null) {
-+				return generate_obfuscated_command();
++				// Use global cached command for null session_id to ensure consistency
++				// 对null session_id使用全局缓存命令以确保一致性
++				global_protocol_mutex.lock();
++				try {
++					if (global_call_command == null) {
++						global_call_command = generate_obfuscated_command();
++					}
++					return global_call_command;
++				} finally {
++					global_protocol_mutex.unlock();
++				}
 +			}
 +
 +			if (!session_commands.has_key(session_id)) {
@@ -1082,6 +1109,9 @@ index 00000000..a0127b94
 +			if (session_commands != null) {
 +				session_commands.unset(session_id);
 +			}
++			if (session_responses != null) {
++				session_responses.unset(session_id);
++			}
 +		}
 +
 +		/**
@@ -1106,8 +1136,6 @@ index 00000000..a0127b94
 +			string[] commands = {"exec", "run", "invoke", "proc", "handle"};
 +			return commands[Random.int_range(0, commands.length)];
 +		}
-+
-+
 +
 +		/**
 +		 * Protocol configuration file path
@@ -1167,10 +1195,6 @@ index 00000000..a0127b94
 +			// 配置按需生成
 +			return false;
 +		}
-+
-+
-+
-+
 +	}
 +}
 +

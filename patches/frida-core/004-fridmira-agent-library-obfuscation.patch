@@ -1,14 +1,14 @@
-From 4cb5ef762d0ecfb3d2719ae42f9116feb5bf42a0 Mon Sep 17 00:00:00 2001
+From baa5fdd0112c0f6a9ca6b3be9052fa527fb7f951 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
  src/agent-container.vala              |  31 ++++++-
- src/host-session-service.vala         | 106 ++++++++++++++++++++++-
+ src/host-session-service.vala         | 108 ++++++++++++++++++++++-
  src/linux/linux-host-session.vala     | 120 +++++++++++++++++++++++++-
  src/windows/windows-host-session.vala |  19 ++--
- 4 files changed, 262 insertions(+), 14 deletions(-)
+ 4 files changed, 264 insertions(+), 14 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -65,10 +65,10 @@ index eecfa1f6..c4244aaa 100644
  
  		private void start_worker_thread () {
 diff --git a/src/host-session-service.vala b/src/host-session-service.vala
-index b7a0c167..fb03b87e 100644
+index b7a0c167..9b80df2c 100644
 --- a/src/host-session-service.vala
 +++ b/src/host-session-service.vala
-@@ -1480,9 +1480,64 @@ namespace Frida {
+@@ -1480,9 +1480,66 @@ namespace Frida {
  
  		protected async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable)
  				throws Error, IOError {
@@ -89,13 +89,15 @@ index b7a0c167..fb03b87e 100644
 +			// 检查RPC增强器是否激活并获取混淆参数
 +			if (RpcClient.enhancer != null) {
 +				try {
-+					// Get the current session's obfuscated protocol parameters
-+					// 获取当前会话的混淆协议参数
-+					protocol_id = RpcClient.enhancer.get_protocol_id (rpc_client.session_id);
-+					call_command = RpcClient.enhancer.get_call_command (rpc_client.session_id);
++					// Get the global obfuscated protocol parameters (same as server initialization)
++					// 获取全局混淆协议参数（与服务器初始化相同）
++					// Use null session_id to get the same global protocol as displayed during server startup
++					// 使用null session_id获取与服务器启动时显示相同的全局协议
++					protocol_id = RpcClient.enhancer.get_protocol_id (null);
++					call_command = RpcClient.enhancer.get_call_command (null);
 +
 +					if (verbose) {
-+						stderr.printf ("FridMira: DEBUG: InternalAgent.call - Using obfuscated protocol: %s, command: %s\n",
++						stderr.printf ("FridMira: DEBUG: InternalAgent.call - Using global obfuscated protocol: %s, command: %s\n",
 +							protocol_id, call_command);
 +					}
 +				} catch (GLib.Error e) {
@@ -135,7 +137,7 @@ index b7a0c167..fb03b87e 100644
  		}
  
  		protected async void post (Json.Node message, Cancellable? cancellable) throws Error, IOError {
-@@ -1510,21 +1565,47 @@ namespace Frida {
+@@ -1510,21 +1567,47 @@ namespace Frida {
  			}
  			ensure_request = new Promise<bool> ();
  
@@ -183,7 +185,7 @@ index b7a0c167..fb03b87e 100644
  						Bytes? snapshot = yield load_snapshot (cancellable, out transport);
  						if (snapshot != null) {
  							options.snapshot = snapshot;
-@@ -1532,21 +1613,39 @@ namespace Frida {
+@@ -1532,21 +1615,39 @@ namespace Frida {
  						}
  						options.runtime = script_runtime;
  
@@ -223,7 +225,7 @@ index b7a0c167..fb03b87e 100644
  				try {
  					yield ensure_unloaded (cancellable);
  				} finally {
-@@ -1555,6 +1654,9 @@ namespace Frida {
+@@ -1555,6 +1656,9 @@ namespace Frida {
  
  				throw_api_error (pending_error);
  			}
