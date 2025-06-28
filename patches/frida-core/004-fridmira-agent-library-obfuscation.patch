@@ -1,4 +1,4 @@
-From cc0cc7091c4240e2d20870167ed3b460d0f48d1e Mon Sep 17 00:00:00 2001
+From 104eb0b47f6a97e5f0df1b1603177b5d57b20510 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
@@ -6,10 +6,10 @@ Subject: [PATCH 004/006] FridMira Agent Library Management Module
 ---
  src/agent-container.vala              |  31 +-
  src/host-session-service.vala         | 108 +++++-
- src/linux/agent/system-server.js      | 520 ++++++++++++++++----------
+ src/linux/agent/system-server.js      | 515 ++++++++++++++++----------
  src/linux/linux-host-session.vala     | 120 +++++-
  src/windows/windows-host-session.vala |  19 +-
- 5 files changed, 589 insertions(+), 209 deletions(-)
+ 5 files changed, 584 insertions(+), 209 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -237,7 +237,7 @@ index b7a0c167..9b80df2c 100644
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {
 diff --git a/src/linux/agent/system-server.js b/src/linux/agent/system-server.js
-index b7a6c9db..bfcf01d9 100644
+index b7a6c9db..2c55bfb4 100644
 --- a/src/linux/agent/system-server.js
 +++ b/src/linux/agent/system-server.js
 @@ -1,3 +1,21 @@
@@ -766,7 +766,7 @@ index b7a6c9db..bfcf01d9 100644
      if (pendingStartRequests.has(tid)) {
        pendingStartRequests.delete(tid);
        msg.recycle();
-@@ -487,4 +536,85 @@ function performOnJavaVM(task) {
+@@ -487,4 +536,80 @@ function performOnJavaVM(task) {
    });
  }
  
@@ -794,16 +794,11 @@ index b7a6c9db..bfcf01d9 100644
 +            typeof method === 'string' &&
 +            Array.isArray(args)) {
 +
-+          // Convert to standard rpc.exports call using obfuscated access
-+          // 使用混淆访问转换为标准rpc.exports调用
-+          const rpcKey = 'rpc';
-+          const exportsKey = 'exports';
-+          const rpcObj = this[rpcKey];
-+          const exportsObj = rpcObj[exportsKey];
-+
-+          if (exportsObj[method]) {
++          // Convert to standard rpc.exports call using direct global access
++          // 使用直接全局访问转换为标准rpc.exports调用
++          if (rpc.exports[method]) {
 +            try {
-+              const result = exportsObj[method].apply(null, args);
++              const result = rpc.exports[method].apply(null, args);
 +
 +              // Handle both sync and async results
 +              // 处理同步和异步结果
