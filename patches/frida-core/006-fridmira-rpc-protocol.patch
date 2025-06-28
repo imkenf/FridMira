@@ -1,17 +1,17 @@
-From 9eee9abe977e915540fbdfc14661b622f1d0e064 Mon Sep 17 00:00:00 2001
+From 33e8dd0971c3b4c703eb2f62307d8506ff380394 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 343 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 339 insertions(+), 4 deletions(-)
+ lib/base/rpc.vala | 345 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 341 insertions(+), 4 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index c4654527..298b7346 100644
+index c4654527..4d695750 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
-@@ -1,17 +1,279 @@
+@@ -1,17 +1,281 @@
 +/*
 + * FRIDMIRA ENHANCED RPC MODULE / FRIDMIRA增强RPC模块
 + *
@@ -260,10 +260,12 @@ index c4654527..298b7346 100644
 +		private async Json.Node call_with_enhanced_protocol (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable) throws Error, IOError {
 +			string request_id = Uuid.string_random ();
 +
-+			// Use session-specific enhanced protocol identifiers
-+			// 使用特定于会话的增强协议标识符
-+			string protocol_id = enhancer.get_protocol_id (_session_id);
-+			string call_command = enhancer.get_call_command (_session_id);
++			// Use global enhanced protocol identifiers (same as InternalAgent)
++			// 使用全局增强协议标识符（与InternalAgent相同）
++			// Use null session_id to get the same global protocol as InternalAgent
++			// 使用null session_id获取与InternalAgent相同的全局协议
++			string protocol_id = enhancer.get_protocol_id (null);
++			string call_command = enhancer.get_call_command (null);
 +
 +			var request = new Json.Builder ();
 +			request
@@ -291,7 +293,7 @@ index c4654527..298b7346 100644
  			string request_id = Uuid.string_random ();
  
  			var request = new Json.Builder ();
-@@ -29,11 +291,19 @@ namespace Frida {
+@@ -29,11 +293,19 @@ namespace Frida {
  				.end_array ();
  			string raw_request = Json.to_string (request.get_root (), false);
  
@@ -312,7 +314,7 @@ index c4654527..298b7346 100644
  				return false;
  			});
  			pending_responses[request_id] = pending;
-@@ -69,8 +339,41 @@ namespace Frida {
+@@ -69,8 +341,41 @@ namespace Frida {
  			return pending.result;
  		}
  
@@ -355,7 +357,7 @@ index c4654527..298b7346 100644
  				return false;
  
  			var parser = new Json.Parser ();
-@@ -90,6 +393,14 @@ namespace Frida {
+@@ -90,6 +395,14 @@ namespace Frida {
  			return handled;
  		}
  
@@ -370,7 +372,7 @@ index c4654527..298b7346 100644
  		private bool try_handle_rpc_message (Json.Object message) {
  			var payload = message.get_member ("payload");
  			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
-@@ -98,8 +409,24 @@ namespace Frida {
+@@ -98,8 +411,24 @@ namespace Frida {
  			if (rpc_message.get_length () < 4)
  				return false;
  
@@ -396,7 +398,7 @@ index c4654527..298b7346 100644
  				return false;
  
  			var request_id_value = rpc_message.get_element (1);
-@@ -111,8 +438,16 @@ namespace Frida {
+@@ -111,8 +440,16 @@ namespace Frida {
  			if (!pending_responses.unset (request_id, out response))
  				return false;
  
