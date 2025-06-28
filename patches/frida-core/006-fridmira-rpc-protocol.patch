@@ -1,17 +1,17 @@
-From 33e8dd0971c3b4c703eb2f62307d8506ff380394 Mon Sep 17 00:00:00 2001
+From bfd5858850a00dc5f4f271204c528f24e6b81234 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 345 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 341 insertions(+), 4 deletions(-)
+ lib/base/rpc.vala | 427 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 422 insertions(+), 5 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index c4654527..4d695750 100644
+index c4654527..8d98c56b 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
-@@ -1,17 +1,281 @@
+@@ -1,17 +1,323 @@
 +/*
 + * FRIDMIRA ENHANCED RPC MODULE / FRIDMIRA增强RPC模块
 + *
@@ -151,8 +151,8 @@ index c4654527..4d695750 100644
 +			if (enhancer != null) {
 +				enhancer.forget_session (_session_id);
 +			}
- 		}
- 
++		}
++
 +		/**
 +		 * FridMira Protocol Discovery API / FridMira协议发现API
 +		 *
@@ -174,8 +174,8 @@ index c4654527..4d695750 100644
 +				throw new Error.NOT_SUPPORTED ("Protocol discovery is not available without a protocol enhancer");
 +			}
 +			return yield enhancer.discover_protocol (peer, cancellable);
-+		}
-+
+ 		}
+ 
 +		/**
 +		 * Enhanced RPC Call with FridMira Protocol Support / 支持FridMira协议的增强RPC调用
 +		 *
@@ -194,12 +194,27 @@ index c4654527..4d695750 100644
 +		 * @throws IOError IO operation errors / IO操作错误
 +		 */
  		public async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable) throws Error, IOError {
++			// FridMira DEBUG: Add detailed protocol selection debugging
++			// FridMira 调试：添加详细的协议选择调试信息
++			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
++
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: RpcClient.call - Method: %s\n", method);
++				stderr.printf ("FridMira: DEBUG: RpcClient.call - Enhancer present: %s\n", (enhancer != null) ? "YES" : "NO");
++			}
++
 +			// Smart protocol selection: Try enhanced protocol first, fallback to standard
 +			// 智能协议选择：首先尝试增强协议，失败时回退到标准协议
 +			if (enhancer != null && should_use_enhanced_protocol()) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: RpcClient.call - Using enhanced protocol path\n");
++				}
 +				try {
 +					return yield call_with_enhanced_protocol (method, args, data, cancellable);
 +				} catch (Error e) {
++					if (verbose) {
++						stderr.printf ("FridMira: DEBUG: RpcClient.call - Enhanced protocol failed: %s\n", e.message);
++					}
 +					// Enhanced protocol failed, try protocol discovery
 +					// 增强协议失败，尝试协议发现
 +					if (e is IOError.TIMED_OUT || e is IOError.CONNECTION_REFUSED) {
@@ -209,14 +224,25 @@ index c4654527..4d695750 100644
 +						} catch (Error discovery_error) {
 +							// Protocol discovery failed, fallback to standard protocol
 +							// 协议发现失败，回退到标准协议
-+							warning ("FridMira: Protocol discovery failed (%s), falling back to standard protocol", discovery_error.message);
++							if (verbose) {
++								stderr.printf ("FridMira: DEBUG: RpcClient.call - Protocol discovery failed (%s), falling back to standard protocol\n", discovery_error.message);
++							}
 +						}
 +					}
++				}
++			} else {
++				if (verbose) {
++					bool should_use = should_use_enhanced_protocol();
++					stderr.printf ("FridMira: DEBUG: RpcClient.call - Using standard protocol path (enhancer: %s, should_use_enhanced: %s)\n",
++						(enhancer != null) ? "YES" : "NO", should_use ? "YES" : "NO");
 +				}
 +			}
 +
 +			// Use standard protocol as fallback
 +			// 使用标准协议作为回退
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: RpcClient.call - Falling back to standard protocol\n");
++			}
 +			return yield call_with_standard_protocol (method, args, data, cancellable);
 +		}
 +
@@ -258,6 +284,10 @@ index c4654527..4d695750 100644
 +		 * 使用增强协议进行RPC调用
 +		 */
 +		private async Json.Node call_with_enhanced_protocol (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable) throws Error, IOError {
++			// FridMira DEBUG: Add detailed enhanced protocol debugging
++			// FridMira 调试：添加详细的增强协议调试信息
++			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
++
 +			string request_id = Uuid.string_random ();
 +
 +			// Use global enhanced protocol identifiers (same as InternalAgent)
@@ -266,6 +296,13 @@ index c4654527..4d695750 100644
 +			// 使用null session_id获取与InternalAgent相同的全局协议
 +			string protocol_id = enhancer.get_protocol_id (null);
 +			string call_command = enhancer.get_call_command (null);
++
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: call_with_enhanced_protocol - Protocol ID: %s\n", protocol_id);
++				stderr.printf ("FridMira: DEBUG: call_with_enhanced_protocol - Call command: %s\n", call_command);
++				stderr.printf ("FridMira: DEBUG: call_with_enhanced_protocol - Request ID: %s\n", request_id);
++				stderr.printf ("FridMira: DEBUG: call_with_enhanced_protocol - Method: %s\n", method);
++			}
 +
 +			var request = new Json.Builder ();
 +			request
@@ -282,6 +319,11 @@ index c4654527..4d695750 100644
 +				.end_array ();
 +			string raw_request = Json.to_string (request.get_root (), false);
 +
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: call_with_enhanced_protocol - Raw request: %s\n", raw_request);
++				stderr.printf ("FridMira: DEBUG: call_with_enhanced_protocol - Calling execute_rpc_request\n");
++			}
++
 +			return yield execute_rpc_request (raw_request, request_id, data, cancellable);
 +		}
 +
@@ -293,7 +335,7 @@ index c4654527..4d695750 100644
  			string request_id = Uuid.string_random ();
  
  			var request = new Json.Builder ();
-@@ -29,11 +293,19 @@ namespace Frida {
+@@ -29,25 +335,60 @@ namespace Frida {
  				.end_array ();
  			string raw_request = Json.to_string (request.get_root (), false);
  
@@ -305,6 +347,15 @@ index c4654527..4d695750 100644
 +		 * 执行RPC请求并处理响应
 +		 */
 +		private async Json.Node execute_rpc_request (string raw_request, string request_id, Bytes? data, Cancellable? cancellable) throws Error, IOError {
++			// FridMira DEBUG: Add detailed request execution debugging
++			// FridMira 调试：添加详细的请求执行调试信息
++			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
++
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: execute_rpc_request - Starting execution\n");
++				stderr.printf ("FridMira: DEBUG: execute_rpc_request - Request ID: %s\n", request_id);
++			}
++
  			bool waiting = false;
  
  			var pending = new PendingResponse (() => {
@@ -314,7 +365,61 @@ index c4654527..4d695750 100644
  				return false;
  			});
  			pending_responses[request_id] = pending;
-@@ -69,8 +341,41 @@ namespace Frida {
+ 
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: execute_rpc_request - Pending response registered\n");
++				stderr.printf ("FridMira: DEBUG: execute_rpc_request - Calling peer.post_rpc_message\n");
++			}
++
+ 			try {
+ 				yield peer.post_rpc_message (raw_request, data, cancellable);
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: execute_rpc_request - Message posted successfully\n");
++				}
+ 			} catch (Error e) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: execute_rpc_request - Error posting message: %s\n", e.message);
++				}
+ 				if (pending_responses.unset (request_id))
+ 					pending.complete_with_error (e);
+ 			}
+ 
+ 			if (!pending.completed) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: execute_rpc_request - Waiting for response\n");
++				}
++
+ 				var cancel_source = new CancellableSource (cancellable);
+ 				cancel_source.set_callback (() => {
++					if (verbose) {
++						stderr.printf ("FridMira: DEBUG: execute_rpc_request - Operation cancelled\n");
++					}
+ 					if (pending_responses.unset (request_id))
+ 						pending.complete_with_error (new IOError.CANCELLED ("Operation was cancelled"));
+ 					return false;
+@@ -59,18 +400,62 @@ namespace Frida {
+ 				waiting = false;
+ 
+ 				cancel_source.destroy ();
++
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: execute_rpc_request - Response received or timeout\n");
++				}
+ 			}
+ 
+ 			cancellable.set_error_if_cancelled ();
+ 
+-			if (pending.error != null)
++			if (pending.error != null) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: execute_rpc_request - Completed with error: %s\n", pending.error.message);
++				}
+ 				throw_api_error (pending.error);
++			}
+ 
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: execute_rpc_request - Completed successfully\n");
++			}
  			return pending.result;
  		}
  
@@ -357,7 +462,7 @@ index c4654527..4d695750 100644
  				return false;
  
  			var parser = new Json.Parser ();
-@@ -90,6 +395,14 @@ namespace Frida {
+@@ -90,6 +475,14 @@ namespace Frida {
  			return handled;
  		}
  
@@ -372,7 +477,7 @@ index c4654527..4d695750 100644
  		private bool try_handle_rpc_message (Json.Object message) {
  			var payload = message.get_member ("payload");
  			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
-@@ -98,8 +411,24 @@ namespace Frida {
+@@ -98,8 +491,24 @@ namespace Frida {
  			if (rpc_message.get_length () < 4)
  				return false;
  
@@ -398,7 +503,7 @@ index c4654527..4d695750 100644
  				return false;
  
  			var request_id_value = rpc_message.get_element (1);
-@@ -111,8 +440,16 @@ namespace Frida {
+@@ -111,8 +520,16 @@ namespace Frida {
  			if (!pending_responses.unset (request_id, out response))
  				return false;
  
