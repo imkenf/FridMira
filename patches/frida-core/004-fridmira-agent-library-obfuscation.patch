@@ -1,15 +1,15 @@
-From 81e8a58249cf36148caa397ac7f8babd3900ee00 Mon Sep 17 00:00:00 2001
+From 952561a62695c31d6181da7abc9a4b8fe52afad9 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
- src/agent-container.vala              |  31 +++-
+ src/agent-container.vala              |  31 ++-
  src/host-session-service.vala         | 108 ++++++++++-
  src/linux/agent/system-server.js      |  76 ++++++++
- src/linux/linux-host-session.vala     | 254 ++++++++++++++++++++++++--
+ src/linux/linux-host-session.vala     | 262 ++++++++++++++++++++++++--
  src/windows/windows-host-session.vala |  19 +-
- 5 files changed, 462 insertions(+), 26 deletions(-)
+ 5 files changed, 470 insertions(+), 26 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -322,7 +322,7 @@ index b7a6c9db..f087ac4c 100644
 +// 启动增强RPC支持
 +setupEnhancedRpcSupport();
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbec..1ed34658 100644
+index 55a0fbec..5c8492cd 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
 @@ -89,11 +89,91 @@ namespace Frida {
@@ -563,7 +563,22 @@ index 55a0fbec..1ed34658 100644
  		private void on_zygote_agent_unloaded (InternalAgent dead_internal_agent) {
  			var dead_agent = (ZygoteAgent) dead_internal_agent;
  			dead_agent.unloaded.disconnect (on_zygote_agent_unloaded);
-@@ -787,10 +918,14 @@ namespace Frida {
+@@ -740,6 +871,14 @@ namespace Frida {
+ 			if (dead_agent.name.has_prefix ("zygote") && ensure_request != null && ensure_request.future.ready)
+ 				ensure_request = null;
+ 		}
++
++		private async void handle_usap_child (uint pid, string name) throws GLib.Error {
++			try {
++				yield inject_zygote_agent (pid, name, io_cancellable);
++			} finally {
++				host_session.resume.begin (pid, io_cancellable);
++			}
++		}
+ 	}
+ 
+ 	private sealed class ZygoteAgent : InternalAgent {
+@@ -787,10 +926,14 @@ namespace Frida {
  		}
  
  		protected override async uint get_target_pid (Cancellable? cancellable) throws Error, IOError {
@@ -578,7 +593,7 @@ index 55a0fbec..1ed34658 100644
  			return null;
  		}
  	}
-@@ -810,17 +945,43 @@ namespace Frida {
+@@ -810,17 +953,43 @@ namespace Frida {
  		}
  
  		public async void preload (Cancellable? cancellable) throws Error, IOError {
@@ -622,7 +637,7 @@ index 55a0fbec..1ed34658 100644
  		}
  
  		public async HostApplicationInfo get_frontmost_application (FrontmostQueryOptions options,
-@@ -953,7 +1114,71 @@ namespace Frida {
+@@ -953,7 +1122,71 @@ namespace Frida {
  		}
  
  		protected override async uint get_target_pid (Cancellable? cancellable) throws Error, IOError {
@@ -695,7 +710,7 @@ index 55a0fbec..1ed34658 100644
  		}
  
  		protected override async string? load_source (Cancellable? cancellable) throws Error, IOError {
-@@ -1656,5 +1881,4 @@ namespace Frida {
+@@ -1656,5 +1889,4 @@ namespace Frida {
  			return pid;
  		}
  	}
