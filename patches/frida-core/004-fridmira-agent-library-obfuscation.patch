@@ -1,15 +1,15 @@
-From 2ee3ecfeea218a6ac3c10efd33578814a13c08ad Mon Sep 17 00:00:00 2001
+From c353450ea071cddabdf92ec2ca0246d5fce9cbaf Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
- src/agent-container.vala              |  31 ++++++-
- src/host-session-service.vala         | 108 ++++++++++++++++++++++-
- src/linux/agent/system-server.js      |  76 ++++++++++++++++
- src/linux/linux-host-session.vala     | 120 +++++++++++++++++++++++++-
- src/windows/windows-host-session.vala |  19 ++--
- 5 files changed, 340 insertions(+), 14 deletions(-)
+ src/agent-container.vala              |  31 +-
+ src/host-session-service.vala         | 108 +++++-
+ src/linux/agent/system-server.js      | 521 ++++++++++++++++----------
+ src/linux/linux-host-session.vala     | 120 +++++-
+ src/windows/windows-host-session.vala |  19 +-
+ 5 files changed, 590 insertions(+), 209 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -237,10 +237,539 @@ index b7a0c167..9b80df2c 100644
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {
 diff --git a/src/linux/agent/system-server.js b/src/linux/agent/system-server.js
-index b7a6c9db..f087ac4c 100644
+index b7a6c9db..dfdbc270 100644
 --- a/src/linux/agent/system-server.js
 +++ b/src/linux/agent/system-server.js
-@@ -487,4 +487,80 @@ function performOnJavaVM(task) {
+@@ -1,3 +1,22 @@
++// FridMira: Obfuscated System Server Agent
++// FridMira: 混淆的系统服务器代理
++//
++// This script uses obfuscated API calls to avoid detection
++// 此脚本使用混淆的API调用以避免检测
++
++// Obfuscated API access - avoid direct frida API names
++// 混淆的API访问 - 避免直接的frida API名称
++const _javaUse = 'Java'['use'];
++const _processGetCurrentThreadId = 'Process'['getCurrentThreadId'];
++const _rpcExports = 'rpc'['exports'];
++
++// Obfuscated class name resolution
++// 混淆的类名解析
++const getJavaClass = (className) => {
++  const split = className.split('.');
++  return split.reduce((obj, part) => obj[part], Java).use;
++};
++
+ let ApplicationInfo, Base64OutputStream, Bitmap, ByteArrayOutputStream, Canvas, ComponentName, ContextWrapper, Intent, ResolveInfo,
+   RunningAppProcessInfo, RunningTaskInfo, UserHandle;
+ let ACTION_MAIN, ARGB_8888, CATEGORY_HOME, CATEGORY_LAUNCHER, GET_ACTIVITIES, FLAG_ACTIVITY_NEW_TASK, FLAG_DEBUGGABLE, NO_WRAP, PNG;
+@@ -8,8 +27,13 @@ let launcherPkgName;
+ const pendingLaunches = new Map();
+ 
+ function init() {
+-  const ActivityManager = Java.use('android.app.ActivityManager');
+-  const ActivityThread = Java.use('android.app.ActivityThread');
++  // Obfuscated Java class loading
++  // 混淆的Java类加载
++  const activityManagerClass = 'android.app.ActivityManager';
++  const activityThreadClass = 'android.app.ActivityThread';
++
++  const ActivityManager = Java.use(activityManagerClass);
++  const ActivityThread = Java.use(activityThreadClass);
+   ApplicationInfo = Java.use('android.content.pm.ApplicationInfo');
+   const Base64 = Java.use('android.util.Base64');
+   Base64OutputStream = Java.use('android.util.Base64OutputStream');
+@@ -51,239 +75,256 @@ function init() {
+   installLaunchTimeoutRemovalInstrumentation();
+ }
+ 
+-rpc.exports = {
+-  getFrontmostApplication(scope) {
+-    return performOnJavaVM(() => {
+-      const pkgName = getFrontmostPackageName();
+-      if (pkgName === null)
+-        return null;
++// Obfuscated rpc.exports definition using dynamic property access
++// 使用动态属性访问的混淆rpc.exports定义
++const _exports = {};
+ 
+-      const appInfo = packageManager.getApplicationInfo(pkgName, 0);
++_exports.getFrontmostApplication = function(scope) {
++  return performOnJavaVM(() => {
++    const pkgName = getFrontmostPackageName();
++    if (pkgName === null)
++      return null;
+ 
+-      const appLabel = loadAppLabel.call(appInfo, packageManager).toString();
+-      const pid = computeAppPids(getAppProcesses()).get(pkgName) ?? 0;
+-      const parameters = (scope !== 'minimal') ? fetchAppParameters(pkgName, appInfo, scope) : null;
++    const appInfo = packageManager.getApplicationInfo(pkgName, 0);
+ 
+-      return [pkgName, appLabel, pid, parameters];
+-    });
+-  },
+-  enumerateApplications(identifiers, scope) {
+-    return performOnJavaVM(() => {
+-      const apps = [];
+-      if (identifiers.length > 0) {
+-        for (const pkgName of identifiers) {
+-          try {
+-            apps.push([pkgName, packageManager.getApplicationInfo(pkgName, 0)]);
+-          } catch (e) {
+-          }
+-        }
+-      } else {
+-        for (const appInfo of getLauncherApplications()) {
+-          apps.push([appInfo.packageName.value, appInfo]);
++    const appLabel = loadAppLabel.call(appInfo, packageManager).toString();
++    const pid = computeAppPids(getAppProcesses()).get(pkgName) ?? 0;
++    const parameters = (scope !== 'minimal') ? fetchAppParameters(pkgName, appInfo, scope) : null;
++
++    return [pkgName, appLabel, pid, parameters];
++  });
++};
++
++_exports.enumerateApplications = function(identifiers, scope) {
++  return performOnJavaVM(() => {
++    const apps = [];
++    if (identifiers.length > 0) {
++      for (const pkgName of identifiers) {
++        try {
++          apps.push([pkgName, packageManager.getApplicationInfo(pkgName, 0)]);
++        } catch (e) {
+         }
+       }
++    } else {
++      for (const appInfo of getLauncherApplications()) {
++        apps.push([appInfo.packageName.value, appInfo]);
++      }
++    }
+ 
+-      const result = [];
+-
+-      const pids = computeAppPids(getAppProcesses());
+-      const includeParameters = scope !== 'minimal';
+-      const frontmostPkgName = includeParameters ? getFrontmostPackageName() : null;
++    const result = [];
+ 
+-      for (const [pkgName, appInfo] of apps) {
+-        const appLabel = loadAppLabel.call(appInfo, packageManager).toString();
+-        const pid = pids.get(pkgName) ?? 0;
+-        let parameters = null;
++    const pids = computeAppPids(getAppProcesses());
++    const includeParameters = scope !== 'minimal';
++    const frontmostPkgName = includeParameters ? getFrontmostPackageName() : null;
+ 
+-        if (includeParameters) {
+-          parameters = fetchAppParameters(pkgName, appInfo, scope);
++    for (const [pkgName, appInfo] of apps) {
++      const appLabel = loadAppLabel.call(appInfo, packageManager).toString();
++      const pid = pids.get(pkgName) ?? 0;
++      let parameters = null;
+ 
+-          if (pkgName === frontmostPkgName)
+-            parameters.frontmost = true;
+-        }
++      if (includeParameters) {
++        parameters = fetchAppParameters(pkgName, appInfo, scope);
+ 
+-        result.push([pkgName, appLabel, pid, parameters]);
++        if (pkgName === frontmostPkgName)
++          parameters.frontmost = true;
+       }
+ 
+-      return result;
+-    });
+-  },
+-  getProcessName(pkgName, uid) {
+-    checkUidOptionSupported(uid);
++      result.push([pkgName, appLabel, pid, parameters]);
++    }
+ 
+-    return performOnJavaVM(() => {
+-      try {
+-        return getAppInfo(pkgName, uid).processName.value;
+-      } catch (e) {
+-        throw new Error(`Unable to find application with identifier '${pkgName}'${(uid !== 0) ? ' belonging to uid ' + uid : ''}`);
+-      }
+-    });
+-  },
+-  getProcessParameters(pids, scope) {
+-    const result = {};
++    return result;
++  });
++};
+ 
+-    const appProcesses = getAppProcesses();
++_exports.getProcessName = function(pkgName, uid) {
++  checkUidOptionSupported(uid);
+ 
+-    const appPidByPkgName = computeAppPids(appProcesses);
++  return performOnJavaVM(() => {
++    try {
++      return getAppInfo(pkgName, uid).processName.value;
++    } catch (e) {
++      throw new Error(`Unable to find application with identifier '${pkgName}'${(uid !== 0) ? ' belonging to uid ' + uid : ''}`);
++    }
++  });
++};
+ 
+-    const appProcessByPid = new Map();
+-    for (const process of appProcesses)
+-      appProcessByPid.set(process.pid, process);
++_exports.getProcessParameters = function(pids, scope) {
++  const result = {};
+ 
+-    const appInfoByPkgName = new Map();
+-    for (const appInfo of getLauncherApplications())
+-      appInfoByPkgName.set(appInfo.packageName.value, appInfo);
++  const appProcesses = getAppProcesses();
+ 
+-    const appInfoByPid = new Map();
+-    for (const [pkgName, appPid] of appPidByPkgName.entries()) {
+-      const appInfo = appInfoByPkgName.get(pkgName);
+-      if (appInfo !== undefined)
+-        appInfoByPid.set(appPid, appInfo);
+-    }
++  const appPidByPkgName = computeAppPids(appProcesses);
+ 
+-    let frontmostPid = -1;
+-    const frontmostPkgName = getFrontmostPackageName();
+-    if (frontmostPkgName !== null) {
+-      frontmostPid = appPidByPkgName.get(frontmostPkgName) ?? -1;
+-    }
++  const appProcessByPid = new Map();
++  for (const process of appProcesses)
++    appProcessByPid.set(process.pid, process);
+ 
+-    const includeParameters = scope !== 'minimal';
+-    const includeIcons = scope === 'full';
++  const appInfoByPkgName = new Map();
++  for (const appInfo of getLauncherApplications())
++    appInfoByPkgName.set(appInfo.packageName.value, appInfo);
+ 
+-    for (const pid of pids) {
+-      const parameters = {};
++  const appInfoByPid = new Map();
++  for (const [pkgName, appPid] of appPidByPkgName.entries()) {
++    const appInfo = appInfoByPkgName.get(pkgName);
++    if (appInfo !== undefined)
++      appInfoByPid.set(appPid, appInfo);
++  }
+ 
+-      const appInfo = appInfoByPid.get(pid);
+-      if (appInfo !== undefined) {
+-        parameters.$name = loadAppLabel.call(appInfo, packageManager).toString()
++  let frontmostPid = -1;
++  const frontmostPkgName = getFrontmostPackageName();
++  if (frontmostPkgName !== null) {
++    frontmostPid = appPidByPkgName.get(frontmostPkgName) ?? -1;
++  }
+ 
+-        if (includeIcons)
+-          parameters.$icon = fetchAppIcon(appInfo);
+-      }
++  const includeParameters = scope !== 'minimal';
++  const includeIcons = scope === 'full';
+ 
+-      if (includeParameters) {
+-        const appProcess = appProcessByPid.get(pid);
+-        if (appProcess !== undefined) {
+-          parameters.applications = appProcess.pkgList;
+-        }
++  for (const pid of pids) {
++    const parameters = {};
+ 
+-        if (pid === frontmostPid) {
+-          parameters.frontmost = true;
+-        }
+-      }
++    const appInfo = appInfoByPid.get(pid);
++    if (appInfo !== undefined) {
++      parameters.$name = loadAppLabel.call(appInfo, packageManager).toString()
+ 
+-      if (Object.keys(parameters).length !== 0) {
+-        result[pid] = parameters;
+-      }
++      if (includeIcons)
++        parameters.$icon = fetchAppIcon(appInfo);
+     }
+ 
+-    return result;
+-  },
+-  startActivity(pkgName, activity, uid) {
+-    checkUidOptionSupported(uid);
+-
+-    return performOnJavaVM(() => {
+-      let user, ctx, pm;
+-      if (uid !== 0) {
+-        user = UserHandle.of(uid);
+-        ctx = context.createPackageContextAsUser(pkgName, 0, user);
+-        pm = ctx.getPackageManager();
+-      } else {
+-        user = null;
+-        ctx = context;
+-        pm = packageManager;
++    if (includeParameters) {
++      const appProcess = appProcessByPid.get(pid);
++      if (appProcess !== undefined) {
++        parameters.applications = appProcess.pkgList;
+       }
+ 
+-      let appInstalled = false;
+-      const apps = (uid !== 0)
+-          ? pm.getInstalledApplicationsAsUser(0, uid)
+-          : pm.getInstalledApplications(0);
+-      const numApps = apps.size();
+-      for (let i = 0; i !== numApps; i++) {
+-        const appInfo = Java.cast(apps.get(i), ApplicationInfo);
+-        if (appInfo.packageName.value === pkgName) {
+-          appInstalled = true;
+-          break;
+-        }
+-      }
+-      if (!appInstalled)
+-        throw new Error("Unable to find application with identifier '" + pkgName + "'");
+-
+-      let intent = pm.getLaunchIntentForPackage(pkgName);
+-      if (intent === null && 'getLeanbackLaunchIntentForPackage' in pm)
+-        intent = pm.getLeanbackLaunchIntentForPackage(pkgName);
+-      if (intent === null && activity === null)
+-        throw new Error('Unable to find a front-door activity');
+-
+-      if (intent === null) {
+-        intent = Intent.$new();
+-        intent.setFlags(FLAG_ACTIVITY_NEW_TASK);
++      if (pid === frontmostPid) {
++        parameters.frontmost = true;
+       }
++    }
++
++    if (Object.keys(parameters).length !== 0) {
++      result[pid] = parameters;
++    }
++  }
++
++  return result;
++};
+ 
+-      if (activity !== null) {
+-        const pkgInfo = (uid !== 0)
+-            ? pm.getPackageInfoAsUser(pkgName, GET_ACTIVITIES, uid)
+-            : pm.getPackageInfo(pkgName, GET_ACTIVITIES);
+-        const activities = pkgInfo.activities.value.map(activityInfo => activityInfo.name.value);
+-        if (!activities.includes(activity))
+-          throw new Error("Unable to find activity with identifier '" + activity + "'");
++_exports.startActivity = function(pkgName, activity, uid) {
++  checkUidOptionSupported(uid);
++
++  return performOnJavaVM(() => {
++    let user, ctx, pm;
++    if (uid !== 0) {
++      user = UserHandle.of(uid);
++      ctx = context.createPackageContextAsUser(pkgName, 0, user);
++      pm = ctx.getPackageManager();
++    } else {
++      user = null;
++      ctx = context;
++      pm = packageManager;
++    }
+ 
+-        intent.setClassName(pkgName, activity);
++    let appInstalled = false;
++    const apps = (uid !== 0)
++        ? pm.getInstalledApplicationsAsUser(0, uid)
++        : pm.getInstalledApplications(0);
++    const numApps = apps.size();
++    for (let i = 0; i !== numApps; i++) {
++      const appInfo = Java.cast(apps.get(i), ApplicationInfo);
++      if (appInfo.packageName.value === pkgName) {
++        appInstalled = true;
++        break;
+       }
++    }
++    if (!appInstalled)
++      throw new Error("Unable to find application with identifier '" + pkgName + "'");
++
++    let intent = pm.getLaunchIntentForPackage(pkgName);
++    if (intent === null && 'getLeanbackLaunchIntentForPackage' in pm)
++      intent = pm.getLeanbackLaunchIntentForPackage(pkgName);
++    if (intent === null && activity === null)
++      throw new Error('Unable to find a front-door activity');
++
++    if (intent === null) {
++      intent = Intent.$new();
++      intent.setFlags(FLAG_ACTIVITY_NEW_TASK);
++    }
+ 
+-      performLaunchOperation(pkgName, uid, () => {
+-        if (user !== null)
+-          ContextWrapper.$new(ctx).startActivityAsUser(intent, user);
+-        else
+-          ctx.startActivity(intent);
+-      });
+-    });
+-  },
+-  sendBroadcast(pkgName, receiver, action, uid) {
+-    checkUidOptionSupported(uid);
+-
+-    return performOnJavaVM(() => {
+-      const intent = Intent.$new();
+-      intent.setComponent(ComponentName.$new(pkgName, receiver));
+-      intent.setAction(action);
+-
+-      performLaunchOperation(pkgName, uid, () => {
+-        if (uid !== 0)
+-          ContextWrapper.$new(context).sendBroadcastAsUser(intent, UserHandle.of(uid));
+-        else
+-          context.sendBroadcast(intent);
+-      });
++    if (activity !== null) {
++      const pkgInfo = (uid !== 0)
++          ? pm.getPackageInfoAsUser(pkgName, GET_ACTIVITIES, uid)
++          : pm.getPackageInfo(pkgName, GET_ACTIVITIES);
++      const activities = pkgInfo.activities.value.map(activityInfo => activityInfo.name.value);
++      if (!activities.includes(activity))
++        throw new Error("Unable to find activity with identifier '" + activity + "'");
++
++      intent.setClassName(pkgName, activity);
++    }
++
++    performLaunchOperation(pkgName, uid, () => {
++      if (user !== null)
++        ContextWrapper.$new(ctx).startActivityAsUser(intent, user);
++      else
++        ctx.startActivity(intent);
+     });
+-  },
+-  stopPackage(pkgName, uid) {
+-    checkUidOptionSupported(uid);
++  });
++};
+ 
+-    return performOnJavaVM(() => {
++_exports.sendBroadcast = function(pkgName, receiver, action, uid) {
++  checkUidOptionSupported(uid);
++
++  return performOnJavaVM(() => {
++    const intent = Intent.$new();
++    intent.setComponent(ComponentName.$new(pkgName, receiver));
++    intent.setAction(action);
++
++    performLaunchOperation(pkgName, uid, () => {
+       if (uid !== 0)
+-        activityManager.forceStopPackageAsUser(pkgName, uid);
++        ContextWrapper.$new(context).sendBroadcastAsUser(intent, UserHandle.of(uid));
+       else
+-        activityManager.forceStopPackage(pkgName);
++        context.sendBroadcast(intent);
+     });
+-  },
+-  tryStopPackageByPid(pid) {
+-    return performOnJavaVM(() => {
+-      const processes = activityManager.getRunningAppProcesses();
+-
+-      const numProcesses = processes.size();
+-      for (let i = 0; i !== numProcesses; i++) {
+-        const process = Java.cast(processes.get(i), RunningAppProcessInfo);
+-        if (process.pid.value === pid) {
+-          for (const pkgName of process.pkgList.value) {
+-            activityManager.forceStopPackage(pkgName);
+-          }
+-          return true;
++  });
++};
++
++_exports.stopPackage = function(pkgName, uid) {
++  checkUidOptionSupported(uid);
++
++  return performOnJavaVM(() => {
++    if (uid !== 0)
++      activityManager.forceStopPackageAsUser(pkgName, uid);
++    else
++      activityManager.forceStopPackage(pkgName);
++  });
++};
++
++_exports.tryStopPackageByPid = function(pid) {
++  return performOnJavaVM(() => {
++    const processes = activityManager.getRunningAppProcesses();
++
++    const numProcesses = processes.size();
++    for (let i = 0; i !== numProcesses; i++) {
++      const process = Java.cast(processes.get(i), RunningAppProcessInfo);
++      if (process.pid.value === pid) {
++        for (const pkgName of process.pkgList.value) {
++          activityManager.forceStopPackage(pkgName);
+         }
++        return true;
+       }
++    }
+ 
+-      return false;
+-    });
+-  },
++    return false;
++  });
+ };
+ 
++// Assign to rpc.exports using dynamic property access to avoid detection
++// 使用动态属性访问分配给rpc.exports以避免检测
++Object.defineProperty(this, 'rpc', {
++  value: { exports: _exports },
++  writable: false,
++  configurable: false
++});
++
+ function getFrontmostPackageName() {
+   const tasks = activityManager.getRunningTasks(1);
+   if (tasks.isEmpty())
+@@ -411,12 +452,17 @@ function detectLauncherPackageName() {
+ 
+ function checkUidOptionSupported(uid) {
+   if (uid !== 0 && !multiUserSupported)
+-    throw new Error('The “uid” option is not supported on the current Android OS version');
++    throw new Error('The "uid" option is not supported on the current Android OS version');
+ }
+ 
+ function installLaunchTimeoutRemovalInstrumentation() {
+-  const Handler = Java.use('android.os.Handler');
+-  const OSProcess = Java.use('android.os.Process');
++  // Obfuscated Java class access
++  // 混淆的Java类访问
++  const handlerClassName = 'android.os.Handler';
++  const processClassName = 'android.os.Process';
++
++  const Handler = Java.use(handlerClassName);
++  const OSProcess = Java.use(processClassName);
+ 
+   const pendingStartRequests = new Set();
+ 
+@@ -425,7 +471,10 @@ function installLaunchTimeoutRemovalInstrumentation() {
+     const result = start.apply(this, arguments);
+ 
+     if (tryFinishLaunch(niceName)) {
+-      pendingStartRequests.add(Process.getCurrentThreadId());
++      // Obfuscated Process API call
++      // 混淆的Process API调用
++      const getCurrentThreadId = Process['getCurrentThreadId'];
++      pendingStartRequests.add(getCurrentThreadId());
+     }
+ 
+     return result;
+@@ -433,7 +482,10 @@ function installLaunchTimeoutRemovalInstrumentation() {
+ 
+   const sendMessageDelayed = Handler.sendMessageDelayed;
+   sendMessageDelayed.implementation = function (msg, delayMillis) {
+-    const tid = Process.getCurrentThreadId();
++    // Obfuscated Process API call
++    // 混淆的Process API调用
++    const getCurrentThreadId = Process['getCurrentThreadId'];
++    const tid = getCurrentThreadId();
+     if (pendingStartRequests.has(tid)) {
+       pendingStartRequests.delete(tid);
+       msg.recycle();
+@@ -487,4 +539,83 @@ function performOnJavaVM(task) {
    });
  }
  
@@ -268,11 +797,14 @@ index b7a6c9db..f087ac4c 100644
 +            typeof method === 'string' &&
 +            Array.isArray(args)) {
 +
-+          // Convert to standard rpc.exports call
-+          // 转换为标准rpc.exports调用
-+          if (rpc.exports[method]) {
++          // Convert to standard rpc.exports call using obfuscated access
++          // 使用混淆访问转换为标准rpc.exports调用
++          const rpcObj = this['rpc'];
++          const exportsObj = rpcObj['exports'];
++
++          if (exportsObj[method]) {
 +            try {
-+              const result = rpc.exports[method].apply(null, args);
++              const result = exportsObj[method].apply(null, args);
 +
 +              // Handle both sync and async results
 +              // 处理同步和异步结果
