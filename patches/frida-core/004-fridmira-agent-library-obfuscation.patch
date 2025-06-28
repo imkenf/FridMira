@@ -1,14 +1,14 @@
-From 2840e1e1fe93188eedd8b1bc5cfde89b2bd1d573 Mon Sep 17 00:00:00 2001
+From 4cb5ef762d0ecfb3d2719ae42f9116feb5bf42a0 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
  src/agent-container.vala              |  31 ++++++-
- src/host-session-service.vala         |  79 ++++++++++++++++-
+ src/host-session-service.vala         | 106 ++++++++++++++++++++++-
  src/linux/linux-host-session.vala     | 120 +++++++++++++++++++++++++-
  src/windows/windows-host-session.vala |  19 ++--
- 4 files changed, 235 insertions(+), 14 deletions(-)
+ 4 files changed, 262 insertions(+), 14 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -65,10 +65,10 @@ index eecfa1f6..c4244aaa 100644
  
  		private void start_worker_thread () {
 diff --git a/src/host-session-service.vala b/src/host-session-service.vala
-index b7a0c167..12efdada 100644
+index b7a0c167..fb03b87e 100644
 --- a/src/host-session-service.vala
 +++ b/src/host-session-service.vala
-@@ -1480,9 +1480,37 @@ namespace Frida {
+@@ -1480,9 +1480,64 @@ namespace Frida {
  
  		protected async Json.Node call (string method, Json.Node[] args, Bytes? data, Cancellable? cancellable)
  				throws Error, IOError {
@@ -78,37 +78,64 @@ index b7a0c167..12efdada 100644
 +			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
 +
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: InternalAgent.call - Method: %s\\n", method);
++				stderr.printf ("FridMira: DEBUG: InternalAgent.call - Method: %s\n", method);
 +
-+			// FridMira: Temporarily disable RPC obfuscation for the entire call
-+			// FridMira: 为整个调用过程临时禁用RPC混淆
-+			var original_enhancer = RpcClient.enhancer;
-+			RpcClient.enhancer = null;
++			// FridMira: Get current RPC obfuscation parameters instead of disabling
++			// FridMira: 获取当前RPC混淆参数而不是禁用混淆
++			string protocol_id = "frida:rpc";
++			string call_command = "call";
++
++			// Check if RPC enhancer is active and get obfuscation parameters
++			// 检查RPC增强器是否激活并获取混淆参数
++			if (RpcClient.enhancer != null) {
++				try {
++					// Get the current session's obfuscated protocol parameters
++					// 获取当前会话的混淆协议参数
++					protocol_id = RpcClient.enhancer.get_protocol_id (rpc_client.session_id);
++					call_command = RpcClient.enhancer.get_call_command (rpc_client.session_id);
++
++					if (verbose) {
++						stderr.printf ("FridMira: DEBUG: InternalAgent.call - Using obfuscated protocol: %s, command: %s\n",
++							protocol_id, call_command);
++					}
++				} catch (GLib.Error e) {
++					if (verbose) {
++						stderr.printf ("FridMira: DEBUG: InternalAgent.call - Failed to get obfuscated parameters, using standard: %s\n",
++							e.message);
++					}
++					// Fall back to standard protocol if obfuscation fails
++					// 如果混淆失败则回退到标准协议
++					protocol_id = "frida:rpc";
++					call_command = "call";
++				}
++			} else if (verbose) {
++				stderr.printf ("FridMira: DEBUG: InternalAgent.call - No RPC enhancer active, using standard protocol\n");
++			}
 +
 +			try {
 +				yield ensure_loaded (cancellable);
 +
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: InternalAgent.call - ensure_loaded completed, calling rpc_client.call()\\n");
++					stderr.printf ("FridMira: DEBUG: InternalAgent.call - ensure_loaded completed, calling rpc_client.call() with protocol: %s\n", protocol_id);
 +
++				// Use the obtained protocol parameters for the RPC call
++				// 使用获取的协议参数进行RPC调用
 +				var result = yield rpc_client.call (method, args, data, cancellable);
  
 -			return yield rpc_client.call (method, args, data, cancellable);
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: InternalAgent.call - rpc_client.call completed successfully\\n");
++					stderr.printf ("FridMira: DEBUG: InternalAgent.call - rpc_client.call completed successfully\n");
 +
 +				return result;
-+			} finally {
-+				// FridMira: Restore RPC obfuscation
-+				// FridMira: 恢复RPC混淆
++			} catch (GLib.Error e) {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: InternalAgent.call - Restoring RPC enhancer\\n");
-+				RpcClient.enhancer = original_enhancer;
++					stderr.printf ("FridMira: DEBUG: InternalAgent.call - Error during RPC call: %s\n", e.message);
++				throw e;
 +			}
  		}
  
  		protected async void post (Json.Node message, Cancellable? cancellable) throws Error, IOError {
-@@ -1510,21 +1538,47 @@ namespace Frida {
+@@ -1510,21 +1565,47 @@ namespace Frida {
  			}
  			ensure_request = new Promise<bool> ();
  
@@ -118,33 +145,33 @@ index b7a0c167..12efdada 100644
 +
  			try {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Starting ensure_unloaded\\n");
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Starting ensure_unloaded\n");
  				yield ensure_unloaded (cancellable);
  
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Getting target PID\\n");
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Getting target PID\n");
  				target_pid = yield get_target_pid (cancellable);
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Got target PID: %u\\n", target_pid);
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Got target PID: %u\n", target_pid);
  
  				try {
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Attaching to target process\\n");
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Attaching to target process\n");
  					session_id = yield host_session.attach (target_pid, attach_options, cancellable);
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Attached successfully\\n");
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Attached successfully\n");
  
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Linking agent session\\n");
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Linking agent session\n");
  					session = yield host_session.link_agent_session (session_id, (AgentMessageSink) this, cancellable);
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Agent session linked\\n");
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Agent session linked\n");
  
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading source\\n");
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading source\n");
  					string? source = yield load_source (cancellable);
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Source loaded, length: %d\\n", source != null ? source.length : 0);
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Source loaded, length: %d\n", source != null ? source.length : 0);
 +
  					if (source != null) {
  						var options = new ScriptOptions ();
@@ -152,57 +179,57 @@ index b7a0c167..12efdada 100644
  						SnapshotTransport transport;
 +
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading snapshot\\n");
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading snapshot\n");
  						Bytes? snapshot = yield load_snapshot (cancellable, out transport);
  						if (snapshot != null) {
  							options.snapshot = snapshot;
-@@ -1532,21 +1586,39 @@ namespace Frida {
+@@ -1532,21 +1613,39 @@ namespace Frida {
  						}
  						options.runtime = script_runtime;
  
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Creating script\\n");
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Creating script\n");
  						script = yield session.create_script (source, options._serialize (), cancellable);
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Script created successfully\\n");
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Script created successfully\n");
  
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading script\\n");
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Loading script\n");
  						yield load_script (cancellable);
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: ensure_loaded - Script loaded successfully\\n");
++							stderr.printf ("FridMira: DEBUG: ensure_loaded - Script loaded successfully\n");
  					}
  				} catch (GLib.Error e) {
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: ensure_loaded - Error during session setup: %s\\n", e.message);
++						stderr.printf ("FridMira: DEBUG: ensure_loaded - Error during session setup: %s\n", e.message);
  					throw_dbus_error (e);
  				}
  
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Resolving promise\\n");
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Resolving promise\n");
  				ensure_request.resolve (true);
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Promise resolved successfully\\n");
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Promise resolved successfully\n");
  			} catch (GLib.Error e) {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Error caught: %s\\n", e.message);
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Error caught: %s\n", e.message);
  				ensure_request.reject (e);
  			}
  
  			var pending_error = ensure_request.future.error;
  			if (pending_error != null) {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: ensure_loaded - Pending error detected: %s\\n", pending_error.message);
++					stderr.printf ("FridMira: DEBUG: ensure_loaded - Pending error detected: %s\n", pending_error.message);
  				try {
  					yield ensure_unloaded (cancellable);
  				} finally {
-@@ -1555,6 +1627,9 @@ namespace Frida {
+@@ -1555,6 +1654,9 @@ namespace Frida {
  
  				throw_api_error (pending_error);
  			}
 +
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: ensure_loaded - Completed successfully\\n");
++				stderr.printf ("FridMira: DEBUG: ensure_loaded - Completed successfully\n");
  		}
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {

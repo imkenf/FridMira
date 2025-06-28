@@ -1,17 +1,17 @@
-From da5b08c1be8b871677a1071bcff43429ab4d9239 Mon Sep 17 00:00:00 2001
+From 9eee9abe977e915540fbdfc14661b622f1d0e064 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 331 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 327 insertions(+), 4 deletions(-)
+ lib/base/rpc.vala | 343 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 339 insertions(+), 4 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index c4654527..2192bfc5 100644
+index c4654527..298b7346 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
-@@ -1,17 +1,267 @@
+@@ -1,17 +1,279 @@
 +/*
 + * FRIDMIRA ENHANCED RPC MODULE / FRIDMIRA增强RPC模块
 + *
@@ -115,6 +115,18 @@ index c4654527..2192bfc5 100644
 +		 */
 +		private string _session_id;
 +
++		/**
++		 * Public accessor for session ID / 会话ID的公共访问器
++		 *
++		 * Allows external components to access the session ID for protocol
++		 * parameter retrieval and other session-specific operations.
++		 *
++		 * 允许外部组件访问会话ID以进行协议参数检索和其他特定于会话的操作。
++		 */
++		public string session_id {
++			get { return _session_id; }
++		}
++
  		private Gee.HashMap<string, PendingResponse> pending_responses = new Gee.HashMap<string, PendingResponse> ();
  
  		public RpcClient (RpcPeer peer) {
@@ -139,8 +151,8 @@ index c4654527..2192bfc5 100644
 +			if (enhancer != null) {
 +				enhancer.forget_session (_session_id);
 +			}
-+		}
-+
+ 		}
+ 
 +		/**
 +		 * FridMira Protocol Discovery API / FridMira协议发现API
 +		 *
@@ -162,8 +174,8 @@ index c4654527..2192bfc5 100644
 +				throw new Error.NOT_SUPPORTED ("Protocol discovery is not available without a protocol enhancer");
 +			}
 +			return yield enhancer.discover_protocol (peer, cancellable);
- 		}
- 
++		}
++
 +		/**
 +		 * Enhanced RPC Call with FridMira Protocol Support / 支持FridMira协议的增强RPC调用
 +		 *
@@ -279,7 +291,7 @@ index c4654527..2192bfc5 100644
  			string request_id = Uuid.string_random ();
  
  			var request = new Json.Builder ();
-@@ -29,11 +279,19 @@ namespace Frida {
+@@ -29,11 +291,19 @@ namespace Frida {
  				.end_array ();
  			string raw_request = Json.to_string (request.get_root (), false);
  
@@ -300,7 +312,7 @@ index c4654527..2192bfc5 100644
  				return false;
  			});
  			pending_responses[request_id] = pending;
-@@ -69,8 +327,41 @@ namespace Frida {
+@@ -69,8 +339,41 @@ namespace Frida {
  			return pending.result;
  		}
  
@@ -343,7 +355,7 @@ index c4654527..2192bfc5 100644
  				return false;
  
  			var parser = new Json.Parser ();
-@@ -90,6 +381,14 @@ namespace Frida {
+@@ -90,6 +393,14 @@ namespace Frida {
  			return handled;
  		}
  
@@ -358,7 +370,7 @@ index c4654527..2192bfc5 100644
  		private bool try_handle_rpc_message (Json.Object message) {
  			var payload = message.get_member ("payload");
  			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
-@@ -98,8 +397,24 @@ namespace Frida {
+@@ -98,8 +409,24 @@ namespace Frida {
  			if (rpc_message.get_length () < 4)
  				return false;
  
@@ -384,7 +396,7 @@ index c4654527..2192bfc5 100644
  				return false;
  
  			var request_id_value = rpc_message.get_element (1);
-@@ -111,8 +426,16 @@ namespace Frida {
+@@ -111,8 +438,16 @@ namespace Frida {
  			if (!pending_responses.unset (request_id, out response))
  				return false;
  
