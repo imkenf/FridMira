@@ -1,15 +1,15 @@
-From 5e67b81e899f585c3d9a1e31c617a9d5092bd011 Mon Sep 17 00:00:00 2001
+From 81e8a58249cf36148caa397ac7f8babd3900ee00 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
- src/agent-container.vala              |  31 ++-
- src/host-session-service.vala         | 108 ++++++++-
- src/linux/agent/system-server.js      |  76 +++++++
- src/linux/linux-host-session.vala     | 308 +++++++++++++++++++++++++-
+ src/agent-container.vala              |  31 +++-
+ src/host-session-service.vala         | 108 ++++++++++-
+ src/linux/agent/system-server.js      |  76 ++++++++
+ src/linux/linux-host-session.vala     | 254 ++++++++++++++++++++++++--
  src/windows/windows-host-session.vala |  19 +-
- 5 files changed, 523 insertions(+), 19 deletions(-)
+ 5 files changed, 462 insertions(+), 26 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -322,7 +322,7 @@ index b7a6c9db..f087ac4c 100644
 +// 启动增强RPC支持
 +setupEnhancedRpcSupport();
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbec..df9660e4 100644
+index 55a0fbec..1ed34658 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
 @@ -89,11 +89,91 @@ namespace Frida {
@@ -341,9 +341,9 @@ index 55a0fbec..df9660e4 100644
 +				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - Starting\n");
 +			}
 +
-+			// Add random delay (2-8 seconds) to avoid immediate injection detection
-+			// 添加随机延迟（2-8秒）以避免立即注入检测
-+			uint delay_ms = Random.int_range (2000, 8000);
++			// Add random delay (0.5-2 seconds) to avoid immediate injection detection
++			// 添加随机延迟（0.5-2秒）以避免立即注入检测
++			uint delay_ms = Random.int_range (500, 2000);
 +			if (verbose) {
 +				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - Adding random delay: %u ms\n", delay_ms);
 +			}
@@ -384,7 +384,7 @@ index 55a0fbec..df9660e4 100644
 +
 +				// Add another random delay between system_server and zygote injection
 +				// 在system_server和zygote注入之间添加另一个随机延迟
-+				uint inter_delay = Random.int_range (1000, 3000);
++				uint inter_delay = Random.int_range (200, 800);
 +				if (verbose) {
 +					stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - Adding inter-injection delay: %u ms\n", inter_delay);
 +				}
@@ -548,84 +548,37 @@ index 55a0fbec..df9660e4 100644
  				agent.unloaded.disconnect (on_zygote_agent_unloaded);
  				zygote_agents.unset (pid);
  
-@@ -787,11 +926,75 @@ namespace Frida {
+@@ -724,14 +863,6 @@ namespace Frida {
+ 			}
+ 		}
+ 
+-		private async void handle_usap_child (uint pid, string name) throws GLib.Error {
+-			try {
+-				yield inject_zygote_agent (pid, name, io_cancellable);
+-			} finally {
+-				host_session.resume.begin (pid, io_cancellable);
+-			}
+-		}
+-
+ 		private void on_zygote_agent_unloaded (InternalAgent dead_internal_agent) {
+ 			var dead_agent = (ZygoteAgent) dead_internal_agent;
+ 			dead_agent.unloaded.disconnect (on_zygote_agent_unloaded);
+@@ -787,10 +918,14 @@ namespace Frida {
  		}
  
  		protected override async uint get_target_pid (Cancellable? cancellable) throws Error, IOError {
-+			// FridMira Enhancement: Stealth system_server PID lookup
-+			// FridMira增强：隐蔽的system_server PID查找
-+			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
-+
-+			if (verbose) {
-+				stderr.printf ("FridMira: DEBUG: Looking up system_server PID using stealth method...\n");
-+			}
-+
-+			// Use indirect method to find system_server without direct name lookup
-+			// 使用间接方法查找system_server，避免直接名称查找
-+			uint pid = 0;
-+
-+			try {
-+				// Method 1: Look for process with specific characteristics instead of name
-+				// 方法1：查找具有特定特征的进程而不是名称
-+				Dir proc_dir = Dir.open ("/proc");
-+				string? entry;
-+
-+				while ((entry = proc_dir.read_name ()) != null) {
-+					if (!entry.has_prefix ("/") && entry != "." && entry != "..") {
-+						uint candidate_pid = 0;
-+						if (uint.try_parse (entry, out candidate_pid) && candidate_pid > 1) {
-+							try {
-+								string cmdline_path = "/proc/%u/cmdline".printf (candidate_pid);
-+								string cmdline;
-+								if (FileUtils.get_contents (cmdline_path, out cmdline)) {
-+									// Look for characteristic system_server command line pattern
-+									// 查找特征性的system_server命令行模式
-+									if (cmdline.contains ("system_server") &&
-+									    cmdline.contains ("android") &&
-+									    !cmdline.contains ("frida")) {
-+										pid = candidate_pid;
-+										break;
-+									}
-+								}
-+							} catch (FileError e) {
-+								// Continue to next process
-+								continue;
-+							}
-+						}
-+					}
-+				}
-+
-+				// Fallback: If stealth method fails, use traditional method quietly
-+				// 后备方案：如果隐蔽方法失败，静默使用传统方法
-+				if (pid == 0) {
-+					if (verbose) {
-+						stderr.printf ("FridMira: DEBUG: Stealth lookup failed, using fallback method\n");
-+					}
-+					pid = LocalProcesses.get_pid ("system_server");
-+				}
-+
-+			} catch (FileError e) {
-+				// Final fallback
-+				if (verbose) {
-+					stderr.printf ("FridMira: DEBUG: Directory enumeration failed: %s, using direct lookup\n", e.message);
-+				}
-+				pid = LocalProcesses.get_pid ("system_server");
-+			}
-+
-+			if (verbose) {
-+				stderr.printf ("FridMira: DEBUG: Found system_server PID: %u\n", pid);
-+			}
-+
++			// ZygoteAgent should return its own PID, not search for system_server
++			// ZygoteAgent应该返回自己的PID，而不是搜索system_server
  			return pid;
  		}
  
  		protected override async string? load_source (Cancellable? cancellable) throws Error, IOError {
--			return null;
-+			return (string) Frida.Data.Android.get_system_server_js_blob ().data;
++			// ZygoteAgent doesn't need JavaScript source, return null
++			// ZygoteAgent不需要JavaScript源码，返回null
+ 			return null;
  		}
  	}
- 
-@@ -810,17 +1013,43 @@ namespace Frida {
+@@ -810,17 +945,43 @@ namespace Frida {
  		}
  
  		public async void preload (Cancellable? cancellable) throws Error, IOError {
@@ -669,7 +622,7 @@ index 55a0fbec..df9660e4 100644
  		}
  
  		public async HostApplicationInfo get_frontmost_application (FrontmostQueryOptions options,
-@@ -953,7 +1182,71 @@ namespace Frida {
+@@ -953,7 +1114,71 @@ namespace Frida {
  		}
  
  		protected override async uint get_target_pid (Cancellable? cancellable) throws Error, IOError {
@@ -742,7 +695,7 @@ index 55a0fbec..df9660e4 100644
  		}
  
  		protected override async string? load_source (Cancellable? cancellable) throws Error, IOError {
-@@ -1656,5 +1949,4 @@ namespace Frida {
+@@ -1656,5 +1881,4 @@ namespace Frida {
  			return pid;
  		}
  	}
