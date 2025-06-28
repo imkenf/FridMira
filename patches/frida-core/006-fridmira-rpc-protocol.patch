@@ -1,14 +1,14 @@
-From a9cbc30f92e03ead7e6eb6bbc544d7ad05dbefa1 Mon Sep 17 00:00:00 2001
+From 0a1654e21966aa0dea3607763aab2d28a1f273fe Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 551 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 540 insertions(+), 11 deletions(-)
+ lib/base/rpc.vala | 575 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 564 insertions(+), 11 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index c4654527..dab64d05 100644
+index c4654527..e368bfaf 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
 @@ -1,17 +1,323 @@
@@ -397,7 +397,7 @@ index c4654527..dab64d05 100644
  					if (pending_responses.unset (request_id))
  						pending.complete_with_error (new IOError.CANCELLED ("Operation was cancelled"));
  					return false;
-@@ -59,24 +400,91 @@ namespace Frida {
+@@ -59,24 +400,115 @@ namespace Frida {
  				waiting = false;
  
  				cancel_source.destroy ();
@@ -461,9 +461,33 @@ index c4654527..dab64d05 100644
 +			// Check if message contains dynamic protocol identifier, if enhancer is present
 +			// 如果存在增强器，检查消息是否包含动态协议标识符
 +			if (enhancer != null) {
-+				string dynamic_protocol = enhancer.get_dynamic_protocol_id ();
-+				if (dynamic_protocol != "" && dynamic_protocol != "frida:rpc") {
-+					has_dynamic = json.index_of ("\"" + dynamic_protocol + "\"") != -1;
++				// Parse the message to extract protocol ID and check if it's valid
++				// 解析消息以提取协议ID并检查其是否有效
++				try {
++					var parser = new Json.Parser ();
++					parser.load_from_data (json);
++					var message = parser.get_root ().get_object ();
++
++					if (message.has_member ("payload")) {
++						var payload = message.get_member ("payload");
++						if (payload.get_node_type () == Json.NodeType.ARRAY) {
++							var payload_array = payload.get_array ();
++							if (payload_array.get_length () > 0) {
++								var first_element = payload_array.get_element (0);
++								if (first_element.get_value_type () == typeof (string)) {
++									string protocol_id = first_element.get_string ();
++									has_dynamic = enhancer.is_valid_protocol (protocol_id);
++									if (verbose && has_dynamic) {
++										stderr.printf ("FridMira: DEBUG: try_handle_message - Found valid dynamic protocol: %s\n", protocol_id);
++									}
++								}
++							}
++						}
++					}
++				} catch (GLib.Error e) {
++					if (verbose) {
++						stderr.printf ("FridMira: DEBUG: try_handle_message - Error parsing message for protocol check: %s\n", e.message);
++					}
 +				}
 +			}
 +
@@ -491,7 +515,7 @@ index c4654527..dab64d05 100644
  				assert_not_reached ();
  			}
  			var message = parser.get_root ().get_object ();
-@@ -84,38 +492,159 @@ namespace Frida {
+@@ -84,38 +516,159 @@ namespace Frida {
  			bool handled = false;
  
  			var type = message.get_string_member ("type");
