@@ -1,4 +1,4 @@
-From baa5fdd0112c0f6a9ca6b3be9052fa527fb7f951 Mon Sep 17 00:00:00 2001
+From 544915d47607114011af757d751e2e57cd1b9773 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
@@ -6,9 +6,10 @@ Subject: [PATCH 004/006] FridMira Agent Library Management Module
 ---
  src/agent-container.vala              |  31 ++++++-
  src/host-session-service.vala         | 108 ++++++++++++++++++++++-
+ src/linux/agent/system-server.js      |  72 ++++++++++++++++
  src/linux/linux-host-session.vala     | 120 +++++++++++++++++++++++++-
  src/windows/windows-host-session.vala |  19 ++--
- 4 files changed, 264 insertions(+), 14 deletions(-)
+ 5 files changed, 336 insertions(+), 14 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -235,8 +236,89 @@ index b7a0c167..9b80df2c 100644
  		}
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {
+diff --git a/src/linux/agent/system-server.js b/src/linux/agent/system-server.js
+index b7a6c9db..2ca9f8bf 100644
+--- a/src/linux/agent/system-server.js
++++ b/src/linux/agent/system-server.js
+@@ -487,4 +487,76 @@ function performOnJavaVM(task) {
+   });
+ }
+ 
++// FridMira: Enhanced RPC Protocol Support
++// FridMira: 增强RPC协议支持
++//
++// This handler intercepts obfuscated RPC messages and converts them to standard rpc.exports calls
++// 此处理器拦截混淆的RPC消息并将其转换为标准的rpc.exports调用
++function setupEnhancedRpcSupport() {
++  // Listen for all incoming messages
++  // 监听所有传入消息
++  recv(function(message) {
++    try {
++      // Check if this is an enhanced RPC protocol message
++      // 检查这是否是增强RPC协议消息
++      if (Array.isArray(message) && message.length >= 4) {
++        const [protocolId, requestId, command, method, args] = message;
++
++        // Check if this looks like an obfuscated protocol
++        // 检查这是否看起来像混淆协议
++        if (typeof protocolId === 'string' &&
++            protocolId !== 'frida:rpc' &&
++            typeof requestId === 'string' &&
++            typeof command === 'string' &&
++            typeof method === 'string' &&
++            Array.isArray(args)) {
++
++          console.log(`FridMira: DEBUG: Handling obfuscated RPC - Protocol: ${protocolId}, Method: ${method}`);
++
++          // Convert to standard rpc.exports call
++          // 转换为标准rpc.exports调用
++          if (rpc.exports[method]) {
++            try {
++              const result = rpc.exports[method].apply(null, args);
++
++              // Handle both sync and async results
++              // 处理同步和异步结果
++              if (result && typeof result.then === 'function') {
++                // Async result
++                result.then(value => {
++                  send([protocolId, requestId, 'ok', value]);
++                }).catch(error => {
++                  send([protocolId, requestId, 'error', error.message || error.toString()]);
++                });
++              } else {
++                // Sync result
++                send([protocolId, requestId, 'ok', result]);
++              }
++            } catch (error) {
++              send([protocolId, requestId, 'error', error.message || error.toString()]);
++            }
++          } else {
++            send([protocolId, requestId, 'error', `Method '${method}' not found`]);
++          }
++
++          // Continue listening for next message
++          // 继续监听下一条消息
++          setupEnhancedRpcSupport();
++          return;
++        }
++      }
++    } catch (e) {
++      console.log(`FridMira: DEBUG: Message processing error: ${e.message}`);
++    }
++
++    // If not an enhanced RPC message, continue listening
++    // 如果不是增强RPC消息，继续监听
++    setupEnhancedRpcSupport();
++  });
++}
++
+ Java.perform(init);
++
++// Start enhanced RPC support
++// 启动增强RPC支持
++setupEnhancedRpcSupport();
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbec..a6835fe6 100644
+index 55a0fbec..01a5545c 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
 @@ -90,9 +90,27 @@ namespace Frida {
@@ -246,23 +328,23 @@ index 55a0fbec..a6835fe6 100644
 +			// FridMira DEBUG: LinuxHostSession preload
 +			// FridMira 调试：LinuxHostSession preload
 +			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
-+				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - Starting\\n");
++				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - Starting\n");
 +			}
 +
 +			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
-+				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - Calling system_server_agent.preload()\\n");
++				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - Calling system_server_agent.preload()\n");
 +			}
  			yield system_server_agent.preload (cancellable);
 +			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
-+				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - system_server_agent.preload() completed\\n");
++				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - system_server_agent.preload() completed\n");
 +			}
  
 +			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
-+				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - Calling robo_launcher.preload()\\n");
++				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - Calling robo_launcher.preload()\n");
 +			}
  			yield robo_launcher.preload (cancellable);
 +			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
-+				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - robo_launcher.preload() completed\\n");
++				stderr.printf ("FridMira: DEBUG: LinuxHostSession.preload - robo_launcher.preload() completed\n");
 +			}
  #endif
  		}
@@ -286,13 +368,13 @@ index 55a0fbec..a6835fe6 100644
 +			// FridMira DEBUG: RoboLauncher preload started
 +			// FridMira 调试：RoboLauncher preload 开始
 +			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
-+				stderr.printf ("FridMira: DEBUG: RoboLauncher.preload - Starting\\n");
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.preload - Starting\n");
 +			}
 +
  			yield ensure_loaded (cancellable);
 +
 +			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
-+				stderr.printf ("FridMira: DEBUG: RoboLauncher.preload - Completed successfully\\n");
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.preload - Completed successfully\n");
 +			}
  		}
  
@@ -306,7 +388,7 @@ index 55a0fbec..a6835fe6 100644
 +			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
 +
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Starting\\n");
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Starting\n");
 +
  			while (ensure_request != null) {
  				try {
@@ -316,7 +398,7 @@ index 55a0fbec..a6835fe6 100644
  			};
  
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Enumerating processes\\n");
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Enumerating processes\n");
 +
  			foreach (HostProcessInfo info in System.enumerate_processes (new ProcessQueryOptions ())) {
  				var name = info.name;
@@ -325,45 +407,45 @@ index 55a0fbec..a6835fe6 100644
 -					if (zygote_agents.has_key (pid))
 +
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Found %s process: %u\\n", name, pid);
++						stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Found %s process: %u\n", name, pid);
 +
 +					if (zygote_agents.has_key (pid)) {
 +						if (verbose)
-+							stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Agent already exists for %s:%u\\n", name, pid);
++							stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Agent already exists for %s:%u\n", name, pid);
  						continue;
 +					}
  
  					pending++;
 +					if (verbose)
-+						stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Starting injection for %s:%u\\n", name, pid);
++						stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Starting injection for %s:%u\n", name, pid);
  					do_inject_zygote_agent.begin (pid, name, cancellable, on_complete);
  				}
  			}
  
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Process enumeration complete, pending: %u\\n", pending);
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Process enumeration complete, pending: %u\n", pending);
 +
  			on_complete (null);
  
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Waiting for completion\\n");
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Waiting for completion\n");
 +
  			yield;
  
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - All injections completed\\n");
++				stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - All injections completed\n");
 +
  			on_complete = null;
  
  			if (first_error == null) {
  				ensure_request.resolve (true);
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Success\\n");
++					stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Success\n");
  			} else {
  				ensure_request.reject (first_error);
  				ensure_request = null;
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Error: %s\\n", first_error.message);
++					stderr.printf ("FridMira: DEBUG: RoboLauncher.ensure_loaded - Error: %s\n", first_error.message);
  
  				throw_api_error (first_error);
  			}
@@ -374,22 +456,22 @@ index 55a0fbec..a6835fe6 100644
 +			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
 +
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: inject_zygote_agent - Starting for %s:%u\\n", name, pid);
++				stderr.printf ("FridMira: DEBUG: inject_zygote_agent - Starting for %s:%u\n", name, pid);
 +
  			var agent = new ZygoteAgent (host_session, pid, name);
  			zygote_agents[pid] = agent;
  			agent.unloaded.connect (on_zygote_agent_unloaded);
  
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: inject_zygote_agent - ZygoteAgent created, calling load()\\n");
++				stderr.printf ("FridMira: DEBUG: inject_zygote_agent - ZygoteAgent created, calling load()\n");
 +
  			try {
  				yield agent.load (cancellable);
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: inject_zygote_agent - ZygoteAgent loaded successfully for %s:%u\\n", name, pid);
++					stderr.printf ("FridMira: DEBUG: inject_zygote_agent - ZygoteAgent loaded successfully for %s:%u\n", name, pid);
  			} catch (GLib.Error e) {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: inject_zygote_agent - Error loading ZygoteAgent for %s:%u: %s\\n", name, pid, e.message);
++					stderr.printf ("FridMira: DEBUG: inject_zygote_agent - Error loading ZygoteAgent for %s:%u: %s\n", name, pid, e.message);
 +
  				agent.unloaded.disconnect (on_zygote_agent_unloaded);
  				zygote_agents.unset (pid);
@@ -403,38 +485,38 @@ index 55a0fbec..a6835fe6 100644
 +			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
 +
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Starting\\n");
++				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Starting\n");
 +
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Calling enumerate_applications()\\n");
++				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Calling enumerate_applications()\n");
  			yield enumerate_applications (new ApplicationQueryOptions (), cancellable);
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - enumerate_applications() completed\\n");
++				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - enumerate_applications() completed\n");
  
  			try {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Calling get_process_name()\\n");
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Calling get_process_name()\n");
  				yield get_process_name ("", 0, cancellable);
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - get_process_name() completed\\n");
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - get_process_name() completed\n");
  			} catch (Error e) {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - get_process_name() error: %s\\n", e.message);
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - get_process_name() error: %s\n", e.message);
  			}
  
  			try {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Calling start_package()\\n");
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - Calling start_package()\n");
  				yield start_package ("", new DefaultActivityEntrypoint (), cancellable);
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - start_package() completed\\n");
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - start_package() completed\n");
  			} catch (Error e) {
 +				if (verbose)
-+					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - start_package() error: %s\\n", e.message);
++					stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - start_package() error: %s\n", e.message);
  			}
 +
 +			if (verbose)
-+				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - All operations completed\\n");
++				stderr.printf ("FridMira: DEBUG: SystemServerAgent.preload - All operations completed\n");
  		}
  
  		public async HostApplicationInfo get_frontmost_application (FrontmostQueryOptions options,
@@ -446,13 +528,13 @@ index 55a0fbec..a6835fe6 100644
 +			// FridMira DEBUG: Starting system_server PID lookup
 +			// FridMira 调试：开始查找 system_server PID
 +			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
-+				stderr.printf ("FridMira: DEBUG: Looking up system_server PID...\\n");
++				stderr.printf ("FridMira: DEBUG: Looking up system_server PID...\n");
 +			}
 +
 +			uint pid = LocalProcesses.get_pid ("system_server");
 +
 +			if (GLib.Environment.get_variable ("FRIDA_VERBOSE") != null) {
-+				stderr.printf ("FridMira: DEBUG: Found system_server PID: %u\\n", pid);
++				stderr.printf ("FridMira: DEBUG: Found system_server PID: %u\n", pid);
 +			}
 +
 +			return pid;
