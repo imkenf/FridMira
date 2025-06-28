@@ -1,4 +1,4 @@
-From 544915d47607114011af757d751e2e57cd1b9773 Mon Sep 17 00:00:00 2001
+From 31fc74741ea24f3ec95c7a4b461d842ebc134b43 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
@@ -6,10 +6,10 @@ Subject: [PATCH 004/006] FridMira Agent Library Management Module
 ---
  src/agent-container.vala              |  31 ++++++-
  src/host-session-service.vala         | 108 ++++++++++++++++++++++-
- src/linux/agent/system-server.js      |  72 ++++++++++++++++
+ src/linux/agent/system-server.js      |  82 ++++++++++++++++++
  src/linux/linux-host-session.vala     | 120 +++++++++++++++++++++++++-
  src/windows/windows-host-session.vala |  19 ++--
- 5 files changed, 336 insertions(+), 14 deletions(-)
+ 5 files changed, 346 insertions(+), 14 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -237,10 +237,10 @@ index b7a0c167..9b80df2c 100644
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {
 diff --git a/src/linux/agent/system-server.js b/src/linux/agent/system-server.js
-index b7a6c9db..2ca9f8bf 100644
+index b7a6c9db..885d1d3a 100644
 --- a/src/linux/agent/system-server.js
 +++ b/src/linux/agent/system-server.js
-@@ -487,4 +487,76 @@ function performOnJavaVM(task) {
+@@ -487,4 +487,86 @@ function performOnJavaVM(task) {
    });
  }
  
@@ -274,25 +274,35 @@ index b7a6c9db..2ca9f8bf 100644
 +          // 转换为标准rpc.exports调用
 +          if (rpc.exports[method]) {
 +            try {
++              console.log(`FridMira: DEBUG: Calling rpc.exports.${method} with args:`, args);
 +              const result = rpc.exports[method].apply(null, args);
 +
 +              // Handle both sync and async results
 +              // 处理同步和异步结果
 +              if (result && typeof result.then === 'function') {
++                console.log(`FridMira: DEBUG: Method ${method} returned Promise, waiting for resolution`);
 +                // Async result
 +                result.then(value => {
++                  console.log(`FridMira: DEBUG: Promise resolved for ${method}, sending response`);
 +                  send([protocolId, requestId, 'ok', value]);
++                  console.log(`FridMira: DEBUG: Response sent successfully for ${method}`);
 +                }).catch(error => {
++                  console.log(`FridMira: DEBUG: Promise rejected for ${method}:`, error.message || error.toString());
 +                  send([protocolId, requestId, 'error', error.message || error.toString()]);
 +                });
 +              } else {
++                console.log(`FridMira: DEBUG: Method ${method} returned sync result, sending response`);
 +                // Sync result
 +                send([protocolId, requestId, 'ok', result]);
++                console.log(`FridMira: DEBUG: Sync response sent successfully for ${method}`);
 +              }
 +            } catch (error) {
++              console.log(`FridMira: DEBUG: Method ${method} threw error:`, error.message || error.toString());
 +              send([protocolId, requestId, 'error', error.message || error.toString()]);
 +            }
 +          } else {
++            console.log(`FridMira: DEBUG: Method ${method} not found in rpc.exports`);
++            console.log(`FridMira: DEBUG: Available methods:`, Object.keys(rpc.exports));
 +            send([protocolId, requestId, 'error', `Method '${method}' not found`]);
 +          }
 +
