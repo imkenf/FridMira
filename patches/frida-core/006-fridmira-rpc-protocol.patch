@@ -1,14 +1,14 @@
-From bfd5858850a00dc5f4f271204c528f24e6b81234 Mon Sep 17 00:00:00 2001
+From dd1c689b1898f0eee2af059279d0a83b4f17bd07 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 427 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 422 insertions(+), 5 deletions(-)
+ lib/base/rpc.vala | 511 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 501 insertions(+), 10 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index c4654527..8d98c56b 100644
+index c4654527..1ed6a5f1 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
 @@ -1,17 +1,323 @@
@@ -151,8 +151,8 @@ index c4654527..8d98c56b 100644
 +			if (enhancer != null) {
 +				enhancer.forget_session (_session_id);
 +			}
-+		}
-+
+ 		}
+ 
 +		/**
 +		 * FridMira Protocol Discovery API / FridMira协议发现API
 +		 *
@@ -174,8 +174,8 @@ index c4654527..8d98c56b 100644
 +				throw new Error.NOT_SUPPORTED ("Protocol discovery is not available without a protocol enhancer");
 +			}
 +			return yield enhancer.discover_protocol (peer, cancellable);
- 		}
- 
++		}
++
 +		/**
 +		 * Enhanced RPC Call with FridMira Protocol Support / 支持FridMira协议的增强RPC调用
 +		 *
@@ -462,7 +462,7 @@ index c4654527..8d98c56b 100644
  				return false;
  
  			var parser = new Json.Parser ();
-@@ -90,6 +475,14 @@ namespace Frida {
+@@ -90,32 +475,138 @@ namespace Frida {
  			return handled;
  		}
  
@@ -475,52 +475,139 @@ index c4654527..8d98c56b 100644
 +		 * 处理RPC响应消息，支持标准和动态协议，以及通过可插拔增强器进行增强状态验证。
 +		 */
  		private bool try_handle_rpc_message (Json.Object message) {
++			// FridMira DEBUG: Add detailed RPC message handling debugging
++			// FridMira 调试：添加详细的RPC消息处理调试信息
++			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
++
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Starting message processing\n");
++			}
++
  			var payload = message.get_member ("payload");
- 			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
-@@ -98,8 +491,24 @@ namespace Frida {
- 			if (rpc_message.get_length () < 4)
+-			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY)
++			if (payload == null || payload.get_node_type () != Json.NodeType.ARRAY) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Invalid payload format\n");
++				}
  				return false;
++			}
+ 			var rpc_message = payload.get_array ();
+-			if (rpc_message.get_length () < 4)
++			if (rpc_message.get_length () < 4) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Message too short: %u elements\n", rpc_message.get_length ());
++				}
+ 				return false;
++			}
  
 +			// Extract protocol type from first element
 +			// 从第一个元素提取协议类型
  			string? type = rpc_message.get_element (0).get_string ();
 -			if (type == null || type != "frida:rpc")
-+			if (type == null)
++			if (type == null) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - No protocol type found\n");
++				}
 +				return false;
++			}
++
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Protocol type: %s\n", type);
++			}
 +
 +			// Enhanced protocol validation: Support both standard and dynamic protocols via enhancer
 +			// 增强协议验证：通过增强器支持标准和动态协议
 +			bool is_valid_protocol = false;
 +			if (type == "frida:rpc") {
 +				is_valid_protocol = true;
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Standard protocol validated\n");
++				}
 +			} else if (enhancer != null && enhancer.is_valid_protocol (type)) {
 +				is_valid_protocol = true;
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Enhanced protocol validated\n");
++				}
++			} else {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Protocol validation failed (enhancer: %s)\n",
++						(enhancer != null) ? "present" : "null");
++				}
 +			}
 +
 +			// Reject messages with unsupported protocol
 +			// 拒绝使用不支持协议的消息
-+			if (!is_valid_protocol)
++			if (!is_valid_protocol) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Rejecting unsupported protocol: %s\n", type);
++				}
  				return false;
++			}
  
  			var request_id_value = rpc_message.get_element (1);
-@@ -111,8 +520,16 @@ namespace Frida {
- 			if (!pending_responses.unset (request_id, out response))
+-			if (request_id_value.get_value_type () != typeof (string))
++			if (request_id_value.get_value_type () != typeof (string)) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Invalid request ID type\n");
++				}
  				return false;
++			}
+ 			string request_id = request_id_value.get_string ();
+ 
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Request ID: %s\n", request_id);
++			}
++
+ 			PendingResponse response;
+-			if (!pending_responses.unset (request_id, out response))
++			if (!pending_responses.unset (request_id, out response)) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - No pending response found for request ID: %s\n", request_id);
++				}
+ 				return false;
++			}
++
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Found pending response for request ID: %s\n", request_id);
++			}
  
 +			// Extract response status with enhanced validation
 +			// 提取响应状态并进行增强验证
  			var status = rpc_message.get_string_element (2);
 -			if (status == "ok")
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Response status: %s\n", status);
++			}
++
 +			// Enhanced status validation: Support standard "ok" and dynamic OK responses via enhancer
 +			// 增强状态验证：通过增强器支持标准"ok"和动态OK响应
 +			bool is_success = (status == "ok") || (enhancer != null && enhancer.is_valid_ok_response (status));
 +
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Status validation result: %s\n", is_success ? "SUCCESS" : "ERROR");
++			}
++
 +			// Complete the pending response based on status
 +			// 根据状态完成待处理响应
-+			if (is_success)
++			if (is_success) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Completing with success result\n");
++				}
  				response.complete_with_result (rpc_message.get_element (3));
- 			else
+-			else
++			} else {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Completing with error: %s\n", rpc_message.get_string_element (3));
++				}
  				response.complete_with_error (new Error.NOT_SUPPORTED (rpc_message.get_string_element (3)));
++			}
++
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_rpc_message - Message processing completed successfully\n");
++			}
+ 
+ 			return true;
+ 		}
 -- 
 2.45.1.windows.1
 
