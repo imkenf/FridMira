@@ -1,15 +1,15 @@
-From 4e936cdd219d09fa21cbca5cb391702e74f92086 Mon Sep 17 00:00:00 2001
+From 800456cc46bb602b0f3a9de5b244191293fd993c Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
 
 ---
  src/agent-container.vala              |  31 +-
- src/host-session-service.vala         | 108 +++++-
- src/linux/agent/system-server.js      | 529 ++++++++++++++++----------
+ src/host-session-service.vala         | 108 ++++-
+ src/linux/agent/system-server.js      | 579 ++++++++++++++++----------
  src/linux/linux-host-session.vala     | 120 +++++-
  src/windows/windows-host-session.vala |  19 +-
- 5 files changed, 598 insertions(+), 209 deletions(-)
+ 5 files changed, 630 insertions(+), 227 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -237,10 +237,10 @@ index b7a0c167..9b80df2c 100644
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {
 diff --git a/src/linux/agent/system-server.js b/src/linux/agent/system-server.js
-index b7a6c9db..c51cff40 100644
+index b7a6c9db..65e8d957 100644
 --- a/src/linux/agent/system-server.js
 +++ b/src/linux/agent/system-server.js
-@@ -1,3 +1,21 @@
+@@ -1,3 +1,22 @@
 +// FridMira: Obfuscated System Server Agent
 +// FridMira: 混淆的系统服务器代理
 +//
@@ -251,6 +251,7 @@ index b7a6c9db..c51cff40 100644
 +// 混淆的API访问 - 避免直接的frida API名称
 +const _javaUse = 'Java'['use'];
 +const _processGetCurrentThreadId = 'Process'['getCurrentThreadId'];
++const _rpcExports = 'rpc'['exports'];
 +
 +// Obfuscated class name resolution
 +// 混淆的类名解析
@@ -262,23 +263,61 @@ index b7a6c9db..c51cff40 100644
  let ApplicationInfo, Base64OutputStream, Bitmap, ByteArrayOutputStream, Canvas, ComponentName, ContextWrapper, Intent, ResolveInfo,
    RunningAppProcessInfo, RunningTaskInfo, UserHandle;
  let ACTION_MAIN, ARGB_8888, CATEGORY_HOME, CATEGORY_LAUNCHER, GET_ACTIVITIES, FLAG_ACTIVITY_NEW_TASK, FLAG_DEBUGGABLE, NO_WRAP, PNG;
-@@ -8,8 +26,13 @@ let launcherPkgName;
+@@ -8,25 +27,34 @@ let launcherPkgName;
  const pendingLaunches = new Map();
  
  function init() {
 -  const ActivityManager = Java.use('android.app.ActivityManager');
 -  const ActivityThread = Java.use('android.app.ActivityThread');
+-  ApplicationInfo = Java.use('android.content.pm.ApplicationInfo');
+-  const Base64 = Java.use('android.util.Base64');
+-  Base64OutputStream = Java.use('android.util.Base64OutputStream');
+-  Bitmap = Java.use('android.graphics.Bitmap');
+-  const BitmapCompressFormat = Java.use('android.graphics.Bitmap$CompressFormat');
+-  const BitmapConfig = Java.use('android.graphics.Bitmap$Config');
+-  ByteArrayOutputStream = Java.use('java.io.ByteArrayOutputStream');
+-  Canvas = Java.use('android.graphics.Canvas');
+-  ComponentName = Java.use('android.content.ComponentName');
+-  ContextWrapper = Java.use('android.content.ContextWrapper');
+-  Intent = Java.use('android.content.Intent');
+-  const Context = Java.use('android.content.Context');
+-  const PackageManager = Java.use('android.content.pm.PackageManager');
+-  ResolveInfo = Java.use('android.content.pm.ResolveInfo');
+-  RunningAppProcessInfo = Java.use('android.app.ActivityManager$RunningAppProcessInfo');
+-  RunningTaskInfo = Java.use('android.app.ActivityManager$RunningTaskInfo');
+-  UserHandle = Java.use('android.os.UserHandle');
 +  // Obfuscated Java class loading
 +  // 混淆的Java类加载
++  const javaObjName = ['J', 'a', 'v', 'a'].join('');
++  const useMethodName = ['u', 's', 'e'].join('');
++  const javaUse = (function() { return this; })()[javaObjName][useMethodName];
++
 +  const activityManagerClass = 'android.app.ActivityManager';
 +  const activityThreadClass = 'android.app.ActivityThread';
 +
-+  const ActivityManager = Java.use(activityManagerClass);
-+  const ActivityThread = Java.use(activityThreadClass);
-   ApplicationInfo = Java.use('android.content.pm.ApplicationInfo');
-   const Base64 = Java.use('android.util.Base64');
-   Base64OutputStream = Java.use('android.util.Base64OutputStream');
-@@ -51,239 +74,255 @@ function init() {
++  const ActivityManager = javaUse(activityManagerClass);
++  const ActivityThread = javaUse(activityThreadClass);
++  ApplicationInfo = javaUse('android.content.pm.ApplicationInfo');
++  const Base64 = javaUse('android.util.Base64');
++  Base64OutputStream = javaUse('android.util.Base64OutputStream');
++  Bitmap = javaUse('android.graphics.Bitmap');
++  const BitmapCompressFormat = javaUse('android.graphics.Bitmap$CompressFormat');
++  const BitmapConfig = javaUse('android.graphics.Bitmap$Config');
++  ByteArrayOutputStream = javaUse('java.io.ByteArrayOutputStream');
++  Canvas = javaUse('android.graphics.Canvas');
++  ComponentName = javaUse('android.content.ComponentName');
++  ContextWrapper = javaUse('android.content.ContextWrapper');
++  Intent = javaUse('android.content.Intent');
++  const Context = javaUse('android.content.Context');
++  const PackageManager = javaUse('android.content.pm.PackageManager');
++  ResolveInfo = javaUse('android.content.pm.ResolveInfo');
++  RunningAppProcessInfo = javaUse('android.app.ActivityManager$RunningAppProcessInfo');
++  RunningTaskInfo = javaUse('android.app.ActivityManager$RunningTaskInfo');
++  UserHandle = javaUse('android.os.UserHandle');
+   const ACTIVITY_SERVICE = Context.ACTIVITY_SERVICE.value;
+   ACTION_MAIN = Intent.ACTION_MAIN.value;
+   ARGB_8888 = BitmapConfig.ARGB_8888.value;
+@@ -51,239 +79,255 @@ function init() {
    installLaunchTimeoutRemovalInstrumentation();
  }
  
@@ -543,14 +582,6 @@ index b7a6c9db..c51cff40 100644
 +        parameters.frontmost = true;
        }
 +    }
-+
-+    if (Object.keys(parameters).length !== 0) {
-+      result[pid] = parameters;
-+    }
-+  }
-+
-+  return result;
-+};
  
 -      if (activity !== null) {
 -        const pkgInfo = (uid !== 0)
@@ -559,6 +590,14 @@ index b7a6c9db..c51cff40 100644
 -        const activities = pkgInfo.activities.value.map(activityInfo => activityInfo.name.value);
 -        if (!activities.includes(activity))
 -          throw new Error("Unable to find activity with identifier '" + activity + "'");
++    if (Object.keys(parameters).length !== 0) {
++      result[pid] = parameters;
++    }
++  }
++
++  return result;
++};
++
 +_exports.startActivity = function(pkgName, activity, uid) {
 +  checkUidOptionSupported(uid);
 +
@@ -645,8 +684,7 @@ index b7a6c9db..c51cff40 100644
 -    checkUidOptionSupported(uid);
 +  });
 +};
- 
--    return performOnJavaVM(() => {
++
 +_exports.sendBroadcast = function(pkgName, receiver, action, uid) {
 +  checkUidOptionSupported(uid);
 +
@@ -654,7 +692,8 @@ index b7a6c9db..c51cff40 100644
 +    const intent = Intent.$new();
 +    intent.setComponent(ComponentName.$new(pkgName, receiver));
 +    intent.setAction(action);
-+
+ 
+-    return performOnJavaVM(() => {
 +    performLaunchOperation(pkgName, uid, () => {
        if (uid !== 0)
 -        activityManager.forceStopPackageAsUser(pkgName, uid);
@@ -712,17 +751,17 @@ index b7a6c9db..c51cff40 100644
 +  });
  };
  
-+// Assign to rpc.exports using safe property access to avoid redefinition error
-+// 使用安全属性访问分配给rpc.exports以避免重定义错误
-+const rpcKey = 'rpc';
-+const exportsKey = 'exports';
-+const globalThis = this;
-+globalThis[rpcKey][exportsKey] = _exports;
++// Assign exports using completely obfuscated property access
++// 使用完全混淆的属性访问来赋值exports
++const rpcName = ['r', 'p', 'c'].join('');
++const exportsName = ['e', 'x', 'p', 'o', 'r', 't', 's'].join('');
++const globalObj = (function() { return this; })();
++globalObj[rpcName][exportsName] = _exports;
 +
  function getFrontmostPackageName() {
    const tasks = activityManager.getRunningTasks(1);
    if (tasks.isEmpty())
-@@ -411,12 +450,17 @@ function detectLauncherPackageName() {
+@@ -411,12 +455,27 @@ function detectLauncherPackageName() {
  
  function checkUidOptionSupported(uid) {
    if (uid !== 0 && !multiUserSupported)
@@ -735,61 +774,62 @@ index b7a6c9db..c51cff40 100644
 -  const OSProcess = Java.use('android.os.Process');
 +  // Obfuscated Java class access
 +  // 混淆的Java类访问
++  const javaObjName = ['J', 'a', 'v', 'a'].join('');
++  const useMethodName = ['u', 's', 'e'].join('');
++  const javaUse = (function() { return this; })()[javaObjName][useMethodName];
++
 +  const handlerClassName = 'android.os.Handler';
 +  const processClassName = 'android.os.Process';
 +
-+  const Handler = Java.use(handlerClassName);
-+  const OSProcess = Java.use(processClassName);
++  const Handler = javaUse(handlerClassName);
++  const OSProcess = javaUse(processClassName);
++
++  // Obfuscated Process API access
++  // 混淆的Process API访问
++  const processObjName = ['P', 'r', 'o', 'c', 'e', 's', 's'].join('');
++  const getCurrentThreadIdMethod = ['g', 'e', 't', 'C', 'u', 'r', 'r', 'e', 'n', 't', 'T', 'h', 'r', 'e', 'a', 'd', 'I', 'd'].join('');
++  const processObj = (function() { return this; })()[processObjName];
  
    const pendingStartRequests = new Set();
  
-@@ -425,7 +469,10 @@ function installLaunchTimeoutRemovalInstrumentation() {
+@@ -425,7 +484,10 @@ function installLaunchTimeoutRemovalInstrumentation() {
      const result = start.apply(this, arguments);
  
      if (tryFinishLaunch(niceName)) {
 -      pendingStartRequests.add(Process.getCurrentThreadId());
 +      // Obfuscated Process API call
 +      // 混淆的Process API调用
-+      const getCurrentThreadId = Process['getCurrentThreadId'];
++      const getCurrentThreadId = processObj[getCurrentThreadIdMethod];
 +      pendingStartRequests.add(getCurrentThreadId());
      }
  
      return result;
-@@ -433,7 +480,10 @@ function installLaunchTimeoutRemovalInstrumentation() {
+@@ -433,7 +495,10 @@ function installLaunchTimeoutRemovalInstrumentation() {
  
    const sendMessageDelayed = Handler.sendMessageDelayed;
    sendMessageDelayed.implementation = function (msg, delayMillis) {
 -    const tid = Process.getCurrentThreadId();
 +    // Obfuscated Process API call
 +    // 混淆的Process API调用
-+    const getCurrentThreadId = Process['getCurrentThreadId'];
++    const getCurrentThreadId = processObj[getCurrentThreadIdMethod];
 +    const tid = getCurrentThreadId();
      if (pendingStartRequests.has(tid)) {
        pendingStartRequests.delete(tid);
        msg.recycle();
-@@ -487,4 +537,93 @@ function performOnJavaVM(task) {
+@@ -487,4 +552,92 @@ function performOnJavaVM(task) {
    });
  }
  
+-Java.perform(init);
 +// FridMira: Enhanced RPC Protocol Support
 +// FridMira: 增强RPC协议支持
 +//
 +// This handler intercepts obfuscated RPC messages and converts them to standard rpc.exports calls
 +// 此处理器拦截混淆的RPC消息并将其转换为标准的rpc.exports调用
 +function setupEnhancedRpcSupport() {
-+  // Obfuscated access to global rpc object
-+  // 混淆访问全局rpc对象
-+  const rpcKey = 'rpc';
-+  const exportsKey = 'exports';
-+  const globalThis = this;
-+
 +  // Listen for all incoming messages
 +  // 监听所有传入消息
 +  recv(function(message) {
-+    // Basic message debugging - send back any received message for verification
-+    // 基础消息调试 - 发送回任何接收到的消息用于验证
-+    send({type: 'debug', received: message});
-+
 +    try {
 +      // Check if this is an enhanced RPC protocol message
 +      // 检查这是否是增强RPC协议消息
@@ -807,7 +847,11 @@ index b7a6c9db..c51cff40 100644
 +
 +          // Convert to standard rpc.exports call using obfuscated access
 +          // 使用混淆访问转换为标准rpc.exports调用
-+          const exportsObj = globalThis[rpcKey][exportsKey];
++          const rpcObjName = ['r', 'p', 'c'].join('');
++          const exportsObjName = ['e', 'x', 'p', 'o', 'r', 't', 's'].join('');
++          const thisGlobal = (function() { return this; })();
++          const rpcObj = thisGlobal[rpcObjName];
++          const exportsObj = rpcObj[exportsObjName];
 +
 +          if (exportsObj[method]) {
 +            try {
@@ -845,9 +889,8 @@ index b7a6c9db..c51cff40 100644
 +        }
 +      }
 +    } catch (e) {
-+      // Send error info for debugging
-+      // 发送错误信息用于调试
-+      send({type: 'error', message: e.message || e.toString()});
++      // Silent error handling to avoid log pollution
++      // 静默错误处理以避免日志污染
 +    }
 +
 +    // If not an enhanced RPC message, continue listening
@@ -856,7 +899,13 @@ index b7a6c9db..c51cff40 100644
 +  });
 +}
 +
- Java.perform(init);
++// Obfuscated Java.perform call
++// 混淆的Java.perform调用
++const javaObjName = ['J', 'a', 'v', 'a'].join('');
++const performMethodName = ['p', 'e', 'r', 'f', 'o', 'r', 'm'].join('');
++const javaPerform = (function() { return this; })()[javaObjName][performMethodName];
++
++javaPerform(init);
 +
 +// Start enhanced RPC support
 +// 启动增强RPC支持
