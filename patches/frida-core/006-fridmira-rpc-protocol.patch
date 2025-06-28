@@ -1,14 +1,14 @@
-From dd1c689b1898f0eee2af059279d0a83b4f17bd07 Mon Sep 17 00:00:00 2001
+From a9cbc30f92e03ead7e6eb6bbc544d7ad05dbefa1 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:47:35 +0800
 Subject: [PATCH 006/006] FridMira RPC Protocol Module
 
 ---
- lib/base/rpc.vala | 511 +++++++++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 501 insertions(+), 10 deletions(-)
+ lib/base/rpc.vala | 551 +++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 540 insertions(+), 11 deletions(-)
 
 diff --git a/lib/base/rpc.vala b/lib/base/rpc.vala
-index c4654527..1ed6a5f1 100644
+index c4654527..dab64d05 100644
 --- a/lib/base/rpc.vala
 +++ b/lib/base/rpc.vala
 @@ -1,17 +1,323 @@
@@ -151,8 +151,8 @@ index c4654527..1ed6a5f1 100644
 +			if (enhancer != null) {
 +				enhancer.forget_session (_session_id);
 +			}
- 		}
- 
++		}
++
 +		/**
 +		 * FridMira Protocol Discovery API / FridMira协议发现API
 +		 *
@@ -174,8 +174,8 @@ index c4654527..1ed6a5f1 100644
 +				throw new Error.NOT_SUPPORTED ("Protocol discovery is not available without a protocol enhancer");
 +			}
 +			return yield enhancer.discover_protocol (peer, cancellable);
-+		}
-+
+ 		}
+ 
 +		/**
 +		 * Enhanced RPC Call with FridMira Protocol Support / 支持FridMira协议的增强RPC调用
 +		 *
@@ -397,7 +397,7 @@ index c4654527..1ed6a5f1 100644
  					if (pending_responses.unset (request_id))
  						pending.complete_with_error (new IOError.CANCELLED ("Operation was cancelled"));
  					return false;
-@@ -59,18 +400,62 @@ namespace Frida {
+@@ -59,24 +400,91 @@ namespace Frida {
  				waiting = false;
  
  				cancel_source.destroy ();
@@ -436,9 +436,20 @@ index c4654527..1ed6a5f1 100644
 +		 */
  		public bool try_handle_message (string json) {
 -			if (json.index_of ("\"frida:rpc\"") == -1)
++			// FridMira DEBUG: Add detailed message handling debugging
++			// FridMira 调试：添加详细的消息处理调试信息
++			bool verbose = GLib.Environment.get_variable ("FRIDA_VERBOSE") != null;
++
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_message - Received message: %s\n", json);
++			}
++
 +			// Give the enhancer a chance to handle the message first (e.g., for discovery)
 +			// 首先给增强器一个处理消息的机会（例如，用于发现）
 +			if (enhancer != null && enhancer.try_handle_message (json, peer)) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_message - Message handled by enhancer\n");
++				}
 +				return true;
 +			}
 +
@@ -456,13 +467,53 @@ index c4654527..1ed6a5f1 100644
 +				}
 +			}
 +
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_message - Protocol check - standard: %s, dynamic: %s\n",
++					has_standard ? "YES" : "NO", has_dynamic ? "YES" : "NO");
++			}
++
 +			// Reject messages that don't match any supported protocol
 +			// 拒绝不匹配任何支持协议的消息
-+			if (!has_standard && !has_dynamic)
++			if (!has_standard && !has_dynamic) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_message - No supported protocol found, rejecting message\n");
++				}
  				return false;
++			}
  
  			var parser = new Json.Parser ();
-@@ -90,32 +475,138 @@ namespace Frida {
+ 			try {
+ 				parser.load_from_data (json);
+ 			} catch (GLib.Error e) {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_message - JSON parsing failed: %s\n", e.message);
++				}
+ 				assert_not_reached ();
+ 			}
+ 			var message = parser.get_root ().get_object ();
+@@ -84,38 +492,159 @@ namespace Frida {
+ 			bool handled = false;
+ 
+ 			var type = message.get_string_member ("type");
+-			if (type == "send")
++			if (verbose) {
++				stderr.printf ("FridMira: DEBUG: try_handle_message - Message type: %s\n", type);
++			}
++
++			if (type == "send") {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_message - Processing 'send' type message\n");
++				}
+ 				handled = try_handle_rpc_message (message);
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_message - RPC message handled: %s\n", handled ? "YES" : "NO");
++				}
++			} else {
++				if (verbose) {
++					stderr.printf ("FridMira: DEBUG: try_handle_message - Ignoring non-send message type: %s\n", type);
++				}
++			}
+ 
  			return handled;
  		}
  
