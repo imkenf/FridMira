@@ -1,4 +1,4 @@
-From 800456cc46bb602b0f3a9de5b244191293fd993c Mon Sep 17 00:00:00 2001
+From e90b560c9d899d1fc599513a04ff23b22338ce1e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Module
@@ -6,10 +6,10 @@ Subject: [PATCH 004/006] FridMira Agent Library Management Module
 ---
  src/agent-container.vala              |  31 +-
  src/host-session-service.vala         | 108 ++++-
- src/linux/agent/system-server.js      | 579 ++++++++++++++++----------
- src/linux/linux-host-session.vala     | 120 +++++-
+ src/linux/agent/system-server.js      | 645 +++++++++++++++++---------
+ src/linux/linux-host-session.vala     | 120 ++++-
  src/windows/windows-host-session.vala |  19 +-
- 5 files changed, 630 insertions(+), 227 deletions(-)
+ 5 files changed, 696 insertions(+), 227 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..c4244aaa 100644
@@ -237,7 +237,7 @@ index b7a0c167..9b80df2c 100644
  
  		private async void ensure_unloaded (Cancellable? cancellable) throws IOError {
 diff --git a/src/linux/agent/system-server.js b/src/linux/agent/system-server.js
-index b7a6c9db..65e8d957 100644
+index b7a6c9db..c77cca63 100644
 --- a/src/linux/agent/system-server.js
 +++ b/src/linux/agent/system-server.js
 @@ -1,3 +1,22 @@
@@ -317,7 +317,7 @@ index b7a6c9db..65e8d957 100644
    const ACTIVITY_SERVICE = Context.ACTIVITY_SERVICE.value;
    ACTION_MAIN = Intent.ACTION_MAIN.value;
    ARGB_8888 = BitmapConfig.ARGB_8888.value;
-@@ -51,239 +79,255 @@ function init() {
+@@ -51,239 +79,258 @@ function init() {
    installLaunchTimeoutRemovalInstrumentation();
  }
  
@@ -437,12 +437,11 @@ index b7a6c9db..65e8d957 100644
 +    return result;
 +  });
 +};
- 
--    const appProcesses = getAppProcesses();
++
 +_exports.getProcessName = function(pkgName, uid) {
 +  checkUidOptionSupported(uid);
  
--    const appPidByPkgName = computeAppPids(appProcesses);
+-    const appProcesses = getAppProcesses();
 +  return performOnJavaVM(() => {
 +    try {
 +      return getAppInfo(pkgName, uid).processName.value;
@@ -452,16 +451,19 @@ index b7a6c9db..65e8d957 100644
 +  });
 +};
  
+-    const appPidByPkgName = computeAppPids(appProcesses);
++_exports.getProcessParameters = function(pids, scope) {
++  const result = {};
+ 
 -    const appProcessByPid = new Map();
 -    for (const process of appProcesses)
 -      appProcessByPid.set(process.pid, process);
-+_exports.getProcessParameters = function(pids, scope) {
-+  const result = {};
++  const appProcesses = getAppProcesses();
  
 -    const appInfoByPkgName = new Map();
 -    for (const appInfo of getLauncherApplications())
 -      appInfoByPkgName.set(appInfo.packageName.value, appInfo);
-+  const appProcesses = getAppProcesses();
++  const appPidByPkgName = computeAppPids(appProcesses);
  
 -    const appInfoByPid = new Map();
 -    for (const [pkgName, appPid] of appPidByPkgName.entries()) {
@@ -469,25 +471,21 @@ index b7a6c9db..65e8d957 100644
 -      if (appInfo !== undefined)
 -        appInfoByPid.set(appPid, appInfo);
 -    }
-+  const appPidByPkgName = computeAppPids(appProcesses);
++  const appProcessByPid = new Map();
++  for (const process of appProcesses)
++    appProcessByPid.set(process.pid, process);
  
 -    let frontmostPid = -1;
 -    const frontmostPkgName = getFrontmostPackageName();
 -    if (frontmostPkgName !== null) {
 -      frontmostPid = appPidByPkgName.get(frontmostPkgName) ?? -1;
 -    }
-+  const appProcessByPid = new Map();
-+  for (const process of appProcesses)
-+    appProcessByPid.set(process.pid, process);
- 
--    const includeParameters = scope !== 'minimal';
--    const includeIcons = scope === 'full';
 +  const appInfoByPkgName = new Map();
 +  for (const appInfo of getLauncherApplications())
 +    appInfoByPkgName.set(appInfo.packageName.value, appInfo);
  
--    for (const pid of pids) {
--      const parameters = {};
+-    const includeParameters = scope !== 'minimal';
+-    const includeIcons = scope === 'full';
 +  const appInfoByPid = new Map();
 +  for (const [pkgName, appPid] of appPidByPkgName.entries()) {
 +    const appInfo = appInfoByPkgName.get(pkgName);
@@ -495,42 +493,53 @@ index b7a6c9db..65e8d957 100644
 +      appInfoByPid.set(appPid, appInfo);
 +  }
  
--      const appInfo = appInfoByPid.get(pid);
--      if (appInfo !== undefined) {
--        parameters.$name = loadAppLabel.call(appInfo, packageManager).toString()
+-    for (const pid of pids) {
+-      const parameters = {};
 +  let frontmostPid = -1;
 +  const frontmostPkgName = getFrontmostPackageName();
 +  if (frontmostPkgName !== null) {
 +    frontmostPid = appPidByPkgName.get(frontmostPkgName) ?? -1;
 +  }
  
+-      const appInfo = appInfoByPid.get(pid);
+-      if (appInfo !== undefined) {
+-        parameters.$name = loadAppLabel.call(appInfo, packageManager).toString()
++  const includeParameters = scope !== 'minimal';
++  const includeIcons = scope === 'full';
+ 
 -        if (includeIcons)
 -          parameters.$icon = fetchAppIcon(appInfo);
 -      }
-+  const includeParameters = scope !== 'minimal';
-+  const includeIcons = scope === 'full';
++  for (const pid of pids) {
++    const parameters = {};
  
 -      if (includeParameters) {
 -        const appProcess = appProcessByPid.get(pid);
 -        if (appProcess !== undefined) {
 -          parameters.applications = appProcess.pkgList;
 -        }
-+  for (const pid of pids) {
-+    const parameters = {};
- 
--        if (pid === frontmostPid) {
--          parameters.frontmost = true;
--        }
--      }
 +    const appInfo = appInfoByPid.get(pid);
 +    if (appInfo !== undefined) {
 +      parameters.$name = loadAppLabel.call(appInfo, packageManager).toString()
  
--      if (Object.keys(parameters).length !== 0) {
--        result[pid] = parameters;
--      }
+-        if (pid === frontmostPid) {
+-          parameters.frontmost = true;
+-        }
 +      if (includeIcons)
 +        parameters.$icon = fetchAppIcon(appInfo);
++    }
++
++    if (includeParameters) {
++      const appProcess = appProcessByPid.get(pid);
++      if (appProcess !== undefined) {
++        parameters.applications = appProcess.pkgList;
+       }
+ 
+-      if (Object.keys(parameters).length !== 0) {
+-        result[pid] = parameters;
++      if (pid === frontmostPid) {
++        parameters.frontmost = true;
+       }
      }
  
 -    return result;
@@ -548,11 +557,11 @@ index b7a6c9db..65e8d957 100644
 -        user = null;
 -        ctx = context;
 -        pm = packageManager;
-+    if (includeParameters) {
-+      const appProcess = appProcessByPid.get(pid);
-+      if (appProcess !== undefined) {
-+        parameters.applications = appProcess.pkgList;
-       }
+-      }
++    if (Object.keys(parameters).length !== 0) {
++      result[pid] = parameters;
++    }
++  }
  
 -      let appInstalled = false;
 -      const apps = (uid !== 0)
@@ -578,10 +587,9 @@ index b7a6c9db..65e8d957 100644
 -      if (intent === null) {
 -        intent = Intent.$new();
 -        intent.setFlags(FLAG_ACTIVITY_NEW_TASK);
-+      if (pid === frontmostPid) {
-+        parameters.frontmost = true;
-       }
-+    }
+-      }
++  return result;
++};
  
 -      if (activity !== null) {
 -        const pkgInfo = (uid !== 0)
@@ -590,14 +598,6 @@ index b7a6c9db..65e8d957 100644
 -        const activities = pkgInfo.activities.value.map(activityInfo => activityInfo.name.value);
 -        if (!activities.includes(activity))
 -          throw new Error("Unable to find activity with identifier '" + activity + "'");
-+    if (Object.keys(parameters).length !== 0) {
-+      result[pid] = parameters;
-+    }
-+  }
-+
-+  return result;
-+};
-+
 +_exports.startActivity = function(pkgName, activity, uid) {
 +  checkUidOptionSupported(uid);
 +
@@ -684,7 +684,8 @@ index b7a6c9db..65e8d957 100644
 -    checkUidOptionSupported(uid);
 +  });
 +};
-+
+ 
+-    return performOnJavaVM(() => {
 +_exports.sendBroadcast = function(pkgName, receiver, action, uid) {
 +  checkUidOptionSupported(uid);
 +
@@ -692,8 +693,7 @@ index b7a6c9db..65e8d957 100644
 +    const intent = Intent.$new();
 +    intent.setComponent(ComponentName.$new(pkgName, receiver));
 +    intent.setAction(action);
- 
--    return performOnJavaVM(() => {
++
 +    performLaunchOperation(pkgName, uid, () => {
        if (uid !== 0)
 -        activityManager.forceStopPackageAsUser(pkgName, uid);
@@ -755,13 +755,16 @@ index b7a6c9db..65e8d957 100644
 +// 使用完全混淆的属性访问来赋值exports
 +const rpcName = ['r', 'p', 'c'].join('');
 +const exportsName = ['e', 'x', 'p', 'o', 'r', 't', 's'].join('');
-+const globalObj = (function() { return this; })();
-+globalObj[rpcName][exportsName] = _exports;
++// Use direct global access instead of function context
++// 使用直接的全局访问而不是函数上下文
++if (typeof rpc !== 'undefined') {
++  rpc[exportsName] = _exports;
++}
 +
  function getFrontmostPackageName() {
    const tasks = activityManager.getRunningTasks(1);
    if (tasks.isEmpty())
-@@ -411,12 +455,27 @@ function detectLauncherPackageName() {
+@@ -411,12 +458,49 @@ function detectLauncherPackageName() {
  
  function checkUidOptionSupported(uid) {
    if (uid !== 0 && !multiUserSupported)
@@ -772,11 +775,22 @@ index b7a6c9db..65e8d957 100644
  function installLaunchTimeoutRemovalInstrumentation() {
 -  const Handler = Java.use('android.os.Handler');
 -  const OSProcess = Java.use('android.os.Process');
-+  // Obfuscated Java class access
-+  // 混淆的Java类访问
++  // Obfuscated Java class access with safer method
++  // 使用更安全方法的混淆Java类访问
 +  const javaObjName = ['J', 'a', 'v', 'a'].join('');
 +  const useMethodName = ['u', 's', 'e'].join('');
-+  const javaUse = (function() { return this; })()[javaObjName][useMethodName];
++
++  let javaUse;
++  try {
++    javaUse = eval(javaObjName)[useMethodName];
++  } catch (e) {
++    try {
++      javaUse = (function() { return this; })()[javaObjName][useMethodName];
++    } catch (e2) {
++      // Fallback to direct access
++      javaUse = Java.use;
++    }
++  }
 +
 +  const handlerClassName = 'android.os.Handler';
 +  const processClassName = 'android.os.Process';
@@ -784,39 +798,61 @@ index b7a6c9db..65e8d957 100644
 +  const Handler = javaUse(handlerClassName);
 +  const OSProcess = javaUse(processClassName);
 +
-+  // Obfuscated Process API access
-+  // 混淆的Process API访问
++  // Obfuscated Process API access with safer method
++  // 使用更安全方法的混淆Process API访问
 +  const processObjName = ['P', 'r', 'o', 'c', 'e', 's', 's'].join('');
 +  const getCurrentThreadIdMethod = ['g', 'e', 't', 'C', 'u', 'r', 'r', 'e', 'n', 't', 'T', 'h', 'r', 'e', 'a', 'd', 'I', 'd'].join('');
-+  const processObj = (function() { return this; })()[processObjName];
++
++  let processObj;
++  try {
++    processObj = eval(processObjName);
++  } catch (e) {
++    try {
++      processObj = (function() { return this; })()[processObjName];
++    } catch (e2) {
++      // Fallback to direct access
++      processObj = Process;
++    }
++  }
  
    const pendingStartRequests = new Set();
  
-@@ -425,7 +484,10 @@ function installLaunchTimeoutRemovalInstrumentation() {
+@@ -425,7 +509,15 @@ function installLaunchTimeoutRemovalInstrumentation() {
      const result = start.apply(this, arguments);
  
      if (tryFinishLaunch(niceName)) {
 -      pendingStartRequests.add(Process.getCurrentThreadId());
-+      // Obfuscated Process API call
-+      // 混淆的Process API调用
-+      const getCurrentThreadId = processObj[getCurrentThreadIdMethod];
++      // Obfuscated Process API call with safer access
++      // 使用更安全访问的混淆Process API调用
++      let getCurrentThreadId;
++      try {
++        getCurrentThreadId = processObj[getCurrentThreadIdMethod];
++      } catch (e) {
++        getCurrentThreadId = Process.getCurrentThreadId;
++      }
 +      pendingStartRequests.add(getCurrentThreadId());
      }
  
      return result;
-@@ -433,7 +495,10 @@ function installLaunchTimeoutRemovalInstrumentation() {
+@@ -433,7 +525,16 @@ function installLaunchTimeoutRemovalInstrumentation() {
  
    const sendMessageDelayed = Handler.sendMessageDelayed;
    sendMessageDelayed.implementation = function (msg, delayMillis) {
 -    const tid = Process.getCurrentThreadId();
-+    // Obfuscated Process API call
-+    // 混淆的Process API调用
-+    const getCurrentThreadId = processObj[getCurrentThreadIdMethod];
++    // Obfuscated Process API call with safer access
++    // 使用更安全访问的混淆Process API调用
++    let getCurrentThreadId;
++    try {
++      getCurrentThreadId = processObj[getCurrentThreadIdMethod];
++    } catch (e) {
++      getCurrentThreadId = Process.getCurrentThreadId;
++    }
++
 +    const tid = getCurrentThreadId();
      if (pendingStartRequests.has(tid)) {
        pendingStartRequests.delete(tid);
        msg.recycle();
-@@ -487,4 +552,92 @@ function performOnJavaVM(task) {
+@@ -487,4 +588,122 @@ function performOnJavaVM(task) {
    });
  }
  
@@ -845,12 +881,31 @@ index b7a6c9db..65e8d957 100644
 +            typeof method === 'string' &&
 +            Array.isArray(args)) {
 +
-+          // Convert to standard rpc.exports call using obfuscated access
-+          // 使用混淆访问转换为标准rpc.exports调用
++          // Convert to standard rpc.exports call using safer access
++          // 使用更安全的访问转换为标准rpc.exports调用
 +          const rpcObjName = ['r', 'p', 'c'].join('');
 +          const exportsObjName = ['e', 'x', 'p', 'o', 'r', 't', 's'].join('');
-+          const thisGlobal = (function() { return this; })();
-+          const rpcObj = thisGlobal[rpcObjName];
++
++          // Safer global object access with fallbacks
++          // 更安全的全局对象访问，带有回退方案
++          let rpcObj;
++          try {
++            rpcObj = eval(rpcObjName);  // Direct eval access
++          } catch (e) {
++            try {
++              rpcObj = (function() { return this; })()[rpcObjName];
++            } catch (e2) {
++              // Skip if can't access rpc object
++              setupEnhancedRpcSupport();
++              return;
++            }
++          }
++
++          if (!rpcObj || !rpcObj[exportsObjName]) {
++            setupEnhancedRpcSupport();
++            return;
++          }
++
 +          const exportsObj = rpcObj[exportsObjName];
 +
 +          if (exportsObj[method]) {
@@ -899,11 +954,22 @@ index b7a6c9db..65e8d957 100644
 +  });
 +}
 +
-+// Obfuscated Java.perform call
-+// 混淆的Java.perform调用
++// Obfuscated Java.perform call using safer access
++// 使用更安全的访问进行混淆的Java.perform调用
 +const javaObjName = ['J', 'a', 'v', 'a'].join('');
 +const performMethodName = ['p', 'e', 'r', 'f', 'o', 'r', 'm'].join('');
-+const javaPerform = (function() { return this; })()[javaObjName][performMethodName];
++
++let javaPerform;
++try {
++  javaPerform = eval(javaObjName)[performMethodName];
++} catch (e) {
++  try {
++    javaPerform = (function() { return this; })()[javaObjName][performMethodName];
++  } catch (e2) {
++    // Fallback to direct access
++    javaPerform = Java.perform;
++  }
++}
 +
 +javaPerform(init);
 +
