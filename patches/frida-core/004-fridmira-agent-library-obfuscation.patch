@@ -1,21 +1,21 @@
-From a0bbb0ba727fb7b55bd2463c15724011e905cc91 Mon Sep 17 00:00:00 2001
+From 1f162087d4046391f1ca1612d70bf8017b04a401 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Modules
 
 ---
- src/agent-container.vala              |  31 ++++-
+ src/agent-container.vala              |  51 +++++++-
  src/host-session-service.vala         | 108 ++++++++++++++-
  src/linux/agent/system-server.js      |  76 +++++++++++
  src/linux/linux-host-session.vala     | 182 +++++++++++++++++++++++---
  src/windows/windows-host-session.vala |  19 +--
- 5 files changed, 387 insertions(+), 29 deletions(-)
+ 5 files changed, 406 insertions(+), 30 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
-index eecfa1f6..c4244aaa 100644
+index eecfa1f6..7788d3ad 100644
 --- a/src/agent-container.vala
 +++ b/src/agent-container.vala
-@@ -21,12 +21,34 @@ namespace Frida {
+@@ -21,14 +21,54 @@ namespace Frida {
  		public static async AgentContainer create (string agent_filename, Cancellable? cancellable) throws Error, IOError {
  			var container = new AgentContainer ();
  
@@ -46,12 +46,33 @@ index eecfa1f6..c4244aaa 100644
  
 +			// FridMira: Resolve obfuscated Agent entry point symbol
 +			// FridMira: 解析混淆的Agent入口点符号
-+			// Standard Agent entry point lookup - symbol obfuscation requires compile-time patching
-+			// 标准Agent入口点查找 - 符号混淆需要编译时补丁
++			// Use obfuscated entry point symbol when Agent obfuscation is enabled
++			// 当启用Agent混淆时使用混淆的入口点符号
  			void * main_func_symbol;
- 			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
+-			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
++			string entry_symbol = FridMiraAgentLibraryManager.get_agent_entry_symbol();
++
++			if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++				stdout.printf("FridMira: Looking up Agent entry point symbol: %s\n", entry_symbol);
++			}
++
++			var main_func_found = container.module.symbol (entry_symbol, out main_func_symbol);
++
++			if (!main_func_found) {
++				// Fallback to standard symbol if obfuscated symbol not found
++				// 如果找不到混淆符号，回退到标准符号
++				if (entry_symbol != "frida_agent_main") {
++					if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++						stdout.printf("FridMira: Obfuscated symbol not found, falling back to standard symbol\n");
++					}
++					main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
++				}
++			}
++
  			assert (main_func_found);
-@@ -100,6 +122,13 @@ namespace Frida {
+ 			container.main_impl = (AgentMainFunc) main_func_symbol;
+ 
+@@ -100,6 +140,13 @@ namespace Frida {
  #endif
  
  			module = null;

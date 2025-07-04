@@ -1,17 +1,17 @@
-From 549b696fe1acce5f532fbde41a5d552a814857c4 Mon Sep 17 00:00:00 2001
+From 1ca9a17a680a5ff539d26b5702e8d5d2f779140e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 269 +++++++++++++
+ lib/mira/fridmira-agent.vala  | 377 ++++++++++++++++++
  lib/mira/fridmira-file.vala   | 275 +++++++++++++
  lib/mira/fridmira-memory.vala | 227 +++++++++++
  lib/mira/fridmira-rpc.vala    | 721 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 ++++++++++
  lib/mira/fridmira-thread.vala | 167 ++++++++
  lib/mira/fridmira.vala        | 305 ++++++++++++++
- 7 files changed, 2176 insertions(+)
+ 7 files changed, 2284 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -22,10 +22,10 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 diff --git a/lib/mira/fridmira-agent.vala b/lib/mira/fridmira-agent.vala
 new file mode 100644
-index 00000000..a3f90458
+index 00000000..1021f8f6
 --- /dev/null
 +++ b/lib/mira/fridmira-agent.vala
-@@ -0,0 +1,269 @@
+@@ -0,0 +1,377 @@
 +/**
 + * FridMira: Agent Library Management Module
 + * FridMira: Agent库管理模块
@@ -70,6 +70,7 @@ index 00000000..a3f90458
 +		private static string? cached_agent_lib_name = null;
 +		private static string? cached_agent_path = null;
 +		private static string? cached_temp_directory = null;
++		private static string? cached_entry_symbol = null;
 +
 +		/**
 +		 * Check if Agent library obfuscation is enabled
@@ -127,12 +128,12 @@ index 00000000..a3f90458
 +		}
 +
 +		/**
-+		 * Create obfuscated Agent library copy
-+		 * 创建混淆的Agent库副本
++		 * Create obfuscated Agent library copy with symbol redirection
++		 * 创建带有符号重定向的混淆Agent库副本
 +		 *
-+		 * Creates an Agent library copy with obfuscated name in temporary
-+		 * directory to mask the original library signature.
-+		 * 在临时目录中创建具有混淆名称的Agent库副本，掩盖原始库签名。
++		 * Creates an Agent library copy with obfuscated name and adds symbol
++		 * redirection to mask the original entry point signature.
++		 * 创建具有混淆名称的Agent库副本，并添加符号重定向以掩盖原始入口点签名。
 +		 */
 +		public static string create_obfuscated_agent_copy(string original_agent_path) throws Error {
 +			if (!is_mode_enabled()) {
@@ -160,6 +161,10 @@ index 00000000..a3f90458
 +
 +				source.copy(dest, FileCopyFlags.OVERWRITE);
 +
++				// Apply symbol obfuscation to the copied library
++				// 对复制的库应用符号混淆
++				apply_symbol_obfuscation(obfuscated_path);
++
 +				cached_agent_path = obfuscated_path;
 +
 +				if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
@@ -173,6 +178,59 @@ index 00000000..a3f90458
 +			} catch (Error e) {
 +				stderr.printf("FridMira: Failed to create obfuscated agent copy: %s\n", e.message);
 +				return original_agent_path; // Fallback to original path on failure
++			}
++		}
++
++		/**
++		 * Apply symbol obfuscation to Agent library
++		 * 对Agent库应用符号混淆
++		 *
++		 * Modifies the Agent library binary to replace the original entry point
++		 * symbol with an obfuscated one using ELF symbol table manipulation.
++		 * 通过ELF符号表操作修改Agent库二进制，将原始入口点符号替换为混淆符号。
++		 */
++		private static void apply_symbol_obfuscation(string agent_path) throws Error {
++			if (!is_mode_enabled()) {
++				return;
++			}
++
++			string obfuscated_symbol = get_agent_entry_symbol();
++			if (obfuscated_symbol == "frida_agent_main") {
++				return; // No obfuscation needed
++			}
++
++			try {
++				// Use objcopy to rename the symbol
++				// 使用objcopy重命名符号
++				string[] objcopy_cmd = {
++					"objcopy",
++					"--redefine-sym", "frida_agent_main=" + obfuscated_symbol,
++					agent_path
++				};
++
++				int exit_status;
++				string std_out, std_err;
++
++				Process.spawn_sync(null, objcopy_cmd, null,
++				                   SpawnFlags.SEARCH_PATH,
++				                   null, out std_out, out std_err, out exit_status);
++
++				if (exit_status != 0) {
++					throw new Error.NOT_SUPPORTED("objcopy failed: %s", std_err);
++				}
++
++				if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++					stdout.printf("FridMira: Applied symbol obfuscation: frida_agent_main -> %s\n",
++					             obfuscated_symbol);
++				}
++
++			} catch (SpawnError e) {
++				if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++					stdout.printf("FridMira: Symbol obfuscation failed (objcopy not available): %s\n", e.message);
++					stdout.printf("FridMira: Falling back to library name obfuscation only\n");
++				}
++				// Continue without symbol obfuscation - library name obfuscation still provides value
++				// 继续执行而不进行符号混淆 - 库名混淆仍然提供价值
 +			}
 +		}
 +
@@ -217,18 +275,65 @@ index 00000000..a3f90458
 +		 * Get Agent entry point symbol name
 +		 * 获取Agent入口点符号名
 +		 *
-+		 * Note: Agent entry point symbol obfuscation requires compile-time patching
-+		 * of the Agent library binary, which is beyond runtime obfuscation scope.
-+		 * 注意：Agent入口点符号混淆需要在编译时对Agent库二进制进行补丁，
-+		 * 这超出了运行时混淆的范围。
-+		 *
-+		 * Current focus: Runtime library path/name obfuscation for maximum stealth
-+		 * 当前重点：运行时库路径/名称混淆以获得最大隐蔽性
++		 * Returns obfuscated entry point symbol when Agent obfuscation is enabled,
++		 * otherwise returns the standard "frida_agent_main" symbol.
++		 * 当启用Agent混淆时返回混淆的入口点符号，否则返回标准的"frida_agent_main"符号。
 +		 */
 +		public static string get_agent_entry_symbol() {
-+			// Agent入口点符号在编译时确定，无法在运行时修改
-+			// The Agent entry point symbol is determined at compile time and cannot be modified at runtime
-+			return "frida_agent_main";
++			if (!is_mode_enabled()) {
++				return "frida_agent_main"; // Standard entry point
++			}
++
++			// Return cached symbol if already generated
++			// 如果已生成则返回缓存的符号
++			if (cached_entry_symbol != null) {
++				return cached_entry_symbol;
++			}
++
++			// Generate obfuscated entry point symbol for Android/Linux
++			// 为Android/Linux生成混淆的入口点符号
++			// Use system-like naming pattern to avoid detection
++			// 使用系统样式的命名模式避免检测
++			string[] prefixes = {
++				"android_init",
++				"system_start",
++				"lib_main",
++				"runtime_init",
++				"core_entry",
++				"service_main",
++				"module_init",
++				"platform_start"
++			};
++
++			string[] suffixes = {
++				"_handler",
++				"_entry",
++				"_main",
++				"_init",
++				"_start",
++				"_proc",
++				"_func",
++				"_call"
++			};
++
++			// Use consistent pseudo-random selection based on process info
++			// 基于进程信息使用一致的伪随机选择
++			int pid = (int) Posix.getpid();
++			int prefix_idx = (pid % prefixes.length);
++			int suffix_idx = ((pid / 100) % suffixes.length);
++
++			string obfuscated_symbol = prefixes[prefix_idx] + suffixes[suffix_idx];
++
++			// Cache the generated symbol for consistency
++			// 缓存生成的符号以确保一致性
++			cached_entry_symbol = obfuscated_symbol;
++
++			if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
++				stdout.printf("FridMira: Agent entry point obfuscation: %s -> %s\n",
++				             "frida_agent_main", obfuscated_symbol);
++			}
++
++			return obfuscated_symbol;
 +		}
 +
 +		/**
@@ -261,6 +366,7 @@ index 00000000..a3f90458
 +			// 重置缓存值
 +			cached_agent_lib_name = null;
 +			cached_temp_directory = null;
++			cached_entry_symbol = null;
 +		}
 +
 +		/**
@@ -286,11 +392,13 @@ index 00000000..a3f90458
 +			string lib_name = cached_agent_lib_name ?? "not generated";
 +			string lib_path = cached_agent_path ?? "not created";
 +			string temp_dir = cached_temp_directory ?? "not set";
++			string entry_symbol = cached_entry_symbol ?? "not generated";
 +
 +			return "Agent obfuscation: ENABLED\n" +
 +			       "  Library name: %s\n".printf(lib_name) +
 +			       "  Library path: %s\n".printf(lib_path) +
-+			       "  Temp directory: %s".printf(temp_dir);
++			       "  Temp directory: %s\n".printf(temp_dir) +
++			       "  Entry symbol: %s".printf(entry_symbol);
 +		}
 +
 +	}
