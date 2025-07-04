@@ -1,14 +1,14 @@
-From 02f46d7f78bf87665f86edd2f9b1cbf1a1baadfd Mon Sep 17 00:00:00 2001
+From def48644129511508c33f5045624ee2af48f7784 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:03:55 +0800
 Subject: [PATCH 005/006] FridMira post-preload initialization
 
 ---
- src/control-service.vala | 119 ++++++++++++++++++++++++++++++++++++---
- 1 file changed, 110 insertions(+), 9 deletions(-)
+ src/control-service.vala | 125 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 116 insertions(+), 9 deletions(-)
 
 diff --git a/src/control-service.vala b/src/control-service.vala
-index cc64470f..c45fbd0b 100644
+index cc64470f..4b8be139 100644
 --- a/src/control-service.vala
 +++ b/src/control-service.vala
 @@ -1,5 +1,13 @@
@@ -115,7 +115,7 @@ index cc64470f..c45fbd0b 100644
  				}
  
  				state = STARTED;
-@@ -1142,5 +1206,42 @@ namespace Frida {
+@@ -1142,5 +1206,48 @@ namespace Frida {
  			set;
  			default = true;
  		}
@@ -156,8 +156,14 @@ index cc64470f..c45fbd0b 100644
 +			set;
 +			default = false;
 +		}
++
++		public bool fridmira_no_agent {
++			get;
++			set;
++			default = false;
++		}
  	}
  }
 -- 
-2.45.1.windows.1
+2.50.0.windows.2
 

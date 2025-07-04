@@ -1,17 +1,17 @@
-From 17d599b52521f38fca1e7c6ae5d7af19f7cdaa12 Mon Sep 17 00:00:00 2001
+From b13ef8b046ba974dca43604569d4215601ff433e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:02:38 +0800
 Subject: [PATCH 003/006] Integrate FridMira server functionality
 
 ---
- server/server.vala | 487 ++++++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 460 insertions(+), 27 deletions(-)
+ server/server.vala | 500 ++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 473 insertions(+), 27 deletions(-)
 
 diff --git a/server/server.vala b/server/server.vala
-index 67bf4b38..b1d0d66b 100644
+index 67bf4b38..2aa56877 100644
 --- a/server/server.vala
 +++ b/server/server.vala
-@@ -18,6 +18,23 @@ namespace Frida.Server {
+@@ -18,6 +18,24 @@ namespace Frida.Server {
  	private static bool report_crashes = true;
  	private static bool verbose = false;
  
@@ -23,6 +23,7 @@ index 67bf4b38..b1d0d66b 100644
 +	private static bool fridmira_no_rpc = false;
 +	private static bool fridmira_no_file = false;
 +	private static bool fridmira_no_gum = false;
++	private static bool fridmira_no_agent = false;
 +	private static bool fridmira_no_preload = false;
 +
 +	// FridMira diagnostic options
@@ -35,7 +36,7 @@ index 67bf4b38..b1d0d66b 100644
  	private enum PolicySoftenerFlavor {
  		SYSTEM,
  		INTERNAL;
-@@ -29,6 +46,113 @@ namespace Frida.Server {
+@@ -29,6 +47,121 @@ namespace Frida.Server {
  
  	private delegate void ReadyHandler (bool success);
  
@@ -69,6 +70,7 @@ index 67bf4b38..b1d0d66b 100644
 +			GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", fridmira_no_rpc ? "0" : "1", true);
 +			GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", fridmira_no_file ? "0" : "1", true);
 +			GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", fridmira_no_gum ? "0" : "1", true);
++			GLib.Environment.set_variable ("FRIDMIRA_AGENT_MODE", fridmira_no_agent ? "0" : "1", true);
 +
 +			// Initialize FridMira framework for diagnostic access
 +			// 初始化FridMira框架以供诊断访问
@@ -144,12 +146,19 @@ index 67bf4b38..b1d0d66b 100644
 +			// 禁用GUM内存混淆
 +			fridmira_no_gum = true;
 +		}
++
++		string? agent_mode = GLib.Environment.get_variable ("FRIDMIRA_AGENT_MODE");
++		if (agent_mode != null && agent_mode == "0") {
++			// Disable Agent library obfuscation
++			// 禁用Agent库混淆
++			fridmira_no_agent = true;
++		}
 +	}
 +
  	const OptionEntry[] option_entries = {
  		{ "version", 0, 0, OptionArg.NONE, ref output_version, "Output version information and exit", null },
  		{ "device", 0, 0, OptionArg.STRING, ref device_id, "Serve device with the given ID", "ID" },
-@@ -48,6 +172,31 @@ namespace Frida.Server {
+@@ -48,6 +181,33 @@ namespace Frida.Server {
  		{ "ignore-crashes", 'C', OptionFlags.REVERSE, OptionArg.NONE, ref report_crashes,
  			"Disable native crash reporter integration", null },
  		{ "verbose", 'v', 0, OptionArg.NONE, ref verbose, "Be verbose", null },
@@ -168,6 +177,8 @@ index 67bf4b38..b1d0d66b 100644
 +			"Disable file obfuscation (requires --fridmira)", null },
 +		{ "no-gum", 0, 0, OptionArg.NONE, ref fridmira_no_gum,
 +			"Disable GUM memory obfuscation (requires --fridmira)", null },
++		{ "no-agent", 0, 0, OptionArg.NONE, ref fridmira_no_agent,
++			"Disable Agent library obfuscation (requires --fridmira)", null },
 +		{ "no-preload", 0, 0, OptionArg.NONE, ref fridmira_no_preload,
 +			"Disable preload optimization with FridMira (for debugging)", null },
 +		{ "show-config", 0, 0, OptionArg.NONE, ref fridmira_show_config,
@@ -181,7 +192,7 @@ index 67bf4b38..b1d0d66b 100644
  		{ null }
  	};
  
-@@ -60,6 +209,10 @@ namespace Frida.Server {
+@@ -60,6 +220,10 @@ namespace Frida.Server {
  		}
  #endif
  
@@ -192,7 +203,7 @@ index 67bf4b38..b1d0d66b 100644
  		try {
  			var ctx = new OptionContext ();
  			ctx.set_help_enabled (true);
-@@ -71,13 +224,64 @@ namespace Frida.Server {
+@@ -71,13 +235,64 @@ namespace Frida.Server {
  			return 1;
  		}
  
@@ -200,12 +211,12 @@ index 67bf4b38..b1d0d66b 100644
 +			// Validate FridMira sub-options
 +			// 验证FridMira子选项
 +			if (fridmira_no_symbol || fridmira_no_thread || fridmira_no_rpc ||
-+				fridmira_no_file || fridmira_no_gum) {
++				fridmira_no_file || fridmira_no_gum || fridmira_no_agent) {
 +				// This is a simple check. More complex validation could be added.
 +			}
 +		} else if (fridmira_no_symbol || fridmira_no_thread || fridmira_no_rpc ||
-+			   fridmira_no_file || fridmira_no_gum || fridmira_no_preload) {
-+			printerr ("Error: FridMira sub-options (--no-symbol, --no-thread, --no-rpc, --no-file, --no-gum, --no-preload) require --fridmira to be enabled.\n");
++			   fridmira_no_file || fridmira_no_gum || fridmira_no_agent || fridmira_no_preload) {
++			printerr ("Error: FridMira sub-options (--no-symbol, --no-thread, --no-rpc, --no-file, --no-gum, --no-agent, --no-preload) require --fridmira to be enabled.\n");
 +			printerr ("Run '%s --help' to see usage information.\n", args[0]);
 +			return 1;
 +		}
@@ -257,7 +268,7 @@ index 67bf4b38..b1d0d66b 100644
  		EndpointParameters endpoint_params;
  		try {
  			endpoint_params = new EndpointParameters (listen_address, 0, parse_certificate (certpath), origin,
-@@ -89,9 +293,17 @@ namespace Frida.Server {
+@@ -89,9 +304,18 @@ namespace Frida.Server {
  		}
  
  		var options = new ControlServiceOptions ();
@@ -272,11 +283,12 @@ index 67bf4b38..b1d0d66b 100644
 +		options.fridmira_no_rpc = fridmira_no_rpc;
 +		options.fridmira_no_file = fridmira_no_file;
 +		options.fridmira_no_gum = fridmira_no_gum;
++		options.fridmira_no_agent = fridmira_no_agent;
 +
  #if (IOS || TVOS) && !HAVE_EMBEDDED_ASSETS
  		string? program_path = null;
  		Gum.Process.enumerate_modules (m => {
-@@ -179,12 +391,32 @@ namespace Frida.Server {
+@@ -179,12 +403,32 @@ namespace Frida.Server {
  		Environment.configure ();
  
  #if DARWIN
@@ -314,7 +326,7 @@ index 67bf4b38..b1d0d66b 100644
  		});
  		_start_run_loop ();
  
-@@ -192,23 +424,120 @@ namespace Frida.Server {
+@@ -192,23 +436,121 @@ namespace Frida.Server {
  
  		return exit_code;
  #else
@@ -376,6 +388,7 @@ index 67bf4b38..b1d0d66b 100644
 +				GLib.Environment.set_variable ("FRIDMIRA_RPC_MODE", options.fridmira_no_rpc ? "0" : "1", true);
 +				GLib.Environment.set_variable ("FRIDMIRA_FILE_MODE", options.fridmira_no_file ? "0" : "1", true);
 +				GLib.Environment.set_variable ("FRIDMIRA_GUM_MODE", options.fridmira_no_gum ? "0" : "1", true);
++				GLib.Environment.set_variable ("FRIDMIRA_AGENT_MODE", options.fridmira_no_agent ? "0" : "1", true);
 +
 +				// STEP 3: Initialize main FridMira framework (full protection)
 +				// 步骤3：初始化主FridMira框架（完整加载混淆）
@@ -446,7 +459,7 @@ index 67bf4b38..b1d0d66b 100644
  
  		if (on_ready != null) {
  			application.ready.connect (success => {
-@@ -220,6 +549,54 @@ namespace Frida.Server {
+@@ -220,6 +562,54 @@ namespace Frida.Server {
  		return application.run ();
  	}
  
@@ -501,7 +514,7 @@ index 67bf4b38..b1d0d66b 100644
  	namespace Environment {
  		public extern void init ();
  		public extern void set_verbose_logging_enabled (bool enabled);
-@@ -284,22 +661,53 @@ namespace Frida.Server {
+@@ -284,22 +674,53 @@ namespace Frida.Server {
  		}
  
  		private async void start () {
@@ -564,7 +577,7 @@ index 67bf4b38..b1d0d66b 100644
  				printerr ("Unable to start: %s\n", e.message);
  				exit_code = 5;
  				loop.quit ();
-@@ -308,12 +716,19 @@ namespace Frida.Server {
+@@ -308,12 +729,19 @@ namespace Frida.Server {
  			}
  
  			Idle.add (() => {
@@ -584,7 +597,7 @@ index 67bf4b38..b1d0d66b 100644
  			Idle.add (() => {
  				perform_stop.begin ();
  				return false;
-@@ -321,32 +736,48 @@ namespace Frida.Server {
+@@ -321,32 +749,48 @@ namespace Frida.Server {
  		}
  
  		private async void perform_stop () {
@@ -634,7 +647,7 @@ index 67bf4b38..b1d0d66b 100644
  			stop ();
  		}
  	}
-@@ -357,4 +788,6 @@ namespace Frida.Server {
+@@ -357,4 +801,6 @@ namespace Frida.Server {
  
  		return new TlsCertificate.from_file (path);
  	}
@@ -642,5 +655,5 @@ index 67bf4b38..b1d0d66b 100644
 +
  }
 -- 
-2.45.1.windows.1
+2.50.0.windows.2
 

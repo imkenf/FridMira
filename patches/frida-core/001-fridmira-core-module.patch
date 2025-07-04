@@ -1,17 +1,17 @@
-From fb095de3ca184e3cc0d45fa0d6186b4933754a57 Mon Sep 17 00:00:00 2001
+From 549b696fe1acce5f532fbde41a5d552a814857c4 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 ---
- lib/mira/fridmira-agent.vala  | 264 +++++++++++++
+ lib/mira/fridmira-agent.vala  | 269 +++++++++++++
  lib/mira/fridmira-file.vala   | 275 +++++++++++++
  lib/mira/fridmira-memory.vala | 227 +++++++++++
  lib/mira/fridmira-rpc.vala    | 721 ++++++++++++++++++++++++++++++++++
  lib/mira/fridmira-symbol.vala | 212 ++++++++++
  lib/mira/fridmira-thread.vala | 167 ++++++++
  lib/mira/fridmira.vala        | 305 ++++++++++++++
- 7 files changed, 2171 insertions(+)
+ 7 files changed, 2176 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -22,10 +22,10 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 diff --git a/lib/mira/fridmira-agent.vala b/lib/mira/fridmira-agent.vala
 new file mode 100644
-index 00000000..bc1aa0eb
+index 00000000..a3f90458
 --- /dev/null
 +++ b/lib/mira/fridmira-agent.vala
-@@ -0,0 +1,264 @@
+@@ -0,0 +1,269 @@
 +/**
 + * FridMira: Agent Library Management Module
 + * FridMira: Agent库管理模块
@@ -75,27 +75,32 @@ index 00000000..bc1aa0eb
 +		 * Check if Agent library obfuscation is enabled
 +		 * 检查是否启用Agent库混淆
 +		 *
-+		 * SECURITY: Agent obfuscation is DISABLED by default to ensure compatibility
-+		 * 安全：Agent混淆默认禁用以确保兼容性
++		 * NEW POLICY: Agent obfuscation is ENABLED by default when FridMira is active
++		 * 新策略：当FridMira激活时默认启用Agent混淆
 +		 *
-+		 * Only enabled when FRIDMIRA_AGENT_MODE=1 is explicitly set
-+		 * 只有明确设置FRIDMIRA_AGENT_MODE=1 时才启用
++		 * Can be disabled with FRIDMIRA_AGENT_MODE=0 or server --no-agent flag
++		 * 可以通过FRIDMIRA_AGENT_MODE=0或服务器--no-agent标志禁用
 +		 *
-+		 * Priority: FRIDMIRA_AGENT_MODE=1 (explicit) > default(DISABLED)
-+		 * 优先级：FRIDMIRA_AGENT_MODE=1 > 默认（禁用）
++		 * Priority: FRIDMIRA_AGENT_MODE (explicit) > FRIDMIRA_MODE (inherited) > default(DISABLED)
++		 * 优先级：FRIDMIRA_AGENT_MODE（显式）> FRIDMIRA_MODE（继承）> 默认（禁用）
 +		 */
 +		private static bool is_mode_enabled() {
-+			// ONLY enable when explicitly requested with FRIDMIRA_AGENT_MODE=1
-+			// 只有明确请求FRIDMIRA_AGENT_MODE=1时才启用
++			// Check specific Agent mode flag first (explicit override)
++			// 首先检查特定的Agent模式标志（显式覆盖）
 +			string? agent_mode = GLib.Environment.get_variable("FRIDMIRA_AGENT_MODE");
-+			if (agent_mode == "1") {
-+				return true;
++			if (agent_mode != null) {
++				return agent_mode == "1";
 +			}
 +
-+			// DEFAULT: Always disabled for compatibility with standard Frida
-+			// 默认：始终禁用以兼容标准Frida
-+			// NOTE: Global FRIDMIRA_MODE does NOT affect Agent obfuscation
-+			// 注意：全局FRIDMIRA_MODE不影响Agent混淆
++			// Fall back to global FridMira mode (inherit from framework)
++			// 回退到全局FridMira模式（从框架继承）
++			string? global_mode = GLib.Environment.get_variable("FRIDMIRA_MODE");
++			if (global_mode == "1") {
++				return true; // Default enabled when FridMira is active
++			}
++
++			// DEFAULT: Disabled when FridMira is not active
++			// 默认：当FridMira不激活时禁用
 +			return false;
 +		}
 +
@@ -2234,5 +2239,5 @@ index 00000000..aeb96678
 +	}
 +}
 -- 
-2.45.1.windows.1
+2.50.0.windows.2
 
