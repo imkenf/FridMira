@@ -1,4 +1,4 @@
-From a2c888be744099e717898f5a52cf01fb30aaad52 Mon Sep 17 00:00:00 2001
+From 9b1da5168efacfff6362d22d4755ea1f41daac5e Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Modules
@@ -7,9 +7,10 @@ Subject: [PATCH 004/006] FridMira Agent Library Management Modules
  src/agent-container.vala              |  40 +++++-
  src/host-session-service.vala         | 108 +++++++++++++++-
  src/linux/agent/system-server.js      |  76 +++++++++++
+ src/linux/helpers/loader.c            |   5 +
  src/linux/linux-host-session.vala     | 180 +++++++++++++++++++++++---
  src/windows/windows-host-session.vala |  19 +--
- 5 files changed, 391 insertions(+), 32 deletions(-)
+ 6 files changed, 396 insertions(+), 32 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
 index eecfa1f6..8aeaf442 100644
@@ -331,6 +332,22 @@ index b7a6c9db..f087ac4c 100644
 +// Start enhanced RPC support
 +// 启动增强RPC支持
 +setupEnhancedRpcSupport();
+diff --git a/src/linux/helpers/loader.c b/src/linux/helpers/loader.c
+index ce228133..18d2c70d 100644
+--- a/src/linux/helpers/loader.c
++++ b/src/linux/helpers/loader.c
+@@ -124,6 +124,11 @@ frida_main (void * user_data)
+     }
+ 
+     ctx->agent_entrypoint_impl = libc->dlsym (ctx->agent_handle, ctx->agent_entrypoint, pretend_caller_addr);
++    if (ctx->agent_entrypoint_impl == NULL && strcmp (ctx->agent_entrypoint, "frida_agent_main") != 0)
++    {
++      ctx->agent_entrypoint_impl = libc->dlsym (ctx->agent_handle, "frida_agent_main", pretend_caller_addr);
++    }
++
+     if (ctx->agent_entrypoint_impl == NULL)
+       goto dlsym_failed;
+   }
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
 index 55a0fbec..95589c18 100644
 --- a/src/linux/linux-host-session.vala
