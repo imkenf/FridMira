@@ -1,21 +1,21 @@
-From 1a65d2792be416aea210b06289717c398ab6e943 Mon Sep 17 00:00:00 2001
+From a2c888be744099e717898f5a52cf01fb30aaad52 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Modules
 
 ---
- src/agent-container.vala              |  31 ++++-
+ src/agent-container.vala              |  40 +++++-
  src/host-session-service.vala         | 108 +++++++++++++++-
  src/linux/agent/system-server.js      |  76 +++++++++++
  src/linux/linux-host-session.vala     | 180 +++++++++++++++++++++++---
  src/windows/windows-host-session.vala |  19 +--
- 5 files changed, 384 insertions(+), 30 deletions(-)
+ 5 files changed, 391 insertions(+), 32 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
-index eecfa1f6..c4244aaa 100644
+index eecfa1f6..8aeaf442 100644
 --- a/src/agent-container.vala
 +++ b/src/agent-container.vala
-@@ -21,12 +21,34 @@ namespace Frida {
+@@ -21,15 +21,42 @@ namespace Frida {
  		public static async AgentContainer create (string agent_filename, Cancellable? cancellable) throws Error, IOError {
  			var container = new AgentContainer ();
  
@@ -25,8 +25,7 @@ index eecfa1f6..c4244aaa 100644
 +			// 只有明确设置FRIDMIRA_AGENT_MODE=1时才激活
 +			string actual_agent_path = agent_filename;
 +
- 			try {
--				container.module = new Module (agent_filename, 0);
++			try {
 +				// This function checks internally if Agent obfuscation is enabled
 +				// 此函数内部检查是否启用Agent混淆
 +				actual_agent_path = FridMiraAgentLibraryManager.create_obfuscated_agent_copy(agent_filename);
@@ -38,7 +37,8 @@ index eecfa1f6..c4244aaa 100644
 +				}
 +			}
 +
-+			try {
+ 			try {
+-				container.module = new Module (agent_filename, 0);
 +				container.module = new Module (actual_agent_path, 0);
  			} catch (ModuleError e) {
  				throw new Error.PERMISSION_DENIED ("%s", e.message);
@@ -46,12 +46,22 @@ index eecfa1f6..c4244aaa 100644
  
 +			// FridMira: Resolve obfuscated Agent entry point symbol
 +			// FridMira: 解析混淆的Agent入口点符号
-+			// Standard Agent entry point lookup - symbol obfuscation requires compile-time patching
-+			// 标准Agent入口点查找 - 符号混淆需要编译时补丁
++			// FridMira: Resolve obfuscated Agent entry point symbol with fallback
++			// 首先尝试随机入口点，失败则回退到原始 frida_agent_main
  			void * main_func_symbol;
- 			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
- 			assert (main_func_found);
-@@ -100,6 +122,13 @@ namespace Frida {
+-			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
+-			assert (main_func_found);
++			bool found = false;
++			string entrypoint = FridMiraAgentLibraryManager.get_agent_entry_symbol();
++			found = container.module.symbol(entrypoint, out main_func_symbol);
++			if (!found && entrypoint != "frida_agent_main") {
++				found = container.module.symbol("frida_agent_main", out main_func_symbol);
++			}
++			assert (found);
+ 			container.main_impl = (AgentMainFunc) main_func_symbol;
+ 
+ 			Future<IOStream> stream_request;
+@@ -100,6 +127,13 @@ namespace Frida {
  #endif
  
  			module = null;
