@@ -1,21 +1,21 @@
-From 1f162087d4046391f1ca1612d70bf8017b04a401 Mon Sep 17 00:00:00 2001
+From 1a65d2792be416aea210b06289717c398ab6e943 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 17:01:27 +0800
 Subject: [PATCH 004/006] FridMira Agent Library Management Modules
 
 ---
- src/agent-container.vala              |  51 +++++++-
- src/host-session-service.vala         | 108 ++++++++++++++-
+ src/agent-container.vala              |  31 ++++-
+ src/host-session-service.vala         | 108 +++++++++++++++-
  src/linux/agent/system-server.js      |  76 +++++++++++
- src/linux/linux-host-session.vala     | 182 +++++++++++++++++++++++---
+ src/linux/linux-host-session.vala     | 180 +++++++++++++++++++++++---
  src/windows/windows-host-session.vala |  19 +--
- 5 files changed, 406 insertions(+), 30 deletions(-)
+ 5 files changed, 384 insertions(+), 30 deletions(-)
 
 diff --git a/src/agent-container.vala b/src/agent-container.vala
-index eecfa1f6..7788d3ad 100644
+index eecfa1f6..c4244aaa 100644
 --- a/src/agent-container.vala
 +++ b/src/agent-container.vala
-@@ -21,14 +21,54 @@ namespace Frida {
+@@ -21,12 +21,34 @@ namespace Frida {
  		public static async AgentContainer create (string agent_filename, Cancellable? cancellable) throws Error, IOError {
  			var container = new AgentContainer ();
  
@@ -46,33 +46,12 @@ index eecfa1f6..7788d3ad 100644
  
 +			// FridMira: Resolve obfuscated Agent entry point symbol
 +			// FridMira: 解析混淆的Agent入口点符号
-+			// Use obfuscated entry point symbol when Agent obfuscation is enabled
-+			// 当启用Agent混淆时使用混淆的入口点符号
++			// Standard Agent entry point lookup - symbol obfuscation requires compile-time patching
++			// 标准Agent入口点查找 - 符号混淆需要编译时补丁
  			void * main_func_symbol;
--			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
-+			string entry_symbol = FridMiraAgentLibraryManager.get_agent_entry_symbol();
-+
-+			if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
-+				stdout.printf("FridMira: Looking up Agent entry point symbol: %s\n", entry_symbol);
-+			}
-+
-+			var main_func_found = container.module.symbol (entry_symbol, out main_func_symbol);
-+
-+			if (!main_func_found) {
-+				// Fallback to standard symbol if obfuscated symbol not found
-+				// 如果找不到混淆符号，回退到标准符号
-+				if (entry_symbol != "frida_agent_main") {
-+					if (GLib.Environment.get_variable("FRIDMIRA_VERBOSE") == "1") {
-+						stdout.printf("FridMira: Obfuscated symbol not found, falling back to standard symbol\n");
-+					}
-+					main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
-+				}
-+			}
-+
+ 			var main_func_found = container.module.symbol ("frida_agent_main", out main_func_symbol);
  			assert (main_func_found);
- 			container.main_impl = (AgentMainFunc) main_func_symbol;
- 
-@@ -100,6 +140,13 @@ namespace Frida {
+@@ -100,6 +122,13 @@ namespace Frida {
  #endif
  
  			module = null;
@@ -343,7 +322,7 @@ index b7a6c9db..f087ac4c 100644
 +// 启动增强RPC支持
 +setupEnhancedRpcSupport();
 diff --git a/src/linux/linux-host-session.vala b/src/linux/linux-host-session.vala
-index 55a0fbec..13faa0e3 100644
+index 55a0fbec..95589c18 100644
 --- a/src/linux/linux-host-session.vala
 +++ b/src/linux/linux-host-session.vala
 @@ -62,12 +62,38 @@ namespace Frida {
@@ -416,38 +395,35 @@ index 55a0fbec..13faa0e3 100644
  #endif
  		}
  
-@@ -360,7 +404,30 @@ namespace Frida {
+@@ -360,7 +404,26 @@ namespace Frida {
  		protected override async Future<IOStream> perform_attach_to (uint pid, HashTable<string, Variant> options,
  				Cancellable? cancellable, out Object? transport) throws Error, IOError {
  			uint id;
+-			string entrypoint = "frida_agent_main";
 +
-+			// FridMira: Apply Agent library obfuscation for anti-detection
-+			// FridMira: 应用Agent库混淆以实现反检测
- 			string entrypoint = "frida_agent_main";
-+
-+			// Check if Agent obfuscation is enabled
-+			// 检查是否启用Agent混淆
++			// FridMira: Use obfuscated entry point when agent obfuscation is enabled
++			// FridMira: 当启用agent混淆时使用混淆的入口点
++			string entrypoint;
 +			if (FridMiraAgentLibraryManager.is_enhanced_mode_enabled()) {
-+				// Use obfuscated entry point symbol (currently same as original)
-+				// 使用混淆的入口点符号（目前与原始相同）
 +				entrypoint = FridMiraAgentLibraryManager.get_agent_entry_symbol();
-+
 +				if (GLib.Environment.get_variable("FRIDA_VERBOSE") != null) {
 +					stdout.printf("FridMira: Using obfuscated Agent injection for PID %u\n", pid);
 +					stdout.printf("FridMira:   Entry point: %s\n", entrypoint);
 +				}
 +			} else {
++				entrypoint = "frida_agent_main";
 +				// Standard Agent entry point - symbol obfuscation requires compile-time patching
 +				// 标准Agent入口点 - 符号混淆需要编译时补丁
 +				if (GLib.Environment.get_variable("FRIDA_VERBOSE") != null) {
 +					stdout.printf("FridMira: Using standard Agent injection for PID %u\n", pid);
++					stdout.printf("FridMira:   Entry point: %s\n", entrypoint);
 +				}
 +			}
 +
  			string parameters = make_agent_parameters (pid, "", options);
  			AgentFeatures features = CONTROL_CHANNEL;
  			var linjector = (Linjector) injector;
-@@ -382,13 +449,30 @@ namespace Frida {
+@@ -382,13 +445,30 @@ namespace Frida {
  		}
  
  		protected override string? get_emulated_agent_path (uint pid) throws Error {
@@ -481,7 +457,7 @@ index 55a0fbec..13faa0e3 100644
  					break;
  				default:
  					throw new Error.NOT_SUPPORTED ("Emulated realm is not supported on this architecture");
-@@ -474,7 +558,17 @@ namespace Frida {
+@@ -474,7 +554,17 @@ namespace Frida {
  		}
  
  		public async void preload (Cancellable? cancellable) throws Error, IOError {
@@ -499,7 +475,7 @@ index 55a0fbec..13faa0e3 100644
  		}
  
  		public async void close (Cancellable? cancellable) throws IOError {
-@@ -634,6 +728,13 @@ namespace Frida {
+@@ -634,6 +724,13 @@ namespace Frida {
  		}
  
  		private async void ensure_loaded (Cancellable? cancellable) throws Error, IOError {
@@ -513,7 +489,7 @@ index 55a0fbec..13faa0e3 100644
  			while (ensure_request != null) {
  				try {
  					yield ensure_request.future.wait_async (cancellable);
-@@ -661,29 +762,54 @@ namespace Frida {
+@@ -661,29 +758,54 @@ namespace Frida {
  				}
  			};
  
@@ -569,7 +545,7 @@ index 55a0fbec..13faa0e3 100644
  
  				throw_api_error (first_error);
  			}
-@@ -700,13 +826,26 @@ namespace Frida {
+@@ -700,13 +822,26 @@ namespace Frida {
  		}
  
  		private async void inject_zygote_agent (uint pid, string name, Cancellable? cancellable) throws Error, IOError {
@@ -596,7 +572,7 @@ index 55a0fbec..13faa0e3 100644
  				agent.unloaded.disconnect (on_zygote_agent_unloaded);
  				zygote_agents.unset (pid);
  
-@@ -810,17 +949,13 @@ namespace Frida {
+@@ -810,17 +945,13 @@ namespace Frida {
  		}
  
  		public async void preload (Cancellable? cancellable) throws Error, IOError {
@@ -619,7 +595,7 @@ index 55a0fbec..13faa0e3 100644
  		}
  
  		public async HostApplicationInfo get_frontmost_application (FrontmostQueryOptions options,
-@@ -953,7 +1088,19 @@ namespace Frida {
+@@ -953,7 +1084,19 @@ namespace Frida {
  		}
  
  		protected override async uint get_target_pid (Cancellable? cancellable) throws Error, IOError {
@@ -640,7 +616,7 @@ index 55a0fbec..13faa0e3 100644
  		}
  
  		protected override async string? load_source (Cancellable? cancellable) throws Error, IOError {
-@@ -1656,5 +1803,4 @@ namespace Frida {
+@@ -1656,5 +1799,4 @@ namespace Frida {
  			return pid;
  		}
  	}
