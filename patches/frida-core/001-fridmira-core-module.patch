@@ -1,4 +1,4 @@
-From 0e11fff3599d91408e7c88696280d797dc12f6c2 Mon Sep 17 00:00:00 2001
+From d3256b0a51da3d8feea251082ca6f73e5e4c88d6 Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -8,10 +8,10 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
  lib/mira/fridmira-file.vala   | 275 +++++++++++++
  lib/mira/fridmira-memory.vala | 227 +++++++++++
  lib/mira/fridmira-rpc.vala    | 721 ++++++++++++++++++++++++++++++++++
- lib/mira/fridmira-symbol.vala | 212 ++++++++++
+ lib/mira/fridmira-symbol.vala | 215 ++++++++++
  lib/mira/fridmira-thread.vala | 167 ++++++++
  lib/mira/fridmira.vala        | 305 ++++++++++++++
- 7 files changed, 2181 insertions(+)
+ 7 files changed, 2184 insertions(+)
  create mode 100644 lib/mira/fridmira-agent.vala
  create mode 100644 lib/mira/fridmira-file.vala
  create mode 100644 lib/mira/fridmira-memory.vala
@@ -1543,10 +1543,10 @@ index 00000000..cdf209e0
 +}
 diff --git a/lib/mira/fridmira-symbol.vala b/lib/mira/fridmira-symbol.vala
 new file mode 100644
-index 00000000..36a7ed29
+index 00000000..9e614588
 --- /dev/null
 +++ b/lib/mira/fridmira-symbol.vala
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,215 @@
 +/**
 + * FridMira: Symbol Obfuscation Module
 + * FridMira: 符号混淆模块
@@ -1648,13 +1648,16 @@ index 00000000..36a7ed29
 +				"frida_process", "frida-process", "FRIDA_PROCESS",
 +				"frida_spawn", "frida-spawn", "FRIDA_SPAWN",
 +
++				// Frida agent entry point (safe to obfuscate during injection)
++				// Frida agent入口点（注入时可以安全混淆）
++				"frida_agent_main",
++
 +				// Additional safe frida patterns / 额外的安全frida模式
 +				"frida_version", "frida_build", "frida_config",
 +				"frida_error", "frida_warning", "frida_debug"
 +
-+				// NOTE: Excluded critical entry points:
-+				// 注意：排除了关键入口点：
-+				// - frida_agent_main (entry point)
++				// NOTE: Excluded critical initialization functions:
++				// 注意：排除了关键初始化函数：
 +				// - gum_init/gum_deinit (core initialization)
 +				// - frida_init/frida_deinit (core initialization)
 +			};
