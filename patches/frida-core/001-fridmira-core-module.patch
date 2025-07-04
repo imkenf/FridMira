@@ -1,4 +1,4 @@
-From 1ca9a17a680a5ff539d26b5702e8d5d2f779140e Mon Sep 17 00:00:00 2001
+From b0e9f75522db1be12dbfc0b1661c168f10bc54bb Mon Sep 17 00:00:00 2001
 From: imkenf <imkenf@gmail.com>
 Date: Fri, 20 Jun 2025 16:34:04 +0800
 Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
@@ -22,7 +22,7 @@ Subject: [PATCH 001/006] FridMira Anti-Detection Framework Core
 
 diff --git a/lib/mira/fridmira-agent.vala b/lib/mira/fridmira-agent.vala
 new file mode 100644
-index 00000000..1021f8f6
+index 00000000..3d864c5d
 --- /dev/null
 +++ b/lib/mira/fridmira-agent.vala
 @@ -0,0 +1,377 @@
@@ -318,7 +318,7 @@ index 00000000..1021f8f6
 +
 +			// Use consistent pseudo-random selection based on process info
 +			// 基于进程信息使用一致的伪随机选择
-+			int pid = (int) Posix.getpid();
++			int pid = (int) GLib.Process.get_pid();
 +			int prefix_idx = (pid % prefixes.length);
 +			int suffix_idx = ((pid / 100) % suffixes.length);
 +
